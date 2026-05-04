@@ -59,6 +59,24 @@ export async function listBrokerAccounts(): Promise<BrokerAccount[]> {
   return invoke<BrokerAccount[]>("list_broker_accounts");
 }
 
+/**
+ * One-time SnapTrade Connection Portal URL. Open `url` in the user's
+ * default browser; SnapTrade redirects back to the backend on success.
+ */
+export interface BrokerLoginPortalResponse {
+  url: string;
+  /** RFC 3339 expiry of the portal URL (5-minute SnapTrade-side TTL). */
+  expires_at: string;
+}
+
+export async function createBrokerLoginPortal(
+  broker?: string,
+): Promise<BrokerLoginPortalResponse> {
+  return invoke<BrokerLoginPortalResponse>("create_broker_login_portal", {
+    broker: broker ?? null,
+  });
+}
+
 export async function getSubscriptionPlans(): Promise<PlansResponse> {
   return invoke<PlansResponse>("get_subscription_plans");
 }

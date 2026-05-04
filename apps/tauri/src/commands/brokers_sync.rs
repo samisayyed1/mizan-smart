@@ -8,8 +8,8 @@ use crate::context::ServiceContext;
 use crate::events::{BROKER_SYNC_COMPLETE, BROKER_SYNC_ERROR, BROKER_SYNC_START};
 use mizan_connect::{
     broker::BrokerApiClient, fetch_subscription_plans_public, BrokerAccount, BrokerConnection,
-    PlansResponse, Platform, SyncConfig, SyncOrchestrator, SyncProgressPayload,
-    SyncProgressReporter, SyncResult, UserInfo,
+    LoginPortalResponse, PlansResponse, Platform, SyncConfig, SyncOrchestrator,
+    SyncProgressPayload, SyncProgressReporter, SyncResult, UserInfo,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -191,6 +191,32 @@ pub async fn list_broker_connections(
     let connections = client.list_connections().await.map_err(|e| e.to_string())?;
 
     Ok(connections)
+}
+
+/// Create a one-time SnapTrade Connection Portal URL.
+///
+/// Calls the cloud API's `POST /api/v1/sync/brokerage/login-portal`. The
+/// frontend opens the returned `url` in the user's default browser; the
+/// SnapTrade-side callback is handled server-side, so the desktop just
+/// needs to refetch `/connections` after the user finishes the flow.
+///
+/// `broker` is an optional SnapTrade slug (e.g. `"ROBINHOOD"`); pass
+/// `None` to show SnapTrade's broker picker.
+#[tauri::command]
+pub async fn create_broker_login_portal(
+    broker: Option<String>,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<LoginPortalResponse, String> {
+    info!(
+        "Creating broker login portal (broker = {:?})",
+        broker.as_deref()
+    );
+
+    let client = state.connect_service().get_api_client().await?;
+    client
+        .create_login_portal(broker.as_deref())
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// List broker accounts from the cloud API

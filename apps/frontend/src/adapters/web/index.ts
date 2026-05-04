@@ -262,6 +262,7 @@ export {
   getSyncedAccounts,
   getSyncEngineStatus,
   getUserInfo,
+  createBrokerLoginPortal,
   listBrokerAccounts,
   listBrokerConnections,
   listDevices,

@@ -116,6 +116,17 @@ struct ApiErrorResponse {
     message: Option<String>,
 }
 
+/// Response of `POST /api/v1/sync/brokerage/login-portal`.
+///
+/// `url` is a one-time SnapTrade Connection Portal URL (5-minute TTL on
+/// SnapTrade's side); `expires_at` is RFC 3339 and surfaces the same TTL
+/// to callers so they can pre-empt expiry rather than guessing.
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
+pub struct LoginPortalResponse {
+    pub url: String,
+    pub expires_at: String,
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Connect API Client
 // ─────────────────────────────────────────────────────────────────────────────
@@ -344,11 +355,63 @@ impl ConnectApiClient {
         self.get("/api/v1/subscription/plans").await
     }
 
+    /// Create a one-time SnapTrade Connection Portal URL for the current user.
+    ///
+    /// `POST /api/v1/sync/brokerage/login-portal`. The backend lazily
+    /// registers the user with SnapTrade on first call and returns a
+    /// portal URL with an embedded signed `state` token bound to the
+    /// caller's local user id. The user opens the URL in their default
+    /// browser, authenticates with their broker, and SnapTrade redirects
+    /// back to the backend's callback handler — no further desktop
+    /// involvement until the connection lands in
+    /// `list_brokerage_connections`.
+    ///
+    /// The backend rate-limits this endpoint at 10 requests per hour per
+    /// user (a 429 is mapped to [`Error::Unexpected`] like any other
+    /// upstream failure).
+    ///
+    /// # Arguments
+    /// * `broker` — optional broker slug (e.g. `"ROBINHOOD"`) to deep-link
+    ///   straight into a single broker. `None` shows SnapTrade's broker
+    ///   picker.
+    pub async fn create_login_portal(
+        &self,
+        broker: Option<&str>,
+    ) -> Result<LoginPortalResponse> {
+        let url = format!("{}/api/v1/sync/brokerage/login-portal", self.base_url);
+        let body = serde_json::json!({ "broker": broker });
+
+        debug!("[ConnectApi] POST {}", url);
+        let response = self
+            .client
+            .post(&url)
+            .headers(self.headers())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| Error::Unexpected(format!("Login-portal request failed: {}", e)))?;
+
+        self.parse_response(response).await
+    }
+
     /// Check if the current user's plan includes broker sync.
     ///
     /// Returns true when the user has an active subscription AND their plan
     /// is not "basic" (basic plan only includes device sync).
+    ///
+    /// **Chunk-3 dev escape hatch**: when `CONNECT_BYPASS_PLAN_CHECK=true`
+    /// is set, this short-circuits to `Ok(true)` without hitting
+    /// `/api/v1/user/me`. The Mizan Connect backend's `/v1/me` does not
+    /// yet return a `team` field — that lands with Chunk 4 (Stripe). The
+    /// flag lets the broker UI work end-to-end against Chunk-3 backends
+    /// in dev, and Chunk 4 will remove it once `team.plan` is populated.
     pub async fn has_broker_sync(&self) -> Result<bool> {
+        // TODO(chunk-4): drop this bypass once /api/v1/user/me returns team.plan.
+        if std::env::var("CONNECT_BYPASS_PLAN_CHECK").as_deref() == Ok("true") {
+            debug!("[ConnectApi] CONNECT_BYPASS_PLAN_CHECK=true — skipping plan gate");
+            return Ok(true);
+        }
+
         let user_info = self.get_user_info().await?;
 
         let team = match &user_info.team {
@@ -589,6 +652,8 @@ pub async fn fetch_subscription_plans_public(base_url: &str) -> Result<PlansResp
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{body_json, header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     #[test]
     fn test_client_creation() {
@@ -600,5 +665,104 @@ mod tests {
     fn test_client_url_normalization() {
         let client = ConnectApiClient::new("https://api.mizan.app/", "test-token").unwrap();
         assert_eq!(client.base_url, "https://api.mizan.app");
+    }
+
+    /// Verifies `create_login_portal`:
+    /// - hits POST `/api/v1/sync/brokerage/login-portal`
+    /// - sends the user's Bearer access token
+    /// - sends `Content-Type: application/json`
+    /// - sends `{ "broker": <slug or null> }` as the body
+    /// - parses `{ url, expires_at }` into [`LoginPortalResponse`]
+    #[tokio::test]
+    async fn create_login_portal_signs_request_and_parses_response() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/sync/brokerage/login-portal"))
+            .and(header("authorization", "Bearer mizan-test-jwt"))
+            .and(header("content-type", "application/json"))
+            .and(body_json(serde_json::json!({ "broker": null })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "url": "https://app.snaptrade.com/snapTrade/redeemToken?token=abc",
+                "expires_at": "2026-05-05T12:34:56Z",
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = ConnectApiClient::new(&server.uri(), "mizan-test-jwt").unwrap();
+        let resp = client
+            .create_login_portal(None)
+            .await
+            .expect("login-portal call");
+        assert_eq!(
+            resp.url,
+            "https://app.snaptrade.com/snapTrade/redeemToken?token=abc"
+        );
+        assert_eq!(resp.expires_at, "2026-05-05T12:34:56Z");
+    }
+
+    /// Same mock, but with `broker = Some("ROBINHOOD")` — confirms the
+    /// caller-specified broker slug is passed through verbatim.
+    #[tokio::test]
+    async fn create_login_portal_passes_broker_slug() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/sync/brokerage/login-portal"))
+            .and(body_json(serde_json::json!({ "broker": "ROBINHOOD" })))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "url": "https://app.snaptrade.com/x",
+                "expires_at": "2026-05-05T12:34:56Z",
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = ConnectApiClient::new(&server.uri(), "mizan-test-jwt").unwrap();
+        client
+            .create_login_portal(Some("ROBINHOOD"))
+            .await
+            .expect("login-portal call with broker");
+    }
+
+    /// 429 from upstream → `Error::Unexpected` (the standard error wrapper
+    /// in this crate). The desktop's adapter layer turns this into a toast.
+    #[tokio::test]
+    async fn create_login_portal_propagates_rate_limit_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/api/v1/sync/brokerage/login-portal"))
+            .respond_with(ResponseTemplate::new(429).set_body_json(serde_json::json!({
+                "error": {
+                    "code": "too_many_requests",
+                    "message": "too many login-portal requests; try again later",
+                    "request_id": "abc",
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let client = ConnectApiClient::new(&server.uri(), "mizan-test-jwt").unwrap();
+        let err = client.create_login_portal(None).await.unwrap_err();
+        let msg = format!("{}", err);
+        assert!(msg.contains("API error"), "got: {msg}");
+    }
+
+    /// `CONNECT_BYPASS_PLAN_CHECK=true` short-circuits without an HTTP
+    /// call. The mock server has no expectations registered, so a request
+    /// to it would 404 — we use a deliberately-broken base URL to prove
+    /// no network call happens.
+    #[tokio::test]
+    #[serial_test::serial]
+    async fn has_broker_sync_bypass_flag_short_circuits() {
+        std::env::set_var("CONNECT_BYPASS_PLAN_CHECK", "true");
+        let client =
+            ConnectApiClient::new("http://127.0.0.1:1/never-reachable", "mizan-test-jwt")
+                .expect("client");
+        let result = client.has_broker_sync().await.expect("bypass returns Ok");
+        assert!(result, "bypass returns true");
+        std::env::remove_var("CONNECT_BYPASS_PLAN_CHECK");
     }
 }

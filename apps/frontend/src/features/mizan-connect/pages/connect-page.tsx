@@ -6,7 +6,9 @@ import { ConnectEmptyState } from "@/features/mizan-connect/components/connect-e
 import {
   useAggregatedSyncStatus,
   useBrokerAccounts,
+  useCreateBrokerLoginPortal,
   useImportRunsInfinite,
+  usePollConnectionsAfterPortal,
 } from "@/features/mizan-connect/hooks";
 import { useSyncBrokerData } from "@/features/mizan-connect/hooks/use-sync-broker-data";
 import { useMizanConnect } from "@/features/mizan-connect/providers/mizan-connect-provider";
@@ -48,6 +50,19 @@ export default function ConnectPage() {
   const { data: devices } = useDevices("my");
   const queryClient = useQueryClient();
   const [isTriggeringDeviceSync, setIsTriggeringDeviceSync] = useState(false);
+
+  // Connect-broker mutation; reused by every "Add broker" / "Reconnect"
+  // header CTA so all entry points go through /api/v1/sync/brokerage/login-portal.
+  const portal = useCreateBrokerLoginPortal();
+  const [isPolling, startPolling] = usePollConnectionsAfterPortal();
+  const handleConnectBroker = (broker?: string) =>
+    portal.mutate(broker, { onSuccess: () => startPolling() });
+  const isPortalBusy = portal.isPending || isPolling;
+  const portalLabel = portal.isPending
+    ? "Opening portal..."
+    : isPolling
+      ? "Waiting for broker..."
+      : null;
 
   const isSyncRunning = isSyncing || isTriggeringDeviceSync || status === "running";
 
@@ -121,11 +136,9 @@ export default function ConnectPage() {
     return map;
   }, [localAccounts]);
 
-  const hasSubscription = useMemo(() => {
-    if (!userInfo?.team) return false;
-    const subStatus = userInfo.team.subscription_status;
-    return subStatus === "active" || subStatus === "trialing";
-  }, [userInfo]);
+  // TODO(chunk-4): restore subscription gating from team.plan once Stripe
+  // ships. For Chunk 3 the broker UI shows whenever the user is signed in
+  // to Mizan Connect (the gate at line ~192 below loosened to !isConnected).
 
   if (isInitializing) {
     return (
@@ -189,7 +202,9 @@ export default function ConnectPage() {
     );
   }
 
-  if (!isEnabled || !isConnected || !hasSubscription) {
+  // TODO(chunk-4): restore the `!hasSubscription` gate once Stripe ships.
+  // For Chunk 3 the empty state shows only when the user isn't signed in.
+  if (!isEnabled || !isConnected) {
     return (
       <Page>
         <PageHeader heading="Sync & Connections" />
@@ -273,26 +288,40 @@ export default function ConnectPage() {
                       )}
                     </div>
                     <div className="flex items-center gap-1">
+                      {/* Mobile: icon-only "Add broker" */}
                       <Button
                         variant="ghost"
                         size="icon"
                         className="text-muted-foreground hover:text-foreground h-8 w-8 sm:hidden"
-                        onClick={() =>
-                          openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/connections`)
-                        }
+                        onClick={() => handleConnectBroker()}
+                        disabled={isPortalBusy}
+                        aria-label="Add broker"
                       >
-                        <Icons.ExternalLink className="h-4 w-4" />
+                        {isPortalBusy ? (
+                          <Icons.Spinner className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Icons.Plus className="h-4 w-4" />
+                        )}
                       </Button>
+                      {/* Desktop: full text "Add broker" */}
                       <Button
                         variant="ghost"
                         size="sm"
                         className="text-muted-foreground hover:text-foreground hidden sm:inline-flex"
-                        onClick={() =>
-                          openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/connections`)
-                        }
+                        onClick={() => handleConnectBroker()}
+                        disabled={isPortalBusy}
                       >
-                        Manage
-                        <Icons.ArrowRight className="ml-1 h-3.5 w-3.5" />
+                        {isPortalBusy ? (
+                          <>
+                            <Icons.Spinner className="mr-1 h-4 w-4 animate-spin" />
+                            {portalLabel ?? "Connecting..."}
+                          </>
+                        ) : (
+                          <>
+                            Add broker
+                            <Icons.ArrowRight className="ml-1 h-3.5 w-3.5" />
+                          </>
+                        )}
                       </Button>
                     </div>
                   </CardTitle>
@@ -323,6 +352,8 @@ export default function ConnectPage() {
                             connection={connection}
                             syncEnabledCount={syncEnabledCount}
                             totalAccountCount={connectionAccounts.length}
+                            onReconnect={handleConnectBroker}
+                            isReconnecting={isPortalBusy}
                           />
                         );
                       })}
@@ -439,6 +470,9 @@ export default function ConnectPage() {
                       Connect your brokerage accounts for automatic portfolio syncing.
                     </p>
                   </div>
+                  {/* TODO(chunk-4): swap to in-app Stripe checkout once billing
+                      ships. mizan.app is currently parked, so this opens nothing
+                      useful — kept only as a placeholder until Chunk 4. */}
                   <Button
                     size="sm"
                     onClick={() =>
@@ -481,10 +515,16 @@ function ConnectionItem({
   connection,
   syncEnabledCount,
   totalAccountCount,
+  onReconnect,
+  isReconnecting,
 }: {
   connection: BrokerConnection;
   syncEnabledCount: number;
   totalAccountCount: number;
+  /** Caller-provided handler — uses the parent ConnectPage's portal hook so
+   *  every page-level CTA shares one mutation + polling window. */
+  onReconnect: (brokerSlug: string | undefined) => void;
+  isReconnecting: boolean;
 }) {
   const name =
     connection.brokerage?.display_name ||
@@ -523,9 +563,17 @@ function ConnectionItem({
             variant="outline"
             size="sm"
             className="h-7 text-xs"
-            onClick={() => openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/connections`)}
+            onClick={() => onReconnect(connection.brokerage?.slug)}
+            disabled={isReconnecting}
           >
-            Reconnect
+            {isReconnecting ? (
+              <>
+                <Icons.Spinner className="mr-1 h-3 w-3 animate-spin" />
+                Connecting
+              </>
+            ) : (
+              "Reconnect"
+            )}
           </Button>
         )}
       </div>

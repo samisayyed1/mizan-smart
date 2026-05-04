@@ -25,10 +25,13 @@ import { useMizanConnect } from "../providers/mizan-connect-provider";
 import { ProviderButton } from "./provider-button";
 
 // OAuth is only available on desktop/mobile (Tauri) where we can handle deep links
-// Web (self-hosted) uses email OTP only since we can't register all possible redirect URLs
+// Web (self-hosted) uses email-based auth only since we can't register all
+// possible redirect URLs.
 const isNativeApp = isDesktop;
 
 type Provider = "google" | "email";
+type AuthMode = "signIn" | "signUp";
+type EmailFlow = "password" | "magicLink";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Features Section
@@ -96,19 +99,80 @@ function FeaturesSection() {
   );
 }
 
-export function LoginForm() {
-  const { signInWithOAuth, signInWithMagicLink, verifyOtp, error, clearError, isLoading } =
-    useMizanConnect();
+// ─────────────────────────────────────────────────────────────────────────────
+// Error message translation
+// ─────────────────────────────────────────────────────────────────────────────
 
-  // State management
+interface FriendlyError {
+  message: string;
+  /** When set, render an inline action under the alert. */
+  action?: "resendConfirmation";
+}
+
+/** Translate Supabase / network errors into user-facing copy. */
+function translateAuthError(raw: string | null | undefined, mode: AuthMode): FriendlyError | null {
+  if (!raw) return null;
+  const m = raw.toLowerCase();
+
+  if (m.includes("invalid login credentials") || m.includes("invalid_credentials")) {
+    return { message: "Wrong email or password." };
+  }
+  if (m.includes("email not confirmed") || m.includes("email_not_confirmed")) {
+    return {
+      message: "Confirm your email first. Check your inbox for the confirmation link.",
+      action: "resendConfirmation",
+    };
+  }
+  if (m.includes("user already registered") || m.includes("user_already_exists")) {
+    return { message: "An account with that email already exists. Try signing in instead." };
+  }
+  if (m.includes("password should be at least") || m.includes("weak_password")) {
+    return { message: raw }; // Supabase's own message is already clear here
+  }
+  if (m.includes("rate") && (m.includes("limit") || m.includes("429"))) {
+    return { message: "Too many attempts. Try again in a minute." };
+  }
+  if (m.includes("network") || m.includes("failed to fetch")) {
+    return { message: "Couldn't reach Supabase. Check your network and try again." };
+  }
+  // Pass anything else through verbatim — better to surface Supabase's text
+  // than to silently swallow it.
+  return { message: mode === "signUp" ? `Sign up failed: ${raw}` : `Sign in failed: ${raw}` };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LoginForm
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function LoginForm() {
+  const {
+    signInWithEmail,
+    signUpWithEmail,
+    signInWithOAuth,
+    signInWithMagicLink,
+    verifyOtp,
+    resendConfirmation,
+    error,
+    clearError,
+    isLoading,
+  } = useMizanConnect();
+
+  // Mode + flow state
+  const [authMode, setAuthMode] = useState<AuthMode>("signIn");
+  const [emailFlow, setEmailFlow] = useState<EmailFlow>("password");
+
+  // Form fields
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // UI state
   const [localError, setLocalError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [loadingProvider, setLoadingProvider] = useState<Provider | null>(null);
   const [preferredProvider, setPreferredProvider] = useState<Provider | null>(null);
   const [isMoreOptionsOpen, setIsMoreOptionsOpen] = useState(false);
 
-  // OTP verification state
+  // OTP / magic-link verification state
   const [showOtpInput, setShowOtpInput] = useState(false);
   const [pendingEmail, setPendingEmail] = useState("");
   const [otpCode, setOtpCode] = useState("");
@@ -119,29 +183,23 @@ export function LoginForm() {
     setPreferredProvider(savedProvider);
   }, []);
 
-  // Determine which providers to show at the top
+  // ─────────────────────────────────────────────────────────────────────────
+  // Provider visibility (unchanged from prior version — Google on desktop,
+  // email always shown)
+  // ─────────────────────────────────────────────────────────────────────────
+
   const getTopProviders = (): Provider[] => {
-    // Web (self-hosted): only email OTP is available
     if (!isNativeApp) {
       return ["email"];
     }
-
-    // Native app: if user has a preference, show it first
     if (preferredProvider) {
       return [preferredProvider];
     }
-
-    // Default: show Google only
     return ["google"];
   };
 
-  // Determine which providers to show in "More options"
   const getMoreOptionsProviders = (): Provider[] => {
-    // Web (self-hosted): no additional options
-    if (!isNativeApp) {
-      return [];
-    }
-
+    if (!isNativeApp) return [];
     const topProviders = getTopProviders();
     const allProviders: Provider[] = ["google", "email"];
     return allProviders.filter((p) => !topProviders.includes(p));
@@ -150,15 +208,33 @@ export function LoginForm() {
   const topProviders = getTopProviders();
   const moreOptionsProviders = getMoreOptionsProviders();
 
-  const handleOAuthSignIn = async (provider: "google") => {
+  // ─────────────────────────────────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const resetTransients = () => {
     setLocalError(null);
     setSuccessMessage(null);
     clearError();
-    setLoadingProvider(provider);
+  };
 
+  const isValidEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+
+  const handleSwitchMode = (mode: AuthMode) => {
+    setAuthMode(mode);
+    setEmailFlow("password"); // reset to password whenever we switch tabs
+    resetTransients();
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // OAuth (Google) handler — unchanged
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleOAuthSignIn = async (provider: "google") => {
+    resetTransients();
+    setLoadingProvider(provider);
     try {
       await signInWithOAuth(provider);
-      // Save provider preference
       savePreferredProvider(provider);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Sign in failed. Please try again.";
@@ -168,34 +244,94 @@ export function LoginForm() {
     }
   };
 
-  const handleMagicLinkSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLocalError(null);
-    setSuccessMessage(null);
-    clearError();
+  // ─────────────────────────────────────────────────────────────────────────
+  // Password sign-in / sign-up (PRIMARY flow)
+  // ─────────────────────────────────────────────────────────────────────────
 
-    if (!email) {
-      setLocalError("Please enter your email address");
+  const handlePasswordSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetTransients();
+
+    if (!email || !isValidEmail(email)) {
+      setLocalError("Please enter a valid email address.");
       return;
     }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setLocalError("Please enter a valid email address");
+    if (!password) {
+      setLocalError("Please enter your password.");
+      return;
+    }
+    if (authMode === "signUp" && password.length < 8) {
+      setLocalError("Password must be at least 8 characters.");
       return;
     }
 
     setLoadingProvider("email");
+    try {
+      if (authMode === "signIn") {
+        await signInWithEmail(email, password);
+        savePreferredProvider("email");
+        // Provider sets the session — ConnectedView takes over from here.
+      } else {
+        await signUpWithEmail(email, password);
+        savePreferredProvider("email");
+        // If Supabase auto-confirms the user, the provider will already
+        // have set a session; otherwise we surface the confirm-email
+        // message it stored on `error`. Either way, give the user clear
+        // visual feedback.
+        setSuccessMessage(
+          "Account created. If your project requires email confirmation, check your inbox.",
+        );
+        setPendingEmail(email);
+      }
+    } catch {
+      // Provider's `error` state already captures the Supabase message —
+      // `translateAuthError(error)` will render it below. We don't
+      // double-set localError here.
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
 
+  const handleResendConfirmation = async () => {
+    const target = pendingEmail || email;
+    if (!target || !isValidEmail(target)) {
+      setLocalError("Enter your email address first.");
+      return;
+    }
+    resetTransients();
+    setLoadingProvider("email");
+    try {
+      await resendConfirmation(target);
+      setSuccessMessage(`Confirmation email re-sent to ${target}.`);
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Couldn't resend the confirmation email.";
+      setLocalError(message);
+    } finally {
+      setLoadingProvider(null);
+    }
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Magic-link / OTP flow (SECONDARY — kept for users without passwords)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleMagicLinkSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    resetTransients();
+
+    if (!email || !isValidEmail(email)) {
+      setLocalError("Please enter a valid email address.");
+      return;
+    }
+
+    setLoadingProvider("email");
     try {
       await signInWithMagicLink(email);
-      // Save provider preference
       savePreferredProvider("email");
-      // Store email for OTP verification and show OTP input
       setPendingEmail(email);
       setShowOtpInput(true);
-      setEmail(""); // Clear email input
+      setEmail("");
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "Failed to send magic link. Please try again.";
@@ -210,17 +346,12 @@ export function LoginForm() {
       setLocalError("Please enter the complete 6-digit code");
       return;
     }
-
-    setLocalError(null);
-    clearError();
+    resetTransients();
     setLoadingProvider("email");
-
     try {
       await verifyOtp(pendingEmail, otpCode);
-      // Success - context will update isConnected
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "";
-      // Check for OTP expired/invalid error and provide a more user-friendly message
       const isOtpExpired =
         errorMessage.toLowerCase().includes("expired") ||
         errorMessage.toLowerCase().includes("invalid");
@@ -228,21 +359,19 @@ export function LoginForm() {
         ? "Code expired or invalid. Please request a new code."
         : errorMessage || "Invalid code. Please try again.";
       setLocalError(message);
-      setOtpCode(""); // Clear OTP on error
+      setOtpCode("");
     } finally {
       setLoadingProvider(null);
     }
   };
 
   const handleResendCode = async () => {
-    setLocalError(null);
-    clearError();
+    resetTransients();
     setLoadingProvider("email");
-
     try {
       await signInWithMagicLink(pendingEmail);
       setSuccessMessage("A new code has been sent to your email.");
-      setOtpCode(""); // Clear OTP input
+      setOtpCode("");
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to resend code.";
       setLocalError(message);
@@ -255,32 +384,203 @@ export function LoginForm() {
     setShowOtpInput(false);
     setPendingEmail("");
     setOtpCode("");
-    setLocalError(null);
-    setSuccessMessage(null);
-    clearError();
+    setEmailFlow("password");
+    resetTransients();
   };
 
-  const displayError = localError ?? error;
+  // ─────────────────────────────────────────────────────────────────────────
+  // Display state
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const friendly = translateAuthError(localError ?? error, authMode);
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Email block — renders the password form by default, magic-link inline
+  // when the user clicks "Use magic link instead".
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const emailBlock = (
+    <div className="w-full max-w-sm space-y-3">
+      {/* Sign in / Sign up toggle */}
+      <div
+        role="tablist"
+        aria-label="Authentication mode"
+        className="bg-muted/40 grid grid-cols-2 rounded-full p-0.5 text-xs"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={authMode === "signIn"}
+          onClick={() => handleSwitchMode("signIn")}
+          className={`rounded-full px-3 py-1.5 font-medium transition-colors ${
+            authMode === "signIn"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Sign in
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={authMode === "signUp"}
+          onClick={() => handleSwitchMode("signUp")}
+          className={`rounded-full px-3 py-1.5 font-medium transition-colors ${
+            authMode === "signUp"
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          Sign up
+        </button>
+      </div>
+
+      {emailFlow === "password" ? (
+        <form onSubmit={handlePasswordSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              className="rounded-full"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="password">Password</Label>
+            <Input
+              id="password"
+              type="password"
+              placeholder={authMode === "signUp" ? "At least 8 characters" : ""}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete={authMode === "signUp" ? "new-password" : "current-password"}
+              className="rounded-full"
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={loadingProvider === "email" || isLoading}
+            className="from-primary to-primary/90 bg-linear-to-r w-full"
+          >
+            {loadingProvider === "email" ? (
+              <>
+                <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                {authMode === "signIn" ? "Signing in..." : "Creating account..."}
+              </>
+            ) : authMode === "signIn" ? (
+              "Sign in"
+            ) : (
+              "Create account"
+            )}
+          </Button>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setEmailFlow("magicLink");
+                resetTransients();
+              }}
+              className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+            >
+              Use magic link instead
+            </button>
+          </div>
+        </form>
+      ) : (
+        <form onSubmit={handleMagicLinkSubmit} className="space-y-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="email-magic">Email</Label>
+            <Input
+              id="email-magic"
+              type="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              className="rounded-full"
+            />
+          </div>
+          <Button
+            type="submit"
+            disabled={loadingProvider === "email" || isLoading}
+            variant="default"
+            className="w-full"
+          >
+            {loadingProvider === "email" ? (
+              <>
+                <Icons.Spinner className="mr-2 h-4 w-4 animate-spin" />
+                Sending magic link...
+              </>
+            ) : (
+              "Send magic link"
+            )}
+          </Button>
+          <div className="text-center">
+            <button
+              type="button"
+              onClick={() => {
+                setEmailFlow("password");
+                resetTransients();
+              }}
+              className="text-muted-foreground hover:text-foreground text-xs underline-offset-4 hover:underline"
+            >
+              ← Back to password
+            </button>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Render
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="space-y-6">
-      {/* Features Grid */}
       <FeaturesSection />
 
-      {/* Sign In Card */}
       <Card>
         <CardHeader className="pb-4">
-          <CardTitle className="text-center text-base font-medium">Get started</CardTitle>
+          <CardTitle className="text-center text-base font-medium">
+            {showOtpInput ? "Verify your email" : "Get started"}
+          </CardTitle>
           <CardDescription className="text-center">
-            Sign in to connect your broker accounts
+            {showOtpInput
+              ? `We sent a 6-digit code to ${pendingEmail}.`
+              : "Sign in to connect your broker accounts"}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Error Alert */}
-          {displayError && (
+          {friendly && (
             <Alert variant="destructive">
               <Icons.AlertCircle className="h-4 w-4" />
-              <AlertDescription>{displayError}</AlertDescription>
+              <AlertDescription className="space-y-2">
+                <div>{friendly.message}</div>
+                {friendly.action === "resendConfirmation" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleResendConfirmation}
+                    disabled={loadingProvider === "email" || isLoading}
+                  >
+                    {loadingProvider === "email" ? (
+                      <>
+                        <Icons.Spinner className="mr-2 h-3 w-3 animate-spin" />
+                        Sending...
+                      </>
+                    ) : (
+                      "Resend confirmation email"
+                    )}
+                  </Button>
+                )}
+              </AlertDescription>
             </Alert>
           )}
 
@@ -292,16 +592,9 @@ export function LoginForm() {
             </Alert>
           )}
 
-          {/* OTP Verification UI */}
+          {/* OTP verification UI (only after a magic-link send) */}
           {showOtpInput ? (
             <div className="flex flex-col items-center space-y-4">
-              <div className="text-center">
-                <p className="text-sm font-medium">Enter verification code</p>
-                <p className="text-muted-foreground text-sm">
-                  We sent a code to <span className="font-medium">{pendingEmail}</span>
-                </p>
-              </div>
-
               <InputOTP
                 maxLength={6}
                 value={otpCode}
@@ -361,7 +654,7 @@ export function LoginForm() {
             </div>
           ) : (
             <>
-              {/* Top Provider Buttons */}
+              {/* Top providers — Google (desktop) above email block */}
               <div className="flex flex-col items-center space-y-3">
                 {topProviders.includes("google") && (
                   <ProviderButton
@@ -371,33 +664,10 @@ export function LoginForm() {
                     isLastUsed={topProviders.length > 1 && preferredProvider === "google"}
                   />
                 )}
-                {topProviders.includes("email") && (
-                  <form onSubmit={handleMagicLinkSignIn} className="w-full max-w-sm space-y-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        autoComplete="email"
-                        className="rounded-full"
-                      />
-                    </div>
-                    <ProviderButton
-                      provider="email"
-                      type="submit"
-                      onClick={() => {}}
-                      isLoading={loadingProvider === "email"}
-                      isLastUsed={topProviders.length > 1 && preferredProvider === "email"}
-                      variant="default"
-                    />
-                  </form>
-                )}
+                {topProviders.includes("email") && emailBlock}
               </div>
 
-              {/* Divider */}
+              {/* Divider when there are alternate providers */}
               {moreOptionsProviders.length > 0 && (
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center">
@@ -411,7 +681,7 @@ export function LoginForm() {
             </>
           )}
 
-          {/* More Sign-in Options (Collapsible) - Hidden during OTP */}
+          {/* Alternate sign-in options (collapsible) — hidden during OTP */}
           {!showOtpInput && moreOptionsProviders.length > 0 && (
             <Collapsible open={isMoreOptionsOpen} onOpenChange={setIsMoreOptionsOpen}>
               <div className="flex justify-center">
@@ -434,36 +704,12 @@ export function LoginForm() {
                     isLoading={loadingProvider === "google"}
                   />
                 )}
-                {moreOptionsProviders.includes("email") && (
-                  <form
-                    onSubmit={handleMagicLinkSignIn}
-                    className="flex w-full max-w-sm flex-col items-center space-y-3"
-                  >
-                    <div className="w-full space-y-2">
-                      <Label htmlFor="more-email">Email</Label>
-                      <Input
-                        id="more-email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        autoComplete="email"
-                        className="rounded-full"
-                      />
-                    </div>
-                    <ProviderButton
-                      provider="email"
-                      type="submit"
-                      onClick={() => {}}
-                      isLoading={loadingProvider === "email"}
-                    />
-                  </form>
-                )}
+                {moreOptionsProviders.includes("email") && emailBlock}
               </CollapsibleContent>
             </Collapsible>
           )}
 
-          {/* Terms and Privacy Footer - Hidden during OTP */}
+          {/* Terms & privacy footer */}
           {!showOtpInput && (
             <div className="pt-4">
               <p className="text-muted-foreground text-center text-xs">
@@ -488,7 +734,7 @@ export function LoginForm() {
         </CardContent>
       </Card>
 
-      {/* Privacy Footnote */}
+      {/* Privacy footnote */}
       <p className="text-muted-foreground text-center text-xs">
         Your portfolio data never leaves your device. Connect uses secure aggregators to sync
         transactions directly to your local database.

@@ -3,7 +3,6 @@ import { Icons } from "@mizan/ui/components/ui/icons";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@mizan/ui/components/ui/tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { useMizanConnect } from "../providers/mizan-connect-provider";
-import { hasBrokerSync } from "../lib/plan-capabilities";
 import { useAggregatedSyncStatus, useSyncBrokerData } from "../hooks";
 import type { AggregatedSyncStatus } from "../types";
 
@@ -29,12 +28,14 @@ const statusColors: Record<AggregatedSyncStatus, string> = {
  * Only visible when Connect is enabled and user has an active subscription.
  */
 export function SyncButton({ className, showLabel = false, size = "icon" }: SyncButtonProps) {
-  const { isEnabled, isConnected, userInfo } = useMizanConnect();
+  const { isEnabled, isConnected } = useMizanConnect();
   const { status, lastSyncTime } = useAggregatedSyncStatus();
   const { mutate: syncBrokerData, isPending: isSyncing } = useSyncBrokerData();
 
-  // Only show when Connect is enabled, connected, and plan includes broker sync
-  if (!isEnabled || !isConnected || !hasBrokerSync(userInfo)) {
+  // TODO(chunk-4): restore plan-tier gating once /api/v1/user/me returns
+  // team.plan. For Chunk 3 the broker UI shows whenever the user is
+  // signed in to Mizan Connect.
+  if (!isEnabled || !isConnected) {
     return null;
   }
 

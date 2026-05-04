@@ -1,8 +1,12 @@
 import { ExternalLink } from "@/components/external-link";
-import { MIZAN_CONNECT_PORTAL_URL } from "@/lib/constants";
 import { Button } from "@mizan/ui/components/ui/button";
 import { Icons } from "@mizan/ui/components/ui/icons";
 import { Link } from "react-router-dom";
+import {
+  useCreateBrokerLoginPortal,
+  usePollConnectionsAfterPortal,
+} from "../hooks";
+import { useMizanConnect } from "../providers/mizan-connect-provider";
 import { ConnectFlowDiagram } from "./connect-flow-diagram";
 
 const features = [
@@ -42,6 +46,15 @@ const colorClasses = {
 };
 
 export function ConnectEmptyState() {
+  const { isConnected } = useMizanConnect();
+  const portal = useCreateBrokerLoginPortal();
+  const [isPolling, startPolling] = usePollConnectionsAfterPortal();
+
+  const handleConnect = () => {
+    portal.mutate(undefined, { onSuccess: () => startPolling() });
+  };
+  const isBusy = portal.isPending || isPolling;
+
   return (
     <div className="flex min-h-[calc(100vh-12rem)] flex-col items-center justify-center px-4 py-6">
       <div className="w-full max-w-3xl space-y-8 sm:space-y-12">
@@ -84,19 +97,37 @@ export function ConnectEmptyState() {
         {/* CTA */}
         <footer className="flex flex-col items-center gap-4">
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center sm:justify-center">
-            <Button asChild className="from-primary to-primary/90 bg-linear-to-r w-full sm:w-auto">
-              <ExternalLink href={MIZAN_CONNECT_PORTAL_URL}>
-                Get Started with Connect
-                <Icons.ExternalLink className="ml-1.5 h-4 w-4" />
-              </ExternalLink>
-            </Button>
-            <Button variant="outline" asChild className="w-full sm:w-auto">
-              <Link to="/settings/connect">
-                <Icons.User className="mr-1.5 h-4 w-4" />
-                Login to your account
-              </Link>
-            </Button>
+            {isConnected ? (
+              <Button
+                onClick={handleConnect}
+                disabled={isBusy}
+                className="from-primary to-primary/90 bg-linear-to-r w-full sm:w-auto"
+              >
+                {isBusy ? (
+                  <>
+                    <Icons.Spinner className="mr-1.5 h-4 w-4 animate-spin" />
+                    {isPolling ? "Waiting for broker..." : "Opening portal..."}
+                  </>
+                ) : (
+                  <>
+                    Connect a broker
+                    <Icons.ExternalLink className="ml-1.5 h-4 w-4" />
+                  </>
+                )}
+              </Button>
+            ) : (
+              <Button variant="outline" asChild className="w-full sm:w-auto">
+                <Link to="/settings/connect">
+                  <Icons.User className="mr-1.5 h-4 w-4" />
+                  Sign in to Mizan Connect first
+                </Link>
+              </Button>
+            )}
           </div>
+          <p className="text-muted-foreground/70 text-xs">
+            Opens a SnapTrade portal in your browser. After you finish in the
+            broker, your accounts appear here automatically.
+          </p>
           <ExternalLink
             href="https://mizan.app/connect/"
             className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 text-xs transition-colors"

@@ -22,7 +22,9 @@ pub use broker::{
 };
 
 // Re-export the HTTP client and public functions
-pub use client::{fetch_subscription_plans_public, ConnectApiClient, DEFAULT_CLOUD_API_URL};
+pub use client::{
+    fetch_subscription_plans_public, ConnectApiClient, LoginPortalResponse, DEFAULT_CLOUD_API_URL,
+};
 pub use token_lifecycle::{
     ensure_valid_access_token, TokenLifecycleConfig, TokenLifecycleError, TokenLifecycleState,
     CLOUD_ACCESS_TOKEN_KEY, CLOUD_REFRESH_TOKEN_KEY,

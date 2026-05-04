@@ -9,12 +9,14 @@ import {
   getPlatforms as getPlatformsAdapter,
   listBrokerConnections as listBrokerConnectionsAdapter,
   listBrokerAccounts as listBrokerAccountsAdapter,
+  createBrokerLoginPortal as createBrokerLoginPortalAdapter,
   getSubscriptionPlans as getSubscriptionPlansAdapter,
   getSubscriptionPlansPublic as getSubscriptionPlansPublicAdapter,
   getUserInfo as getUserInfoAdapter,
   getBrokerSyncStates as getBrokerSyncStatesAdapter,
   getImportRuns as getImportRunsAdapter,
 } from "@/adapters";
+import type { BrokerLoginPortalResponse } from "@/adapters/shared/connect";
 import type { Account, Platform } from "@/lib/types";
 import type {
   BrokerConnection,
@@ -75,6 +77,25 @@ export const listBrokerAccounts = async (): Promise<BrokerAccount[]> => {
     return await listBrokerAccountsAdapter();
   } catch (error) {
     logger.error("Error listing broker accounts.");
+    throw error;
+  }
+};
+
+/**
+ * Request a one-time SnapTrade Connection Portal URL from Mizan Connect.
+ * The caller opens the returned URL in the user's default browser; the
+ * backend's callback endpoint handles SnapTrade's redirect server-side.
+ *
+ * @param broker Optional broker slug (e.g. `"ROBINHOOD"`) to deep-link
+ *   straight into a single broker. Omit to show SnapTrade's broker picker.
+ */
+export const createBrokerLoginPortal = async (
+  broker?: string,
+): Promise<BrokerLoginPortalResponse> => {
+  try {
+    return await createBrokerLoginPortalAdapter(broker);
+  } catch (error) {
+    logger.error("Error creating broker login portal.");
     throw error;
   }
 };

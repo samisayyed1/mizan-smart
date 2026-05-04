@@ -105,6 +105,7 @@ interface MizanConnectContextValue {
   signInWithOAuth: (provider: "google" | "apple" | "github") => Promise<void>;
   signInWithMagicLink: (email: string) => Promise<void>;
   verifyOtp: (email: string, token: string) => Promise<void>;
+  resendConfirmation: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   clearError: () => void;
   refetchUserInfo: () => Promise<void>;
@@ -132,6 +133,7 @@ const disabledContextValue: MizanConnectContextValue = {
   signInWithOAuth: async () => {},
   signInWithMagicLink: async () => {},
   verifyOtp: async () => {},
+  resendConfirmation: async () => {},
   signOut: async () => {},
   clearError: () => {},
   refetchUserInfo: async () => {},
@@ -656,6 +658,40 @@ function EnabledMizanConnectProvider({ children }: { children: ReactNode }) {
     [supabase, storeTokens],
   );
 
+  /**
+   * Resend the confirmation email for an unconfirmed signup.
+   *
+   * Used by the LoginForm when sign-in fails with `email_not_confirmed`:
+   * the user gets an inline "Resend confirmation" action that calls this.
+   * Mirrors `signInWithMagicLink` shape — surfaces Supabase's error
+   * message via `setError` and re-throws so the form can render its
+   * own success state.
+   */
+  const resendConfirmation = useCallback(
+    async (email: string) => {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const { error: resendError } = await supabase.auth.resend({
+          type: "signup",
+          email,
+        });
+        if (resendError) {
+          throw resendError;
+        }
+      } catch (err) {
+        const message =
+          err instanceof Error ? err.message : "Failed to resend confirmation email";
+        setError(message);
+        throw err;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [supabase],
+  );
+
   const signOut = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -742,6 +778,7 @@ function EnabledMizanConnectProvider({ children }: { children: ReactNode }) {
       signInWithOAuth,
       signInWithMagicLink,
       verifyOtp,
+      resendConfirmation,
       signOut,
       clearError,
       refetchUserInfo,
@@ -760,6 +797,7 @@ function EnabledMizanConnectProvider({ children }: { children: ReactNode }) {
       signInWithOAuth,
       signInWithMagicLink,
       verifyOtp,
+      resendConfirmation,
       signOut,
       clearError,
       refetchUserInfo,

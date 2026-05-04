@@ -22,3 +22,9 @@ base64 = "0.22"
 [features]
 default = ["broker"]
 broker = []
+
+[dev-dependencies]
+# Mock HTTP server for ConnectApiClient unit tests.
+wiremock = "0.6"
+# Serialise tests that mutate process-global env vars.
+serial_test = "3"

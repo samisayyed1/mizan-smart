@@ -107,6 +107,8 @@ function PlanCard({ plan, billingPeriod, isDefault, isComingSoon }: PlanCardProp
   };
 
   const handleGetStarted = () => {
+    // TODO(chunk-4): swap to in-app Stripe checkout once billing ships.
+    // mizan.app is currently parked, so this opens nothing useful.
     openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/onboarding?plan=${plan.id}`);
   };
 

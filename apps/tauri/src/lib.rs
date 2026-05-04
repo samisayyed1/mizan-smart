@@ -521,6 +521,8 @@ pub fn run() {
             #[cfg(feature = "connect-sync")]
             commands::brokers_sync::list_broker_accounts,
             #[cfg(feature = "connect-sync")]
+            commands::brokers_sync::create_broker_login_portal,
+            #[cfg(feature = "connect-sync")]
             commands::brokers_sync::get_subscription_plans,
             #[cfg(feature = "connect-sync")]
             commands::brokers_sync::get_subscription_plans_public,

@@ -2,6 +2,9 @@ import { openUrlInBrowser } from "@/adapters";
 import { ComingSoonCard } from "@/components/coming-soon-card";
 import { ExternalLink } from "@/components/external-link";
 import { DeviceSyncSection } from "@/features/devices-sync";
+// TODO(chunk-4): drop MIZAN_CONNECT_PORTAL_URL entirely once the billing
+// surfaces below migrate into the app. The constant points at
+// https://connect.mizan.app, which is currently a parked domain.
 import { MIZAN_CONNECT_PORTAL_URL } from "@/lib/constants";
 import { QueryKeys } from "@/lib/query-keys";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -16,6 +19,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@mizan/ui/components/ui
 import { toast } from "@mizan/ui/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 import { useCallback, useState } from "react";
+import {
+  useCreateBrokerLoginPortal,
+  usePollConnectionsAfterPortal,
+} from "../hooks";
 import { useMizanConnect } from "../providers/mizan-connect-provider";
 import {
   listBrokerAccounts,
@@ -23,7 +30,7 @@ import {
   syncBrokerData,
 } from "../services/broker-service";
 import type { BrokerAccount, BrokerConnection } from "../types";
-import { hasBrokerSync } from "../lib/plan-capabilities";
+// hasBrokerSync gating loosened in Chunk 3; see TODO(chunk-4) below.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Hooks
@@ -228,9 +235,20 @@ function BrokerConnectionsCard({
   onRefresh,
   isRefreshing,
 }: BrokerConnectionsCardProps) {
-  const openConnectionsPortal = () => {
-    openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/connections`);
-  };
+  // Connect-broker-via-SnapTrade is the same call regardless of which
+  // button (header "Manage", empty-state "Connect Broker") triggers it —
+  // every entry point goes through useCreateBrokerLoginPortal so we get
+  // the polling refetch and consistent error toasts for free.
+  const portal = useCreateBrokerLoginPortal();
+  const [isPolling, startPolling] = usePollConnectionsAfterPortal();
+  const handleConnect = () =>
+    portal.mutate(undefined, { onSuccess: () => startPolling() });
+  const isPortalBusy = portal.isPending || isPolling;
+  const portalLabel = portal.isPending
+    ? "Opening portal..."
+    : isPolling
+      ? "Waiting for broker..."
+      : null;
 
   return (
     <Card>
@@ -257,19 +275,35 @@ function BrokerConnectionsCard({
               variant="ghost"
               size="icon"
               className="text-muted-foreground hover:text-foreground sm:hidden"
-              onClick={openConnectionsPortal}
+              onClick={handleConnect}
+              disabled={isPortalBusy}
+              aria-label="Add broker"
             >
-              <Icons.ExternalLink className="h-4 w-4" />
+              {isPortalBusy ? (
+                <Icons.Spinner className="h-4 w-4 animate-spin" />
+              ) : (
+                <Icons.Plus className="h-4 w-4" />
+              )}
             </Button>
             {/* Desktop: full text */}
             <Button
               variant="ghost"
               size="sm"
               className="text-muted-foreground hover:text-foreground hidden sm:inline-flex"
-              onClick={openConnectionsPortal}
+              onClick={handleConnect}
+              disabled={isPortalBusy}
             >
-              Manage connections
-              <Icons.ArrowRight className="ml-1 h-3.5 w-3.5" />
+              {isPortalBusy ? (
+                <>
+                  <Icons.Spinner className="mr-1 h-4 w-4 animate-spin" />
+                  {portalLabel ?? "Connecting..."}
+                </>
+              ) : (
+                <>
+                  Add broker
+                  <Icons.ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </>
+              )}
             </Button>
           </div>
         </div>
@@ -283,9 +317,18 @@ function BrokerConnectionsCard({
           ) : connections.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <p className="text-muted-foreground text-sm">No broker connections yet</p>
-              <Button className="mt-3" onClick={openConnectionsPortal}>
-                <Icons.Plus className="h-4 w-4" />
-                Connect Broker
+              <Button className="mt-3" onClick={handleConnect} disabled={isPortalBusy}>
+                {isPortalBusy ? (
+                  <>
+                    <Icons.Spinner className="h-4 w-4 animate-spin" />
+                    {portalLabel ?? "Connecting..."}
+                  </>
+                ) : (
+                  <>
+                    <Icons.Plus className="h-4 w-4" />
+                    Connect a broker
+                  </>
+                )}
               </Button>
             </div>
           ) : (
@@ -362,8 +405,13 @@ export function ConnectedView() {
     userInfo?.team?.subscription_status === "active" ||
     userInfo?.team?.subscription_status === "trialing";
 
-  // Check if user's plan includes broker sync
-  const showBrokerSync = hasBrokerSync(userInfo);
+  // TODO(chunk-4): restore subscription gating once /api/v1/user/me returns
+  // team.plan. The Mizan Connect Chunk-3 backend doesn't yet populate team
+  // (Stripe lands in Chunk 4), so `hasBrokerSync(userInfo)` would be false
+  // forever and the broker UI would never render. We loosen to "broker UI
+  // shows whenever there's a connected userInfo" and let the empty-state /
+  // BrokerConnectionsCard handle the "no connections yet" view itself.
+  const showBrokerSync = !!userInfo;
 
   // Hooks - only fetch broker connections and accounts if user has broker sync
   const connectionsQuery = useBrokerConnections(showBrokerSync);
@@ -505,16 +553,8 @@ export function ConnectedView() {
         />
       )}
 
-      {/* Brokerage sync (broker connections, accounts, sync history) lands
-          with the SnapTrade integration. Until then, render a placeholder
-          where the broker UI used to sit. */}
-      {!isServiceUnavailable && !!userInfo && (
-        <ComingSoonCard
-          title="Brokerage sync"
-          message="Mizan Connect will let you link a broker once and have transactions and holdings sync automatically."
-          detail="Available in a future Mizan Connect release."
-        />
-      )}
+      {/* Brokerage-sync ComingSoonCard removed in Chunk 3 — the real
+          BrokerConnectionsCard + Accounts card render below. */}
 
       {/* Device sync (E2E-encrypted multi-device) follows brokerage. Hidden
           until the encrypted-snapshot service ships. */}
@@ -557,25 +597,13 @@ export function ConnectedView() {
                   <Icons.CloudSync2 className={`h-4 w-4 ${isSyncing ? "animate-pulse" : ""}`} />
                   Sync Now
                 </Button>
-                {/* Mobile: icon only */}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="text-muted-foreground hover:text-foreground sm:hidden"
-                  onClick={() => openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/accounts`)}
-                >
-                  <Icons.ExternalLink className="h-4 w-4" />
-                </Button>
-                {/* Desktop: full text */}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="text-muted-foreground hover:text-foreground hidden sm:inline-flex"
-                  onClick={() => openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/accounts`)}
-                >
-                  Manage accounts
-                  <Icons.ArrowRight className="ml-1 h-3.5 w-3.5" />
-                </Button>
+                {/* TODO(chunk-5): in-app per-account management UI.
+                    The "Manage accounts" buttons used to deep-link into a
+                    hosted Wealthfolio portal at MIZAN_CONNECT_PORTAL_URL
+                    (currently a parked domain), so they're hidden until we
+                    surface a real in-app screen. Adding a broker is still
+                    available via the BrokerConnectionsCard "Add broker"
+                    header above. */}
               </div>
             </div>
 
@@ -622,6 +650,11 @@ export function ConnectedView() {
                   Connect your brokerage accounts for automatic portfolio syncing.
                 </p>
               </div>
+              {/* TODO(chunk-4): replace with in-app billing surface.
+                  Currently opens a parked-domain URL — the upsell card is
+                  also gated by `hasSubscription && !showBrokerSync` which
+                  is unreachable in Chunk 3 (no team data), so this button
+                  doesn't render today. Kept for the Chunk-4 swap. */}
               <Button
                 size="sm"
                 onClick={() =>

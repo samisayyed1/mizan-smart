@@ -5,7 +5,12 @@ export const DECIMAL_PRECISION = 8;
 export const DISPLAY_DECIMAL_PRECISION = 2;
 
 // Mizan Connect Portal URL - centralized configuration
-// TODO: replace with mizan domain when registered
+// TODO(chunk-4): mizan.app is currently parked; broker connect flows now go
+// through the in-app `useCreateBrokerLoginPortal` hook (POST
+// /api/v1/sync/brokerage/login-portal). The only remaining caller is the
+// billing "Upgrade" CTA in connect-page.tsx, which should be replaced with an
+// in-app Stripe checkout once Chunk 4 ships. Once that's gone, delete this
+// constant.
 export const MIZAN_CONNECT_PORTAL_URL = "https://connect.mizan.app";
 
 export const PORTFOLIO_ACCOUNT_ID = "TOTAL";

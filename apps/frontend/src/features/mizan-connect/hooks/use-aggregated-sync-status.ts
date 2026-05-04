@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { useMizanConnect } from "../providers/mizan-connect-provider";
-import { hasBrokerSync } from "../lib/plan-capabilities";
 import { useSyncStates } from "./use-sync-states";
 import type { AggregatedSyncStatus, BrokerSyncState } from "../types";
 
@@ -41,10 +40,13 @@ function determineAggregatedStatus(
 
 export function useAggregatedSyncStatus() {
   const { isConnected, userInfo, isEnabled } = useMizanConnect();
-  const showBrokerSync = hasBrokerSync(userInfo);
+  // TODO(chunk-4): re-derive `showBrokerSync` from `hasBrokerSync(userInfo)`
+  // once /api/v1/user/me returns team.plan. For Chunk 3 the broker UI
+  // shows whenever the user is signed in to Mizan Connect.
+  const showBrokerSync = isConnected;
   const { data: syncStates = [], isLoading } = useSyncStates({ enabled: showBrokerSync });
 
-  // Determine if user has an active subscription
+  // TODO(chunk-4): restore subscription gating once Stripe ships.
   const hasSubscription = useMemo(() => {
     if (!userInfo?.team) return false;
     const status = userInfo.team.subscription_status;
@@ -53,10 +55,9 @@ export function useAggregatedSyncStatus() {
 
   const status = useMemo<AggregatedSyncStatus>(() => {
     if (!isEnabled) return "not_connected";
-    if (!isConnected || !hasSubscription) return "not_connected";
-    if (!showBrokerSync) return "idle";
-    return determineAggregatedStatus(isConnected, hasSubscription, syncStates);
-  }, [isEnabled, showBrokerSync, isConnected, hasSubscription, syncStates]);
+    if (!isConnected) return "not_connected";
+    return determineAggregatedStatus(isConnected, /* hasSubscription */ true, syncStates);
+  }, [isEnabled, isConnected, syncStates]);
 
   // Find the last successful sync time across all states
   const lastSyncTime = useMemo(() => {

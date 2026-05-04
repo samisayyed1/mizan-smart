@@ -1,11 +1,13 @@
 import { Suspense, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AppLayout } from "@/pages/layouts/app-layout";
 import { OnboardingLayout } from "@/pages/layouts/onboarding-layout";
 import SettingsLayout from "@/pages/settings/settings-layout";
 
 import { getDynamicRoutes, subscribeToNavigationUpdates } from "@/addons/addons-runtime-context";
+import AuthCallbackPage from "@/features/mizan-connect/pages/auth-callback-page";
+import ConnectPage from "@/features/mizan-connect/pages/connect-page";
 import ActivityManagerPage from "@/pages/activity/activity-manager-page";
 import ActivityPage from "@/pages/activity/activity-page";
 import ActivityImportPage from "@/pages/activity/import/activity-import-page";
@@ -33,6 +35,7 @@ import GeneralSettingsPage from "./pages/settings/general/general-page";
 import MarketDataImportPage from "./pages/settings/market-data/market-data-import-page";
 import MarketDataSettingsPage from "./pages/settings/market-data/market-data-settings";
 import TaxonomiesPage from "./pages/settings/taxonomies/taxonomies-page";
+import ConnectSettingsPage from "./pages/settings/mizan-connect/connect-settings-page";
 import GoalsDashboardPage from "@/features/goals/pages/goals-dashboard-page";
 import GoalNewPage from "@/features/goals/pages/goal-new-page";
 import GoalDetailPage from "@/features/goals/pages/goal-detail-page";
@@ -66,8 +69,8 @@ export function AppRoutes() {
         {/* QR Scanner - No layout for fullscreen camera access */}
         {/* <Route path="/qr-scanner" element={<QRScannerPage />} /> */}
 
-        {/* Auth callback redirected to dashboard (Connect UI removed in fork) */}
-        <Route path="/auth/callback" element={<Navigate to="/" replace />} />
+        {/* Auth callback - PKCE code exchange handler for Mizan Connect */}
+        <Route path="/auth/callback" element={<AuthCallbackPage />} />
 
         {/* Onboarding with dedicated layout */}
         <Route path="/onboarding" element={<OnboardingLayout />}>
@@ -90,7 +93,7 @@ export function AppRoutes() {
           <Route path="insights" element={<PortfolioInsightsPage />} />
           <Route path="health" element={<HealthPage />} />
           <Route path="assistant" element={<AiAssistantPage />} />
-          <Route path="connect" element={<Navigate to="/" replace />} />
+          <Route path="connect" element={<ConnectPage />} />
           <Route path="goals" element={<GoalsDashboardPage />} />
           <Route path="goals/new" element={<GoalNewPage />} />
           <Route path="goals/:goalId/guide" element={<GoalRetirementGuidePage />} />
@@ -121,7 +124,7 @@ export function AppRoutes() {
             <Route path="market-data/import" element={<MarketDataImportPage />} />
             <Route path="securities" element={<AssetsPage />} />
             <Route path="taxonomies" element={<TaxonomiesPage />} />
-            <Route path="connect" element={<Navigate to="/settings" replace />} />
+            <Route path="connect" element={<ConnectSettingsPage />} />
             <Route path="ai-providers" element={<AiProvidersPage />} />
             <Route path="addons" element={<AddonSettingsPage />} />
           </Route>

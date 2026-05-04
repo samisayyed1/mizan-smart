@@ -63,6 +63,13 @@ const staticNavigation: NavigationProps = {
   ],
   secondary: [
     {
+      icon: <Icons.Link className="size-6" />,
+      title: "Connect",
+      href: "/connect",
+      keywords: ["sync", "broker", "device", "supabase", "cloud", "account"],
+      label: "Mizan Connect",
+    },
+    {
       icon: <Icons.Settings className="size-6" />,
       title: "Settings",
       href: "/settings",

@@ -88,6 +88,10 @@ Thumbs.db
 .ralph-tui/
 .kiro/
 .conductor/
+
+# Claude Code runtime artifacts (keep CLAUDE.md, skills/, agents/ tracked)
+.claude/scheduled_tasks.lock
+.claude/*.lock
 db/
 apps/db/
 apps/tauri/db/

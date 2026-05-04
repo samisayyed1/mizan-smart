@@ -25,12 +25,14 @@ import { clearSyncSession, restoreSyncSession, storeSyncSession } from "../servi
 import { getUserInfo } from "../services/broker-service";
 import type { UserInfo } from "../types";
 
-// Auth configuration - these are public/publishable keys (safe for client-side)
-// Can be overridden via environment variables: CONNECT_AUTH_URL and CONNECT_AUTH_PUBLISHABLE_KEY
-const AUTH_URL = (import.meta.env.CONNECT_AUTH_URL as string) || "https://auth.mizan.app";
-const AUTH_PUBLISHABLE_KEY =
-  (import.meta.env.CONNECT_AUTH_PUBLISHABLE_KEY as string) ||
-  "sb_publishable_ZSZbXNtWtnh9i2nqJ2UL4A_NV8ZVutd";
+// Auth configuration — must come from .env at build time.
+// Empty strings keep the CONNECT_ENABLED gate honest: an offline-only build
+// is exactly an empty .env. The provider never reaches createSupabaseClient
+// when CONNECT_ENABLED is false, so the empty fallback is unreachable in
+// practice. We keep `as string` for the type cast; the gate (connect-config.ts)
+// is what actually decides whether the Connect provider runs.
+const AUTH_URL = (import.meta.env.CONNECT_AUTH_URL as string) || "";
+const AUTH_PUBLISHABLE_KEY = (import.meta.env.CONNECT_AUTH_PUBLISHABLE_KEY as string) || "";
 
 // Key for storing refresh token in keyring/localStorage (for session restoration)
 // Note: For keyring (Tauri), the "mizan_" prefix is added automatically by SecretStore
@@ -45,11 +47,10 @@ const getWebRedirectUrl = () => {
 };
 
 // For OAuth on desktop, we use a hosted callback page that redirects to the deep link
-// This is necessary because browsers block direct navigation to custom URL schemes
-// Uses env variable in dev, falls back to production URL for bundled builds
-const HOSTED_OAUTH_CALLBACK_URL =
-  (import.meta.env.CONNECT_OAUTH_CALLBACK_URL as string) ||
-  "https://connect.mizan.app/deeplink";
+// This is necessary because browsers block direct navigation to custom URL schemes.
+// Must come from .env; an empty string disables the OAuth-via-browser path
+// while leaving email/password sign-in intact.
+const HOSTED_OAUTH_CALLBACK_URL = (import.meta.env.CONNECT_OAUTH_CALLBACK_URL as string) || "";
 
 type AuthCallbackPayload = { type: "code"; code: string } | { type: "error"; message: string };
 

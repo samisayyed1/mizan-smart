@@ -1,4 +1,5 @@
 import { openUrlInBrowser } from "@/adapters";
+import { ComingSoonCard } from "@/components/coming-soon-card";
 import { ExternalLink } from "@/components/external-link";
 import { DeviceSyncSection } from "@/features/devices-sync";
 import { MIZAN_CONNECT_PORTAL_URL } from "@/lib/constants";
@@ -23,7 +24,6 @@ import {
 } from "../services/broker-service";
 import type { BrokerAccount, BrokerConnection } from "../types";
 import { hasBrokerSync } from "../lib/plan-capabilities";
-import { SubscriptionPlans } from "./subscription-plans";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Custom Hooks
@@ -343,7 +343,6 @@ function BrokerConnectionsCard({
 export function ConnectedView() {
   const {
     user,
-    session,
     userInfo,
     signOut,
     isLoading,
@@ -354,9 +353,6 @@ export function ConnectedView() {
   } = useMizanConnect();
   const [isSigningOut, setIsSigningOut] = useState(false);
   const [isRetrying, setIsRetrying] = useState(false);
-
-  // Check if user is connected (has a valid session)
-  const isConnected = !!session;
 
   // Check if there's a service unavailable error (failed to fetch user info)
   const isServiceUnavailable = !!error && !isLoadingUserInfo && !userInfo;
@@ -498,12 +494,35 @@ export function ConnectedView() {
         <ServiceUnavailableCard onRetry={handleRetry} isRetrying={isRetrying} />
       )}
 
-      {/* Show Subscription Plans if user has no active subscription (keep mounted during refresh) */}
+      {/* Subscription plans backend (/api/v1/subscription/plans) is not in
+          Chunk 1 of Mizan Connect. Replaces upstream's <SubscriptionPlans/>
+          render with a quiet placeholder until billing ships in Chunk 2. */}
       {!isServiceUnavailable && !hasSubscription && !!userInfo && (
-        <SubscriptionPlans
-          enabled={isConnected && !hasSubscription}
-          onRefresh={refetchUserInfo}
-          isRefreshing={isLoadingUserInfo}
+        <ComingSoonCard
+          title="Plans & billing"
+          message="Subscriptions and plan upgrades arrive with the next Mizan Connect release."
+          detail="You're signed in — that's all that's needed for Chunk 2."
+        />
+      )}
+
+      {/* Brokerage sync (broker connections, accounts, sync history) lands
+          with the SnapTrade integration. Until then, render a placeholder
+          where the broker UI used to sit. */}
+      {!isServiceUnavailable && !!userInfo && (
+        <ComingSoonCard
+          title="Brokerage sync"
+          message="Mizan Connect will let you link a broker once and have transactions and holdings sync automatically."
+          detail="Available in a future Mizan Connect release."
+        />
+      )}
+
+      {/* Device sync (E2E-encrypted multi-device) follows brokerage. Hidden
+          until the encrypted-snapshot service ships. */}
+      {!isServiceUnavailable && !!userInfo && (
+        <ComingSoonCard
+          title="Device sync"
+          message="Keep Mizan in sync across your devices with end-to-end encryption."
+          detail="Available in a future Mizan Connect release."
         />
       )}
 

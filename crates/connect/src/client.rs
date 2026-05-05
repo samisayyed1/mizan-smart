@@ -28,12 +28,6 @@ pub const DEFAULT_CLOUD_API_URL: &str = "https://api.mizan.app";
 // API Response Types (internal, for parsing cloud API responses)
 // ─────────────────────────────────────────────────────────────────────────────
 
-#[derive(Debug, serde::Deserialize)]
-struct ApiConnectionsResponse {
-    #[serde(default)]
-    connections: Vec<ApiConnection>,
-}
-
 #[allow(dead_code)]
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -58,12 +52,6 @@ struct ApiBrokerage {
     slug: Option<String>,
     aws_s3_logo_url: Option<String>,
     aws_s3_square_logo_url: Option<String>,
-}
-
-#[derive(Debug, serde::Deserialize)]
-struct ApiAccountsResponse {
-    #[serde(default)]
-    accounts: Vec<BrokerAccount>,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -480,12 +468,15 @@ impl BrokerApiClient for ConnectApiClient {
             )));
         }
 
-        let api_response: ApiConnectionsResponse = serde_json::from_str(&body).map_err(|e| {
+        // The Mizan Connect backend serves /api/v1/sync/brokerage/connections
+        // as a top-level JSON array (`Json(Vec<BrokerConnectionDto>)`), not a
+        // `{ "connections": [...] }` envelope. Earlier client versions targeted
+        // a wrapper shape; mismatch silently broke the connection refresh path.
+        let raw: Vec<ApiConnection> = serde_json::from_str(&body).map_err(|e| {
             Error::Unexpected(format!("Failed to parse connections: {} - {}", e, body))
         })?;
 
-        let connections: Vec<BrokerConnection> = api_response
-            .connections
+        let connections: Vec<BrokerConnection> = raw
             .into_iter()
             .map(|c| {
                 // Use brokerage object if present, otherwise use top-level fields
@@ -560,11 +551,13 @@ impl BrokerApiClient for ConnectApiClient {
             )));
         }
 
-        let api_response: ApiAccountsResponse = serde_json::from_str(&body).map_err(|e| {
+        // Same envelope shape as /connections: backend returns a top-level
+        // JSON array (`Json(Vec<BrokerAccountDto>)`), not `{ "accounts": [...] }`.
+        let accounts: Vec<BrokerAccount> = serde_json::from_str(&body).map_err(|e| {
             Error::Unexpected(format!("Failed to parse accounts: {} - {}", e, body))
         })?;
 
-        Ok(api_response.accounts)
+        Ok(accounts)
     }
 
     /// Fetch all available brokerages (not implemented in REST API).
@@ -748,6 +741,94 @@ mod tests {
         let err = client.create_login_portal(None).await.unwrap_err();
         let msg = format!("{}", err);
         assert!(msg.contains("API error"), "got: {msg}");
+    }
+
+    /// REPRO for the bug: the live Mizan Connect backend serves
+    /// `GET /api/v1/sync/brokerage/connections` as a *bare* JSON array
+    /// (`Json(Vec<BrokerConnectionDto>)` in `mizan-connect/src/snaptrade/handlers.rs`).
+    /// The current desktop client expects a wrapper (`{ "connections": [...] }`)
+    /// and fails to deserialize, so the IPC command returns Err and the React
+    /// Query hook's data falls through to `[]` → "No broker connections yet"
+    /// forever in the UI even though the row exists in Postgres.
+    #[tokio::test]
+    async fn list_connections_parses_bare_array_response() {
+        let server = MockServer::start().await;
+
+        // Exact shape returned by mizan-connect's snaptrade handler:
+        // a top-level JSON array of BrokerConnectionDto.
+        Mock::given(method("GET"))
+            .and(path("/api/v1/sync/brokerage/connections"))
+            .and(header("authorization", "Bearer mizan-test-jwt"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": "auth-alpaca-1",
+                    "name": "Alpaca Paper",
+                    "type": "trade",
+                    "disabled": false,
+                    "status": "connected",
+                    "brokerage": {
+                        "id": "brk-alpaca",
+                        "slug": "ALPACA-PAPER",
+                        "name": "Alpaca Paper",
+                        "display_name": "Alpaca Paper",
+                        "aws_s3_logo_url": null,
+                        "aws_s3_square_logo_url": null
+                    },
+                    "created_date": "2026-05-05T10:00:00Z",
+                    "updated_date": "2026-05-05T10:00:01Z"
+                }
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = ConnectApiClient::new(&server.uri(), "mizan-test-jwt").unwrap();
+        let connections = client
+            .list_connections()
+            .await
+            .expect("list_connections should accept a bare-array response");
+
+        assert_eq!(connections.len(), 1);
+        let only = &connections[0];
+        assert_eq!(only.id, "auth-alpaca-1");
+        assert_eq!(only.status.as_deref(), Some("connected"));
+        assert_eq!(only.disabled, false);
+        let brk = only.brokerage.as_ref().expect("brokerage present");
+        assert_eq!(brk.slug.as_deref(), Some("ALPACA-PAPER"));
+        assert_eq!(brk.display_name.as_deref(), Some("Alpaca Paper"));
+    }
+
+    /// REPRO partner for `/accounts`: same bug pattern. Backend serves
+    /// `Json(Vec<BrokerAccountDto>)` (bare array); current client expects
+    /// `{ "accounts": [...] }`.
+    #[tokio::test]
+    async fn list_accounts_parses_bare_array_response() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/v1/sync/brokerage/accounts"))
+            .and(header("authorization", "Bearer mizan-test-jwt"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
+                {
+                    "id": "acct-1",
+                    "brokerage_authorization": "auth-alpaca-1",
+                    "name": "Paper Trading",
+                    "number": "P12345",
+                    "institution_name": "Alpaca Paper",
+                    "status": "open",
+                    "is_paper": true
+                }
+            ])))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = ConnectApiClient::new(&server.uri(), "mizan-test-jwt").unwrap();
+        let accounts = client
+            .list_accounts(None)
+            .await
+            .expect("list_accounts should accept a bare-array response");
+        assert_eq!(accounts.len(), 1);
     }
 
     /// `CONNECT_BYPASS_PLAN_CHECK=true` short-circuits without an HTTP

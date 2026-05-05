@@ -19,10 +19,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@mizan/ui/components/ui
 import { toast } from "@mizan/ui/components/ui/use-toast";
 import { formatDate } from "@/lib/utils";
 import { useCallback, useState } from "react";
-import {
-  useCreateBrokerLoginPortal,
-  usePollConnectionsAfterPortal,
-} from "../hooks";
+import { useCreateBrokerLoginPortal } from "../hooks";
 import { useMizanConnect } from "../providers/mizan-connect-provider";
 import {
   listBrokerAccounts,
@@ -239,10 +236,8 @@ function BrokerConnectionsCard({
   // button (header "Manage", empty-state "Connect Broker") triggers it —
   // every entry point goes through useCreateBrokerLoginPortal so we get
   // the polling refetch and consistent error toasts for free.
-  const portal = useCreateBrokerLoginPortal();
-  const [isPolling, startPolling] = usePollConnectionsAfterPortal();
-  const handleConnect = () =>
-    portal.mutate(undefined, { onSuccess: () => startPolling() });
+  const [portal, isPolling] = useCreateBrokerLoginPortal();
+  const handleConnect = () => portal.mutate(undefined);
   const isPortalBusy = portal.isPending || isPolling;
   const portalLabel = portal.isPending
     ? "Opening portal..."

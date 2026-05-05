@@ -2,10 +2,7 @@ import { ExternalLink } from "@/components/external-link";
 import { Button } from "@mizan/ui/components/ui/button";
 import { Icons } from "@mizan/ui/components/ui/icons";
 import { Link } from "react-router-dom";
-import {
-  useCreateBrokerLoginPortal,
-  usePollConnectionsAfterPortal,
-} from "../hooks";
+import { useCreateBrokerLoginPortal } from "../hooks";
 import { useMizanConnect } from "../providers/mizan-connect-provider";
 import { ConnectFlowDiagram } from "./connect-flow-diagram";
 
@@ -47,11 +44,10 @@ const colorClasses = {
 
 export function ConnectEmptyState() {
   const { isConnected } = useMizanConnect();
-  const portal = useCreateBrokerLoginPortal();
-  const [isPolling, startPolling] = usePollConnectionsAfterPortal();
+  const [portal, isPolling] = useCreateBrokerLoginPortal();
 
   const handleConnect = () => {
-    portal.mutate(undefined, { onSuccess: () => startPolling() });
+    portal.mutate(undefined);
   };
   const isBusy = portal.isPending || isPolling;
 

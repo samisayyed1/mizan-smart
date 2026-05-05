@@ -8,7 +8,6 @@ import {
   useBrokerAccounts,
   useCreateBrokerLoginPortal,
   useImportRunsInfinite,
-  usePollConnectionsAfterPortal,
 } from "@/features/mizan-connect/hooks";
 import { useSyncBrokerData } from "@/features/mizan-connect/hooks/use-sync-broker-data";
 import { useMizanConnect } from "@/features/mizan-connect/providers/mizan-connect-provider";
@@ -53,10 +52,9 @@ export default function ConnectPage() {
 
   // Connect-broker mutation; reused by every "Add broker" / "Reconnect"
   // header CTA so all entry points go through /api/v1/sync/brokerage/login-portal.
-  const portal = useCreateBrokerLoginPortal();
-  const [isPolling, startPolling] = usePollConnectionsAfterPortal();
-  const handleConnectBroker = (broker?: string) =>
-    portal.mutate(broker, { onSuccess: () => startPolling() });
+  // The hook owns the polling lifecycle internally — callers just invoke mutate().
+  const [portal, isPolling] = useCreateBrokerLoginPortal();
+  const handleConnectBroker = (broker?: string) => portal.mutate(broker);
   const isPortalBusy = portal.isPending || isPolling;
   const portalLabel = portal.isPending
     ? "Opening portal..."

@@ -9,7 +9,9 @@ import {
 import { useAuth } from "@/context/auth-context";
 import { getPlatform } from "@/hooks/use-platform";
 import { CONNECT_ENABLED } from "@/lib/connect-config";
+import { QueryKeys } from "@/lib/query-keys";
 import { createClient, Session, SupabaseClient, User } from "@supabase/supabase-js";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createContext,
   useCallback,
@@ -220,6 +222,7 @@ const createSupabaseClient = () => {
 // Internal provider used when Connect is enabled
 function EnabledMizanConnectProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
+  const queryClient = useQueryClient();
   const [isInitializing, setIsInitializing] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingUserInfo, setIsLoadingUserInfo] = useState(false);
@@ -421,6 +424,22 @@ function EnabledMizanConnectProvider({ children }: { children: ReactNode }) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
   }, [handleAuthCallback]);
+
+  // When the user returns from the SnapTrade portal (which lives in their
+  // default browser), refresh broker connection + account data the moment
+  // the Tauri window regains focus. Backstop for the in-hook polling loop:
+  // catches users who took longer than the 5-minute polling window, or who
+  // navigated away from the page that hosted the polling hook.
+  // Gated on signed-in: no point invalidating queries that aren't enabled.
+  useEffect(() => {
+    if (!session) return;
+    const onFocus = () => {
+      void queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_CONNECTIONS] });
+      void queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_ACCOUNTS] });
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [session, queryClient]);
 
   const signInWithEmail = useCallback(
     async (email: string, password: string) => {

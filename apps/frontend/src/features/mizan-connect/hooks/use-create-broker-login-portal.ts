@@ -1,35 +1,125 @@
 import { openUrlInBrowser } from "@/adapters";
 import { QueryKeys } from "@/lib/query-keys";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+} from "@tanstack/react-query";
 import { toast } from "@mizan/ui/components/ui/use-toast";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createBrokerLoginPortal } from "../services/broker-service";
+import type { BrokerLoginPortalResponse } from "@/adapters/shared/connect";
+import {
+  createBrokerLoginPortal,
+  listBrokerConnections,
+} from "../services/broker-service";
+import type { BrokerConnection } from "../types";
 
 const POLL_INTERVAL_MS = 5_000;
-const POLL_DURATION_MS = 60_000;
+// Real-world broker auth (Alpaca, Robinhood, Fidelity, etc.) routinely takes
+// 60–120 s for first-time setup (terms, MFA, account selection). 5 min is a
+// safe upper bound; polling stops the moment the new connection appears, so
+// the typical case still completes in seconds.
+const POLL_DURATION_MS = 5 * 60_000;
 
 /**
- * Mutation that mints a SnapTrade Connection Portal URL and opens it in
- * the user's default browser.
+ * Mints a SnapTrade Connection Portal URL, opens it in the user's default
+ * browser, then drives a polling window that refetches the broker
+ * connection list until the new connection appears (or 5 minutes elapse).
  *
- * After a successful mint, callers can opt in to a 60-second polling
- * window via {@link usePollConnectionsAfterPortal}: while polling, the
- * `BROKER_CONNECTIONS` query is invalidated every 5 seconds so the new
- * authorization shows up as soon as SnapTrade's callback finishes.
+ * Polling is started internally on mutation success — callers don't need
+ * to wire `onSuccess`. Returns `[mutation, isPolling]` so call sites can
+ * surface a "Waiting for broker..." spinner.
+ *
+ * Stops automatically when:
+ * - `BROKER_CONNECTIONS` data length grows beyond the snapshot taken at
+ *   mutation success (the new connection landed).
+ * - 5 minutes elapse from the last successful mutation.
+ * - The component hosting the hook unmounts.
+ *
+ * Each fresh mutation invocation resets the polling window — the user
+ * can chain "Connect a broker" calls and each one gets its own 5-minute
+ * grace period.
  *
  * Failure modes (raised as toasts):
  * - 429 → "too many login-portal requests; try again later"
  * - any 5xx upstream → "broker temporarily unavailable"
  * - network error → "couldn't reach Mizan Connect"
  */
-export function useCreateBrokerLoginPortal() {
-  return useMutation({
+export function useCreateBrokerLoginPortal(): readonly [
+  UseMutationResult<BrokerLoginPortalResponse, Error, string | undefined, unknown>,
+  boolean,
+] {
+  const queryClient = useQueryClient();
+  const [isPolling, setIsPolling] = useState(false);
+  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Connection count at the moment the portal opened. Polling stops as
+  // soon as the cached count exceeds this, which means the callback
+  // landed and persisted a new authorization.
+  const baselineCountRef = useRef(0);
+
+  const stop = useCallback(() => {
+    if (stopTimerRef.current !== null) {
+      clearTimeout(stopTimerRef.current);
+      stopTimerRef.current = null;
+    }
+    setIsPolling(false);
+  }, []);
+
+  const start = useCallback(() => {
+    // Reset any in-flight window. Each mutation gets a fresh snapshot +
+    // timer so the user can chain connect attempts.
+    if (stopTimerRef.current !== null) {
+      clearTimeout(stopTimerRef.current);
+    }
+    const cached = queryClient.getQueryData<BrokerConnection[]>([
+      QueryKeys.BROKER_CONNECTIONS,
+    ]);
+    baselineCountRef.current = cached?.length ?? 0;
+    setIsPolling(true);
+    stopTimerRef.current = setTimeout(stop, POLL_DURATION_MS);
+  }, [queryClient, stop]);
+
+  // While polling is active, keep an observer on BROKER_CONNECTIONS with a
+  // 5 s refetch interval. The shared cache means any other consumer
+  // (BrokerConnectionsCard, ConnectPage) gets the fresh data for free.
+  const polled = useQuery({
+    queryKey: [QueryKeys.BROKER_CONNECTIONS],
+    queryFn: listBrokerConnections,
+    enabled: isPolling,
+    refetchInterval: isPolling ? POLL_INTERVAL_MS : false,
+    refetchIntervalInBackground: true,
+    staleTime: 0,
+  });
+
+  // Stop the moment the new connection appears in the cache. Also kick
+  // BROKER_ACCOUNTS once so the accounts card refreshes alongside.
+  useEffect(() => {
+    if (!isPolling) return;
+    const length = polled.data?.length ?? 0;
+    if (length > baselineCountRef.current) {
+      stop();
+      void queryClient.invalidateQueries({
+        queryKey: [QueryKeys.BROKER_ACCOUNTS],
+      });
+    }
+  }, [isPolling, polled.data, queryClient, stop]);
+
+  // Clean up the timeout on unmount.
+  useEffect(() => stop, [stop]);
+
+  const mutation = useMutation<
+    BrokerLoginPortalResponse,
+    Error,
+    string | undefined
+  >({
     mutationFn: async (broker?: string) => createBrokerLoginPortal(broker),
     onSuccess: ({ url }) => {
       void openUrlInBrowser(url);
       toast.success("Opened SnapTrade portal in your browser", {
         id: "broker-portal-opened",
       });
+      start();
     },
     onError: (error) => {
       const msg = error instanceof Error ? error.message : "Unknown error";
@@ -38,46 +128,6 @@ export function useCreateBrokerLoginPortal() {
       });
     },
   });
-}
 
-/**
- * Drives a 60-second polling window that refetches broker connections
- * every 5 seconds. Returns `[isPolling, startPolling]`. Idempotent: a
- * second `startPolling()` call within the window resets the timer.
- *
- * Used right after `useCreateBrokerLoginPortal` succeeds so the
- * connections list updates as soon as the user completes the SnapTrade
- * flow in their browser.
- */
-export function usePollConnectionsAfterPortal(): [boolean, () => void] {
-  const queryClient = useQueryClient();
-  const [isPolling, setIsPolling] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const stopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const stop = useCallback(() => {
-    if (intervalRef.current !== null) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    if (stopRef.current !== null) {
-      clearTimeout(stopRef.current);
-      stopRef.current = null;
-    }
-    setIsPolling(false);
-  }, []);
-
-  const start = useCallback(() => {
-    stop();
-    setIsPolling(true);
-    intervalRef.current = setInterval(() => {
-      queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_CONNECTIONS] });
-      queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_ACCOUNTS] });
-    }, POLL_INTERVAL_MS);
-    stopRef.current = setTimeout(stop, POLL_DURATION_MS);
-  }, [queryClient, stop]);
-
-  useEffect(() => stop, [stop]);
-
-  return [isPolling, start];
+  return [mutation, isPolling] as const;
 }

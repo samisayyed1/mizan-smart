@@ -3,9 +3,9 @@ name = "mizan-app"
 version.workspace = true
 edition.workspace = true
 description = "Portfolio tracker"
-authors = ["Aziz Fadil"]
+authors = ["Sami Sayyed", "Aziz Fadil"]
 license = "AGPL-3.0"
-repository = ""
+repository = "https://github.com/samisayyed1/mizan-4"
 
 [build-dependencies]
 tauri-build = { version = "2.5", features = [] }

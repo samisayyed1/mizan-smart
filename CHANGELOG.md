@@ -4,6 +4,35 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.7] — 2026-05-07
+
+### Changed
+
+- **Gold accent layer.** The desktop dark theme now picks up the Mizan brand
+  gold (`#D4A574`) on every primary surface — buttons, focus rings, sidebar
+  primary, etc. — matching the landing page's locked palette. Implemented as a
+  token-only change in `globals.css`: the existing Flexoki palette stays in
+  place; only `--primary`, `--primary-foreground`, `--ring`,
+  `--sidebar-primary`, `--sidebar-primary-foreground`, and `--sidebar-ring` are
+  repointed in the `.dark` block. Zero component edits, so the blast radius is
+  every `bg-primary`/`text-primary`/`ring-ring` usage automatically, and nothing
+  else.
+- New `--gold-cream`, `--gold-primary`, `--gold-deep` tokens (plus HSL component
+  vars `--gold-*-hsl` for alpha-blended use) exposed at `:root` so the rest of
+  the app can reach the brand palette directly when needed.
+- Mizan Connect sidebar icon: removed the hardcoded `text-blue-400` and follows
+  `text-primary` so the icon now glows gold like the rest of the brand surface.
+
+### Backend
+
+- (Shipped on 2026-05-06, retroactive note for the desktop release): Disconnect
+  bug — backend `DELETE /api/v1/sync/brokerage/connections/:id` and the latent
+  `POST /connections/:id/refresh` now resolve by SnapTrade's `authorization_id`
+  instead of the local `broker_connections.id` UUID. The desktop client only
+  ever knew the SnapTrade id; old handlers declared `Path<Uuid>` and looked up
+  by local id, so every disconnect 404'd with `connection not found`. Already
+  deployed to Fly; no desktop install needed for that fix to land.
+
 ## [3.3.6] — 2026-05-06
 
 ### Added

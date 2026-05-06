@@ -448,6 +448,23 @@
   --liquid-glass-bg: rgba(255, 255, 255, 0.05);
   --liquid-glass-border: rgba(255, 255, 255, 0.1);
 
+  /* Mizan brand gold (matches the landing page's locked palette).
+   *
+   * gold-cream  #F5E6C8 — headline emphasis + number highlights
+   * gold-primary #D4A574 — single primary CTA per section
+   * gold-deep   #8B6F47 — line-art and 1px dividers
+   *
+   * Stored as both raw hex (for direct use) and HSL components (for
+   * `hsl(var(--gold-primary-hsl) / <alpha>)` so we can blend without
+   * losing the gold tint on hover/focus/active states).
+   */
+  --gold-cream: #f5e6c8;
+  --gold-primary: #d4a574;
+  --gold-deep: #8b6f47;
+  --gold-cream-hsl: 40 67% 87%;
+  --gold-primary-hsl: 31 49% 64%;
+  --gold-deep-hsl: 31 32% 41%;
+
   --inset-top: env(safe-area-inset-top, 0px);
   --inset-right: env(safe-area-inset-right, 0px);
   --inset-bottom: env(safe-area-inset-bottom, 0px);
@@ -517,6 +534,23 @@
   --toast-info-border: var(--color-blue-800);
 
   --input: hsl(var(--flexoki-ui-2));
+
+  /*
+   * Gold accent layer — applied in dark mode only so the editorial
+   * light theme keeps its existing high-contrast Flexoki feel.
+   *
+   * Repointing `--primary` makes every `bg-primary` / `text-primary`
+   * surface in the app pick up gold automatically. Pairs with the
+   * existing `--primary-foreground` (Flexoki bg ≈ #1c1b1a) for legible
+   * dark text on warm gold buttons. `--ring` carries the gold to focus
+   * outlines so keyboard navigation feels brand-cohesive.
+   */
+  --primary: hsl(var(--gold-primary-hsl));
+  --primary-foreground: hsl(0 3% 6%);
+  --ring: hsl(var(--gold-primary-hsl));
+  --sidebar-primary: hsl(var(--gold-primary-hsl));
+  --sidebar-primary-foreground: hsl(0 3% 6%);
+  --sidebar-ring: hsl(var(--gold-primary-hsl));
 }
 
 @layer base {

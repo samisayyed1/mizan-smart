@@ -69,7 +69,7 @@ const settingsSections = [
         title: "Mizan Connect",
         href: "connect",
         subtitle: "Broker and device linking",
-        icon: <Icons.CloudSync2 className="size-6 text-blue-400" />,
+        icon: <Icons.CloudSync2 className="text-primary size-6" />,
       },
       {
         title: "Market Data",

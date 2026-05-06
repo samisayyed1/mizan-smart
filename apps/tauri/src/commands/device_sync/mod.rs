@@ -1472,13 +1472,10 @@ pub async fn confirm_pairing_with_bootstrap(
 
     // 2. Set freshness gate
     if let Some(min_created_at) = min_snapshot_created_at.as_deref() {
-        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at)
-        {
+        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at) {
             let max_allowed = chrono::Utc::now() + chrono::Duration::minutes(10);
             if parsed_min <= max_allowed {
-                if let Ok(normalized) =
-                    mizan_device_sync::normalize_sync_datetime(min_created_at)
-                {
+                if let Ok(normalized) = mizan_device_sync::normalize_sync_datetime(min_created_at) {
                     set_min_snapshot_created_at_in_store(&device_id, &normalized);
                     let _ = context
                         .app_sync_repository()
@@ -1616,13 +1613,10 @@ pub async fn begin_pairing_confirm(
 
     // 2. Set freshness gate
     if let Some(min_created_at) = min_snapshot_created_at.as_deref() {
-        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at)
-        {
+        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at) {
             let max_allowed = chrono::Utc::now() + chrono::Duration::minutes(10);
             if parsed_min <= max_allowed {
-                if let Ok(normalized) =
-                    mizan_device_sync::normalize_sync_datetime(min_created_at)
-                {
+                if let Ok(normalized) = mizan_device_sync::normalize_sync_datetime(min_created_at) {
                     set_min_snapshot_created_at_in_store(&device_id, &normalized);
                     let _ = context
                         .app_sync_repository()
@@ -1885,8 +1879,7 @@ pub async fn confirm_pairing(
         .map_err(|e| e.to_string())?;
 
     if let Some(min_created_at) = min_snapshot_created_at.as_deref() {
-        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at)
-        {
+        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at) {
             let max_allowed = chrono::Utc::now() + chrono::Duration::minutes(10);
             if parsed_min > max_allowed {
                 log::warn!(

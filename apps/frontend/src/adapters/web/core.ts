@@ -236,6 +236,7 @@ export const COMMANDS: CommandMap = {
   get_sync_session_status: { method: "GET", path: "/connect/session/status" },
   restore_sync_session: { method: "GET", path: "/connect/session/restore" },
   list_broker_connections: { method: "GET", path: "/connect/connections" },
+  delete_broker_connection: { method: "DELETE", path: "/connect/connections/:connection_id" },
   list_broker_accounts: { method: "GET", path: "/connect/accounts" },
   sync_broker_data: { method: "POST", path: "/connect/sync" },
   broker_ingest_run: { method: "POST", path: "/connect/sync" },

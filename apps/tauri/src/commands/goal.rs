@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use crate::context::ServiceContext;
 use log::{debug, warn};
-use rust_decimal::prelude::ToPrimitive;
-use tauri::State;
 use mizan_core::goals::{
     Goal, GoalFundingRule, GoalFundingRuleInput, GoalPlan, NewGoal, SaveGoalPlan,
 };
@@ -11,6 +9,8 @@ use mizan_core::planning::{
     compute_save_up_overview, validate_save_up_input, SaveUpInput, SaveUpOverview,
 };
 use mizan_core::portfolio::fire::RetirementOverview;
+use rust_decimal::prelude::ToPrimitive;
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_goals(state: State<'_, Arc<ServiceContext>>) -> Result<Vec<Goal>, String> {

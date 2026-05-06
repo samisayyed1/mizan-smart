@@ -22,10 +22,12 @@ import { useCallback, useState } from "react";
 import { useCreateBrokerLoginPortal } from "../hooks";
 import { useMizanConnect } from "../providers/mizan-connect-provider";
 import {
+  deleteBrokerConnection,
   listBrokerAccounts,
   listBrokerConnections,
   syncBrokerData,
 } from "../services/broker-service";
+import { useQueryClient } from "@tanstack/react-query";
 import type { BrokerAccount, BrokerConnection } from "../types";
 // hasBrokerSync gating loosened in Chunk 3; see TODO(chunk-4) below.
 
@@ -219,6 +221,90 @@ function BrokerAccountCard({ account, connections }: BrokerAccountCardProps) {
 // Broker Connections Card Component
 // ─────────────────────────────────────────────────────────────────────────────
 
+/**
+ * Single row in the BrokerConnectionsCard. Owns its own disconnect
+ * mutation + confirm-dialog state so multiple rows can disconnect
+ * independently without lifting state into the parent.
+ */
+function BrokerConnectionRow({ connection }: { connection: BrokerConnection }) {
+  const queryClient = useQueryClient();
+
+  const logoUrl =
+    connection.brokerage?.aws_s3_square_logo_url ?? connection.brokerage?.aws_s3_logo_url;
+  const brokerageName =
+    connection.brokerage?.display_name ?? connection.brokerage?.name ?? "Unknown Broker";
+  const isConnected = connection.status === "connected" && !connection.disabled;
+
+  const disconnect = useMutation({
+    mutationFn: () => deleteBrokerConnection(connection.id),
+    onSuccess: () => {
+      // Refresh both the connection list and the live accounts list so
+      // the disconnected broker disappears from both surfaces immediately.
+      void queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_CONNECTIONS] });
+      void queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_ACCOUNTS] });
+      toast.success(`Disconnected ${brokerageName}`, {
+        description: "Your historical data is preserved locally.",
+      });
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      toast.error(`Couldn't disconnect: ${message}`);
+    },
+  });
+
+  return (
+    <div className="bg-muted/30 flex items-center gap-3 rounded-lg border p-3">
+      <Avatar className="h-9 w-9 shrink-0 rounded-lg">
+        <AvatarImage src={logoUrl} alt={brokerageName} className="bg-white object-contain p-1" />
+        <AvatarFallback className="rounded-lg text-sm font-semibold">
+          {brokerageName.charAt(0)}
+        </AvatarFallback>
+      </Avatar>
+      <span className="min-w-0 flex-1 truncate text-sm font-medium">{brokerageName}</span>
+      <Badge
+        className={`shrink-0 ${
+          isConnected
+            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+        }`}
+      >
+        {isConnected ? "Connected" : "Disconnected"}
+      </Badge>
+      <ActionConfirm
+        confirmTitle={`Disconnect ${brokerageName}?`}
+        confirmMessage="Live sync stops immediately. Your already-synced accounts and history stay on this device — nothing is deleted locally. You can reconnect any time."
+        confirmButtonText="Disconnect"
+        pendingText="Disconnecting…"
+        confirmButtonVariant="destructive"
+        isPending={disconnect.isPending}
+        handleConfirm={() => disconnect.mutate()}
+        side="left"
+        button={
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground hover:text-destructive shrink-0 transition-colors"
+            aria-label={`Disconnect ${brokerageName}`}
+            disabled={disconnect.isPending}
+          >
+            {disconnect.isPending ? (
+              <Icons.Spinner className="h-4 w-4 animate-spin" />
+            ) : (
+              <Icons.Trash className="h-4 w-4" />
+            )}
+          </Button>
+        }
+      />
+    </div>
+  );
+}
+
 interface BrokerConnectionsCardProps {
   connections: BrokerConnection[];
   isLoading: boolean;
@@ -327,46 +413,9 @@ function BrokerConnectionsCard({
               </Button>
             </div>
           ) : (
-            connections.map((connection) => {
-              const logoUrl =
-                connection.brokerage?.aws_s3_square_logo_url ??
-                connection.brokerage?.aws_s3_logo_url;
-              const brokerageName =
-                connection.brokerage?.display_name ??
-                connection.brokerage?.name ??
-                "Unknown Broker";
-              const isConnected = connection.status === "connected" && !connection.disabled;
-
-              return (
-                <div
-                  key={connection.id}
-                  className="bg-muted/30 flex items-center gap-3 rounded-lg border p-3"
-                >
-                  <Avatar className="h-9 w-9 shrink-0 rounded-lg">
-                    <AvatarImage
-                      src={logoUrl}
-                      alt={brokerageName}
-                      className="bg-white object-contain p-1"
-                    />
-                    <AvatarFallback className="rounded-lg text-sm font-semibold">
-                      {brokerageName.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                    {brokerageName}
-                  </span>
-                  <Badge
-                    className={`shrink-0 ${
-                      isConnected
-                        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                        : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
-                    }`}
-                  >
-                    {isConnected ? "Connected" : "Disconnected"}
-                  </Badge>
-                </div>
-              );
-            })
+            connections.map((connection) => (
+              <BrokerConnectionRow key={connection.id} connection={connection} />
+            ))
           )}
         </div>
       </CardContent>

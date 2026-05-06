@@ -219,6 +219,31 @@ pub async fn create_broker_login_portal(
         .map_err(|e| e.to_string())
 }
 
+/// Disconnect a broker connection.
+///
+/// Calls the cloud API's `DELETE /api/v1/sync/brokerage/connections/:id`.
+/// The backend revokes the upstream SnapTrade authorization and soft-
+/// deletes the local broker_connections row. Frontend should invalidate
+/// the BROKER_CONNECTIONS + BROKER_ACCOUNTS query keys after success so
+/// the disconnected broker disappears from the UI without a refresh.
+///
+/// Note: this does NOT remove already-synced rows from the local SQLite
+/// (accounts, holdings snapshots, activity history). Those are kept as
+/// historical records — disconnecting a broker doesn't erase your past.
+#[tauri::command]
+pub async fn delete_broker_connection(
+    connection_id: String,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<(), String> {
+    info!("Disconnecting broker connection: {}", connection_id);
+
+    let client = state.connect_service().get_api_client().await?;
+    client
+        .delete_connection(&connection_id)
+        .await
+        .map_err(|e| e.to_string())
+}
+
 /// List broker accounts from the cloud API
 /// Returns the live account data including sync_enabled and owner info
 #[tauri::command]

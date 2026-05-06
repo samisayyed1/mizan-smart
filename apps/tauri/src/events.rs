@@ -1,7 +1,7 @@
 use chrono::NaiveDate;
+use mizan_core::quotes::MarketSyncMode;
 use serde::{Deserialize, Serialize};
 use tauri::Emitter;
-use mizan_core::quotes::MarketSyncMode;
 
 pub const PORTFOLIO_TOTAL_ACCOUNT_ID: &str = "TOTAL";
 

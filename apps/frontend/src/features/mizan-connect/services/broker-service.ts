@@ -10,6 +10,7 @@ import {
   listBrokerConnections as listBrokerConnectionsAdapter,
   listBrokerAccounts as listBrokerAccountsAdapter,
   createBrokerLoginPortal as createBrokerLoginPortalAdapter,
+  deleteBrokerConnection as deleteBrokerConnectionAdapter,
   getSubscriptionPlans as getSubscriptionPlansAdapter,
   getSubscriptionPlansPublic as getSubscriptionPlansPublicAdapter,
   getUserInfo as getUserInfoAdapter,
@@ -96,6 +97,21 @@ export const createBrokerLoginPortal = async (
     return await createBrokerLoginPortalAdapter(broker);
   } catch (error) {
     logger.error("Error creating broker login portal.");
+    throw error;
+  }
+};
+
+/**
+ * Disconnect a broker (revokes upstream SnapTrade authorization +
+ * soft-deletes the cloud row). Already-synced local data is preserved
+ * so the user keeps their history. The next /connections fetch will
+ * not return this connection.
+ */
+export const deleteBrokerConnection = async (connectionId: string): Promise<void> => {
+  try {
+    await deleteBrokerConnectionAdapter(connectionId);
+  } catch (error) {
+    logger.error("Error disconnecting broker.");
     throw error;
   }
 };

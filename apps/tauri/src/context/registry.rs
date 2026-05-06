@@ -1,4 +1,3 @@
-use std::sync::{Arc, RwLock};
 use mizan_ai::{AiProviderServiceTrait, ChatService};
 use mizan_connect::BrokerSyncServiceTrait;
 use mizan_core::{
@@ -8,9 +7,8 @@ use mizan_core::{
     fx, goals, health, limits, portfolio, quotes, settings, taxonomies,
 };
 use mizan_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
-use mizan_storage_sqlite::{
-    portfolio::snapshot::SnapshotRepository, sync::AppSyncRepository,
-};
+use mizan_storage_sqlite::{portfolio::snapshot::SnapshotRepository, sync::AppSyncRepository};
+use std::sync::{Arc, RwLock};
 
 use super::TauriAiEnvironment;
 use crate::services::ConnectService;

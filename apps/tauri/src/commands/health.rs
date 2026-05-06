@@ -3,9 +3,9 @@ use std::sync::Arc;
 use crate::context::ServiceContext;
 use crate::events::{MarketSyncResult, MARKET_SYNC_COMPLETE, MARKET_SYNC_ERROR, MARKET_SYNC_START};
 use log::{debug, error, info, warn};
-use tauri::{AppHandle, Emitter, State};
 use mizan_core::health::{FixAction, HealthConfig, HealthServiceTrait, HealthStatus};
 use mizan_core::quotes::SyncMode;
+use tauri::{AppHandle, Emitter, State};
 
 /// Get current health status (cached or fresh check).
 #[tauri::command]

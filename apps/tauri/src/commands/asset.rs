@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use crate::context::ServiceContext;
-use tauri::State;
 use mizan_core::assets::{Asset, NewAsset, UpdateAssetProfile};
+use tauri::State;
 
 #[tauri::command]
 pub async fn get_asset_profile(

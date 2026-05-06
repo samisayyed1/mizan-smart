@@ -10,9 +10,6 @@ use crate::{
 
 use chrono::{NaiveDate, Utc};
 use log::{debug, info, warn};
-use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, State};
 use mizan_core::{
     accounts::TrackingMode,
     allocation::{AllocationHoldings, PortfolioAllocations},
@@ -26,6 +23,9 @@ use mizan_core::{
     quotes::MarketSyncMode,
     valuation::DailyAccountValuation,
 };
+use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
+use tauri::{AppHandle, State};
 
 // ============================================================================
 // Snapshot Info Types
@@ -988,10 +988,7 @@ pub async fn get_snapshot_by_date(
         let asset = asset.unwrap();
 
         let (holding_type, id_prefix) = if asset.kind.is_alternative() {
-            (
-                mizan_core::holdings::HoldingType::AlternativeAsset,
-                "ALT",
-            )
+            (mizan_core::holdings::HoldingType::AlternativeAsset, "ALT")
         } else {
             (mizan_core::holdings::HoldingType::Security, "SEC")
         };

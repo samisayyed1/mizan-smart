@@ -3,11 +3,11 @@ use std::sync::Arc;
 use crate::context::ServiceContext;
 use crate::events::{emit_portfolio_trigger_recalculate, PortfolioRequestPayload};
 use log::debug;
-use tauri::{AppHandle, State};
 use mizan_core::fx::{ExchangeRate, NewExchangeRate};
 use mizan_core::health::HealthServiceTrait;
 use mizan_core::quotes::MarketSyncMode;
 use mizan_core::settings::{Settings, SettingsUpdate};
+use tauri::{AppHandle, State};
 
 fn recalculate_mode_for_settings_change(
     base_currency_changed: bool,

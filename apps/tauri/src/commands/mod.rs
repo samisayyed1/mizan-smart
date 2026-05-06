@@ -18,6 +18,8 @@ pub mod goal;
 pub mod health;
 pub mod limits;
 pub mod market_data;
+#[cfg(any(feature = "connect-sync", feature = "device-sync"))]
+pub mod mizan_connect;
 pub mod platform;
 pub mod portfolio;
 pub mod providers_settings;
@@ -27,5 +29,3 @@ pub mod settings;
 pub mod sync_crypto;
 pub mod taxonomy;
 pub mod utilities;
-#[cfg(any(feature = "connect-sync", feature = "device-sync"))]
-pub mod mizan_connect;

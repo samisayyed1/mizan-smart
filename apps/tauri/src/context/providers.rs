@@ -4,12 +4,8 @@ use crate::domain_events::TauriDomainEventSink;
 use crate::secret_store::shared_secret_store;
 use crate::services::ConnectService;
 use log::{error, warn};
-use std::sync::{Arc, RwLock};
-use tokio::sync::mpsc;
 use mizan_ai::{AiProviderService, ChatConfig, ChatService};
-use mizan_connect::{
-    BrokerSyncService, CoreImportRunRepositoryAdapter, ImportRunRepositoryTrait,
-};
+use mizan_connect::{BrokerSyncService, CoreImportRunRepositoryAdapter, ImportRunRepositoryTrait};
 use mizan_core::{
     accounts::AccountService,
     activities::ActivityService,
@@ -49,6 +45,8 @@ use mizan_storage_sqlite::{
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
     taxonomies::TaxonomyRepository,
 };
+use std::sync::{Arc, RwLock};
+use tokio::sync::mpsc;
 
 /// Result of context initialization, including the receiver for domain events.
 pub struct ContextInitResult {
@@ -145,12 +143,11 @@ pub async fn initialize_context(
     );
 
     // Custom provider service
-    let custom_provider_service = Arc::new(
-        mizan_core::custom_provider::CustomProviderService::new(
+    let custom_provider_service =
+        Arc::new(mizan_core::custom_provider::CustomProviderService::new(
             custom_provider_repository.clone(),
             secret_store.clone(),
-        ),
-    );
+        ));
 
     // Create taxonomy service before asset service (needed for auto-classification)
     let taxonomy_repository = Arc::new(TaxonomyRepository::new(pool.clone(), writer.clone()));

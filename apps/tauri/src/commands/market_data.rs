@@ -9,12 +9,12 @@ use crate::{
 };
 
 use log::{debug, error};
-use tauri::{AppHandle, State};
 use mizan_core::quotes::{
     service::ProviderInfo, LatestQuoteSnapshot, MarketSyncMode, Quote, QuoteImport,
     SymbolSearchResult,
 };
 use mizan_market_data::ExchangeInfo;
+use tauri::{AppHandle, State};
 
 #[tauri::command]
 pub async fn search_symbol(

@@ -69,12 +69,19 @@ export interface BrokerLoginPortalResponse {
   expires_at: string;
 }
 
-export async function createBrokerLoginPortal(
-  broker?: string,
-): Promise<BrokerLoginPortalResponse> {
+export async function createBrokerLoginPortal(broker?: string): Promise<BrokerLoginPortalResponse> {
   return invoke<BrokerLoginPortalResponse>("create_broker_login_portal", {
     broker: broker ?? null,
   });
+}
+
+/**
+ * Disconnect a broker connection. Resolves when the cloud API has revoked
+ * the upstream SnapTrade authorization and soft-deleted the row. Throws
+ * if the backend rejects the call (e.g. unknown id, network).
+ */
+export async function deleteBrokerConnection(connectionId: string): Promise<void> {
+  return invoke<void>("delete_broker_connection", { connectionId });
 }
 
 export async function getSubscriptionPlans(): Promise<PlansResponse> {

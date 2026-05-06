@@ -275,6 +275,44 @@ impl ConnectApiClient {
         self.parse_response(response).await
     }
 
+    /// Delete (disconnect) a broker authorization.
+    ///
+    /// Calls the Mizan Connect backend's `DELETE /api/v1/sync/brokerage/connections/{id}`.
+    /// The backend revokes the upstream SnapTrade authorization and soft-deletes
+    /// the local broker_connections row. Idempotent — repeat deletes return 200.
+    ///
+    /// # Arguments
+    ///
+    /// * `connection_id` - SnapTrade authorization (connection) UUID, the
+    ///   value of `BrokerConnection.id` returned by `list_connections`.
+    pub async fn delete_connection(&self, connection_id: &str) -> Result<()> {
+        let url = format!(
+            "{}/api/v1/sync/brokerage/connections/{}",
+            self.base_url, connection_id
+        );
+
+        debug!("[ConnectApi] Disconnecting broker: {}", url);
+
+        let response = self
+            .client
+            .delete(&url)
+            .headers(self.headers())
+            .send()
+            .await
+            .map_err(|e| Error::Unexpected(format!("Failed to disconnect broker: {}", e)))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let body = response.text().await.unwrap_or_default();
+            return Err(Error::Unexpected(format!(
+                "Disconnect failed {}: {}",
+                status,
+                body.chars().take(200).collect::<String>()
+            )));
+        }
+        Ok(())
+    }
+
     /// Fetch current holdings for a broker account.
     ///
     /// # Arguments

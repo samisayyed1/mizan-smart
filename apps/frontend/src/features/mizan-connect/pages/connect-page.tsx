@@ -14,7 +14,8 @@ import { useMizanConnect } from "@/features/mizan-connect/providers/mizan-connec
 import { useAccounts } from "@/hooks/use-accounts";
 import { MIZAN_CONNECT_PORTAL_URL } from "@/lib/constants";
 import { QueryKeys } from "@/lib/query-keys";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ActionConfirm } from "@mizan/ui";
 import { Alert } from "@mizan/ui/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@mizan/ui/components/ui/avatar";
 import { Badge } from "@mizan/ui/components/ui/badge";
@@ -22,6 +23,7 @@ import { Button } from "@mizan/ui/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@mizan/ui/components/ui/card";
 import { Icons } from "@mizan/ui/components/ui/icons";
 import { Skeleton } from "@mizan/ui/components/ui/skeleton";
+import { toast } from "@mizan/ui/components/ui/use-toast";
 import {
   Tooltip,
   TooltipContent,
@@ -31,7 +33,7 @@ import {
 import { formatDistanceToNow } from "date-fns";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { listBrokerConnections } from "../services/broker-service";
+import { deleteBrokerConnection, listBrokerConnections } from "../services/broker-service";
 import type { BrokerConnection, ImportRun } from "../types";
 
 import type { Device } from "@/features/devices-sync/types";
@@ -473,9 +475,7 @@ export default function ConnectPage() {
                       useful — kept only as a placeholder until Chunk 4. */}
                   <Button
                     size="sm"
-                    onClick={() =>
-                      openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/settings/billing`)
-                    }
+                    onClick={() => openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/settings/billing`)}
                   >
                     Upgrade
                     <Icons.ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -524,6 +524,7 @@ function ConnectionItem({
   onReconnect: (brokerSlug: string | undefined) => void;
   isReconnecting: boolean;
 }) {
+  const queryClient = useQueryClient();
   const name =
     connection.brokerage?.display_name ||
     connection.brokerage?.name ||
@@ -533,6 +534,26 @@ function ConnectionItem({
     connection.brokerage?.aws_s3_square_logo_url ?? connection.brokerage?.aws_s3_logo_url;
   const isConnected = connection.status === "connected" && !connection.disabled;
   const syncSummary = getConnectionSyncSummary(syncEnabledCount, totalAccountCount);
+
+  const disconnect = useMutation({
+    mutationFn: () => deleteBrokerConnection(connection.id),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_CONNECTIONS] });
+      void queryClient.invalidateQueries({ queryKey: [QueryKeys.BROKER_ACCOUNTS] });
+      toast.success(`Disconnected ${name}`, {
+        description: "Live sync stopped. Already-synced data is kept on this device.",
+      });
+    },
+    onError: (error) => {
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      toast.error(`Couldn't disconnect: ${message}`);
+    },
+  });
 
   return (
     <div className="bg-muted/30 flex items-center gap-3 rounded-lg border p-3">
@@ -574,6 +595,32 @@ function ConnectionItem({
             )}
           </Button>
         )}
+        <ActionConfirm
+          confirmTitle={`Disconnect ${name}?`}
+          confirmMessage="Live sync stops immediately. Your already-synced accounts and history stay on this device — nothing is deleted locally. You can reconnect any time."
+          confirmButtonText="Disconnect"
+          pendingText="Disconnecting…"
+          confirmButtonVariant="destructive"
+          isPending={disconnect.isPending}
+          handleConfirm={() => disconnect.mutate()}
+          side="left"
+          button={
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground hover:text-destructive h-7 w-7 shrink-0 p-0"
+              aria-label={`Disconnect ${name}`}
+              disabled={disconnect.isPending}
+            >
+              {disconnect.isPending ? (
+                <Icons.Spinner className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Icons.Trash className="h-3.5 w-3.5" />
+              )}
+            </Button>
+          }
+        />
       </div>
     </div>
   );

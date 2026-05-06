@@ -4,6 +4,35 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.6] — 2026-05-06
+
+### Added
+
+- **Disconnect a broker** end-to-end. Each broker connection in the Settings →
+  Mizan Connect tab and the Connect page now shows a small trash icon. Clicking
+  it opens a confirm popover ("Disconnect Alpaca Paper?" / "Disconnect" /
+  "Cancel"); on confirm, the cloud API revokes the upstream SnapTrade
+  authorization and soft-deletes the cloud row. The connection vanishes from
+  both surfaces immediately via React Query invalidation.
+  - Already-synced local data (accounts, holdings snapshots, activity history)
+    is preserved on-device. Disconnecting a broker doesn't erase past records —
+    only stops live sync.
+  - You can reconnect any time via the "Add broker" / "Connect a broker" button
+    (existing flow).
+  - Wired across all desktop targets: macOS Apple Silicon, macOS Intel, Windows
+    x64, Linux AppImage. The web build (apps/server) routes through the same
+    `DELETE /connect/connections/:id` path.
+
+### Plumbing
+
+- New Rust client method `ConnectApiClient::delete_connection` →
+  `DELETE /api/v1/sync/brokerage/connections/:id`.
+- New Tauri command `delete_broker_connection(connection_id)` registered in
+  `apps/tauri/src/lib.rs` under the `connect-sync` cargo feature.
+- New JS adapter binding `deleteBrokerConnection(connectionId)` and service
+  wrapper, surfaced to platform indices for both the Tauri and web build
+  targets.
+
 ## [3.3.5] — 2026-05-06
 
 ### Fixed

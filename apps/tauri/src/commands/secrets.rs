@@ -1,7 +1,7 @@
 use crate::{context::ServiceContext, secret_store::KeyringSecretStore};
+use mizan_core::secrets::SecretStore;
 use std::sync::Arc;
 use tauri::State;
-use mizan_core::secrets::SecretStore;
 
 #[tauri::command]
 pub async fn set_secret(

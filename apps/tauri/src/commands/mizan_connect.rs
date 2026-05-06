@@ -2,10 +2,10 @@ use crate::commands::device_sync::clear_min_snapshot_created_at_from_store;
 use crate::context::ServiceContext;
 use crate::secret_store::KeyringSecretStore;
 use log::{debug, error};
+use mizan_core::secrets::SecretStore;
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::State;
-use mizan_core::secrets::SecretStore;
 
 // Storage keys (without prefix - the SecretStore adds "mizan_" prefix)
 const SYNC_ACCESS_TOKEN_KEY: &str = "sync_access_token";

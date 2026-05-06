@@ -6,9 +6,9 @@
 use std::sync::Arc;
 
 use log::{error, info};
+use mizan_core::events::{DomainEvent, DomainEventSink};
 use tauri::AppHandle;
 use tokio::sync::mpsc;
-use mizan_core::events::{DomainEvent, DomainEventSink};
 
 use super::queue_worker::event_queue_worker;
 use crate::context::ServiceContext;

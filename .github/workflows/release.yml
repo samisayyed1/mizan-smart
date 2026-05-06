@@ -104,7 +104,21 @@ jobs:
       # tauri-action also runs the configured beforeBuildCommand, but
       # surfacing a frontend failure here gives a clearer error than
       # waiting for it to fail mid-bundle.
+      #
+      # The CONNECT_* env block has to be present on BOTH this step and
+      # the tauri-action step below. Without it here, Vite reads
+      # `import.meta.env.CONNECT_AUTH_URL` as undefined and the bundled
+      # JS hard-codes `CONNECT_ENABLED = false`. tauri-action's later
+      # beforeBuildCommand re-runs the same build with env, but Tauri's
+      # generate_context! macro expansion is cached against the dist/
+      # produced here — so the second build can be silently shadowed.
+      # Setting env on both steps makes the chain idempotent.
       - name: Build frontend
+        env:
+          CONNECT_AUTH_URL: ${{ vars.CONNECT_AUTH_URL }}
+          CONNECT_AUTH_PUBLISHABLE_KEY: ${{ vars.CONNECT_AUTH_PUBLISHABLE_KEY }}
+          CONNECT_API_URL: ${{ vars.CONNECT_API_URL }}
+          CONNECT_OAUTH_CALLBACK_URL: ${{ vars.CONNECT_OAUTH_CALLBACK_URL }}
         run: pnpm run build:tauri
 
       # The actual desktop bundler. tauri-action handles:

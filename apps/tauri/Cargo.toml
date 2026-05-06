@@ -20,7 +20,11 @@ mizan-device-sync = { workspace = true }
 mizan-ai = { workspace = true }
 
 # Tauri
-tauri = { version = "2.10", features = [] }
+# `devtools` enables right-click → Inspect in production builds. v3.3.1
+# shipped with Connect-related runtime errors that couldn't be diagnosed
+# without devtools — keeping it enabled until founding-member period
+# stabilizes. Disable before Stripe / live broker launch.
+tauri = { version = "2.10", features = ["devtools"] }
 tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"

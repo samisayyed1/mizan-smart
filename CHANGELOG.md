@@ -4,6 +4,25 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.2] — 2026-05-06
+
+### Fixed
+
+- **Mizan Connect navigation still broken in v3.3.1 builds.** The release
+  workflow had two Vite invocations — an explicit "Build frontend" step followed
+  by tauri-action's own beforeBuildCommand. Only the latter received the
+  `CONNECT_*` env vars. When Tauri's `generate_context!` macro caches against
+  the dist/ produced by the first invocation, the second build's correctly-baked
+  bundle gets shadowed. The fix is to set the env block on both steps; the chain
+  is now idempotent.
+
+### Changed
+
+- Tauri `devtools` feature is now enabled in production builds. Right- click in
+  the app and choose **Inspect** to open the WebView devtools console. This is a
+  temporary diagnostic aid for the founding-member period and will be disabled
+  before live-broker launch.
+
 ## [3.3.1] — 2026-05-06
 
 ### Fixed

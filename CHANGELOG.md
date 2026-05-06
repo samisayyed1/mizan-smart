@@ -4,6 +4,16 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.4] — 2026-05-06
+
+### Removed
+
+- Diagnostic amber marker bar and `[mizan-connect]` console log on the Mizan
+  Connect settings page. The fix from v3.3.3 is verified against the live
+  backend — sign-in, broker connection (Alpaca Paper), and signed-in /
+  signed-out transitions all work end-to-end. This release is the clean handoff
+  cut for external sharing.
+
 ## [3.3.3] — 2026-05-06
 
 ### Fixed

@@ -3645,7 +3645,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-ai"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3670,7 +3670,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-app"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3719,7 +3719,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-connect"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3739,7 +3739,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-core"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3784,7 +3784,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-device-sync"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -3808,7 +3808,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-market-data"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "async-trait",
  "chrono",
@@ -3830,7 +3830,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-server"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "anyhow",
  "argon2",
@@ -3877,7 +3877,7 @@ dependencies = [
 
 [[package]]
 name = "mizan-storage-sqlite"
-version = "3.3.2"
+version = "3.3.3"
 dependencies = [
  "anyhow",
  "async-trait",

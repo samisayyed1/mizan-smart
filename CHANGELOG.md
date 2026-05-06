@@ -4,6 +4,26 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.3] — 2026-05-06
+
+### Fixed
+
+- **Settings sidebar navigation hardened.** The sidebar's `NavLink to="connect"`
+  is now resolved to the absolute `/settings/connect` rather than relying on
+  React Router's relative-path resolver. The route tree contains TWO routes
+  named `connect` (one at AppLayout for `/connect`, one at SettingsLayout for
+  `/settings/connect`). Static analysis confirms relative resolution is correct
+  in isolation, but the absolute path is defensive against any runtime edge
+  case.
+
+### Diagnostic
+
+- ConnectSettingsPage now logs to the WebView console on mount and renders a
+  small amber marker bar at the top showing the live `pathname`, `isEnabled`,
+  and `isConnected` values. Right-click → Inspect → Console to read the log
+  line. The marker is removed in the next release once routing is verified
+  healthy in production.
+
 ## [3.3.2] — 2026-05-06
 
 ### Fixed

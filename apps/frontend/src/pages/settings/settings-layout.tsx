@@ -142,7 +142,9 @@ export default function SettingsLayout() {
                     {section.items.map((item) => (
                       <button
                         key={item.href}
-                        onClick={() => navigate(item.href)}
+                        onClick={() =>
+                          navigate(item.href.startsWith("/") ? item.href : `/settings/${item.href}`)
+                        }
                         className="hover:bg-muted/40 flex w-full items-center justify-between gap-3 px-4 py-4 text-left transition-colors active:opacity-90"
                         aria-label={item.title}
                       >

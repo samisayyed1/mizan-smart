@@ -1,0 +1,25 @@
+# Changelog
+
+All notable changes to Mizan desktop ship from this file. Format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
+[SemVer](https://semver.org/spec/v2.0.0.html).
+
+## [3.3.1] — 2026-05-06
+
+### Fixed
+
+- **Mizan Connect navigation broken in production builds.** The 3.3.0 installer
+  shipped with `CONNECT_AUTH_URL` and `CONNECT_AUTH_PUBLISHABLE_KEY` empty at
+  build time, which set `CONNECT_ENABLED = false` and gated the Mizan Connect
+  provider / routes into a "disabled" placeholder. Clicking the sidebar entry
+  appeared to do nothing — the route resolved, but the page rendered a silent
+  disabled state instead of the sign-in form. Build-time variables are now
+  configured on the repo and bake into every release.
+
+## [3.3.0] — 2026-05-05
+
+Initial public release of the Mizan desktop app under the Mizan brand, forking
+from the upstream lineage. Includes the Mizan Connect cloud integration
+(Supabase auth, broker sync via SnapTrade), the Mizan Compass instrument, the
+editorial landing site, and the cross-platform release pipeline (macOS Apple
+Silicon, macOS Intel, Windows x64, Linux AppImage).

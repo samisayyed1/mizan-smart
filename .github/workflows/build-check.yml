@@ -76,6 +76,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # `@mizan/ui` ships its types from `dist/` via project references.
+      # Frontend tsc fails (TS6305) on a fresh checkout if those .d.ts
+      # files aren't built first. pr-check.yml runs the same step.
+      - name: Build package types
+        run: pnpm run build:types
+
       - name: Build frontend
         run: pnpm run build
 

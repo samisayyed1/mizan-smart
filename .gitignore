@@ -92,8 +92,11 @@ Thumbs.db
 # Claude Code runtime artifacts (keep CLAUDE.md, skills/, agents/ tracked)
 .claude/scheduled_tasks.lock
 .claude/*.lock
-db/
-apps/db/
-apps/tauri/db/
+# Local SQLite runtime DB directories — top-level + Tauri-side only.
+# A bare unscoped `db/` rule was previously here, which silently
+# gitignored crates/storage-sqlite/src/db/ (real source) and broke CI.
+/db/
+/apps/db/
+/apps/tauri/db/
 tasks
 **/*.local.md

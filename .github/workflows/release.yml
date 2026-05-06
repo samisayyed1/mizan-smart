@@ -119,6 +119,10 @@ jobs:
           CONNECT_AUTH_PUBLISHABLE_KEY: ${{ vars.CONNECT_AUTH_PUBLISHABLE_KEY }}
           CONNECT_API_URL: ${{ vars.CONNECT_API_URL }}
           CONNECT_OAUTH_CALLBACK_URL: ${{ vars.CONNECT_OAUTH_CALLBACK_URL }}
+          # TODO(chunk-4): drop once /api/v1/user/me returns team.plan and
+          # has_broker_sync() can read the real subscription. Until then
+          # this baked-true keeps broker sync working on shipped binaries.
+          CONNECT_BYPASS_PLAN_CHECK: ${{ vars.CONNECT_BYPASS_PLAN_CHECK }}
         run: pnpm run build:tauri
 
       # The actual desktop bundler. tauri-action handles:
@@ -139,6 +143,8 @@ jobs:
           CONNECT_AUTH_PUBLISHABLE_KEY: ${{ vars.CONNECT_AUTH_PUBLISHABLE_KEY }}
           CONNECT_API_URL: ${{ vars.CONNECT_API_URL }}
           CONNECT_OAUTH_CALLBACK_URL: ${{ vars.CONNECT_OAUTH_CALLBACK_URL }}
+          # See "Build frontend" step above for the chunk-4 plan.
+          CONNECT_BYPASS_PLAN_CHECK: ${{ vars.CONNECT_BYPASS_PLAN_CHECK }}
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "Mizan ${{ github.ref_name }}"

@@ -4,6 +4,37 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.5] — 2026-05-06
+
+### Fixed
+
+- **Broker sync now actually runs in production builds.** Clicking "Sync Now" on
+  a connected broker (Alpaca Paper, etc.) was failing with "Failed to start
+  sync: Unknown error" because:
+  1. `has_broker_sync()` checked `CONNECT_BYPASS_PLAN_CHECK` via
+     `std::env::var()` at runtime. macOS apps launched from Finder / Dock have
+     no shell env, so the bypass never triggered, and since the Connect backend
+     doesn't yet return `team.plan` (Chunk 4 work) the gate returned `Ok(false)`
+     → "Plan does not include broker sync" → sync refused to start.
+  2. The frontend toast read `error instanceof Error ? error.message`, but Tauri
+     rejects `Result<_, String>` commands with a plain string. Strings aren't
+     `Error` instances, so the real reason was silently swallowed and the user
+     just saw "Unknown error".
+
+  Fix: `has_broker_sync()` now also reads the value baked at compile time via
+  `option_env!()`, so the GitHub Actions Variable propagates into shipped
+  binaries. Local dev (`pnpm tauri dev` with the env in the shell) keeps working
+  too — both paths are accepted. Frontend toast helpers now unwrap string
+  rejections so the actual backend message ("Plan does not include broker sync",
+  etc.) reaches the user.
+
+### Infrastructure
+
+- Set `CONNECT_BYPASS_PLAN_CHECK=true` GitHub Actions Variable on the repo.
+  Release workflow's "Build frontend" + tauri-action steps both pass it through.
+  Both will be removed in Chunk 4 once Stripe lands and the real plan check
+  returns truthful values.
+
 ## [3.3.4] — 2026-05-06
 
 ### Removed

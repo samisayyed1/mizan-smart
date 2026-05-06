@@ -78,8 +78,8 @@ function ServiceUnavailableCard({ onRetry, isRetrying }: ServiceUnavailableCardP
             Service Temporarily Unavailable
           </h3>
           <p className="text-muted-foreground mb-4 max-w-sm text-sm">
-            We&apos;re having trouble connecting to Mizan Connect. This is usually temporary
-            and should resolve shortly.
+            We&apos;re having trouble connecting to Mizan Connect. This is usually temporary and
+            should resolve shortly.
           </p>
           <Button variant="outline" onClick={onRetry} disabled={isRetrying}>
             {isRetrying ? (
@@ -431,9 +431,16 @@ export function ConnectedView() {
       toast.loading("Syncing broker data...", { id: "broker-sync-start" });
     },
     onError: (error) => {
-      toast.error(
-        `Failed to start sync: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
+      // Tauri rejects Result<_, String> commands with a plain JS string,
+      // not an Error instance. Unwrap whichever shape we got so the user
+      // sees the real reason instead of "Unknown error".
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === "string"
+            ? error
+            : "Unknown error";
+      toast.error(`Failed to start sync: ${message}`);
     },
   });
 
@@ -652,9 +659,7 @@ export function ConnectedView() {
                   doesn't render today. Kept for the Chunk-4 swap. */}
               <Button
                 size="sm"
-                onClick={() =>
-                  openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/settings/billing`)
-                }
+                onClick={() => openUrlInBrowser(`${MIZAN_CONNECT_PORTAL_URL}/settings/billing`)}
               >
                 Upgrade
                 <Icons.ArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -667,9 +672,9 @@ export function ConnectedView() {
       {/* Privacy Footnote */}
       <footer className="border-t pt-4">
         <p className="text-muted-foreground text-center text-xs leading-relaxed">
-          Mizan Connect doesn&apos;t store your brokerage credentials or financial data.
-          Everything syncs securely via an aggregator to your local database. Device sync uses
-          end-to-end encryption.{" "}
+          Mizan Connect doesn&apos;t store your brokerage credentials or financial data. Everything
+          syncs securely via an aggregator to your local database. Device sync uses end-to-end
+          encryption.{" "}
           <ExternalLink
             href="https://mizan.app/privacy"
             className="text-muted-foreground hover:text-foreground underline underline-offset-2"

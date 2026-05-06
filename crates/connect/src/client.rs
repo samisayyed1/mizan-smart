@@ -362,10 +362,7 @@ impl ConnectApiClient {
     /// * `broker` — optional broker slug (e.g. `"ROBINHOOD"`) to deep-link
     ///   straight into a single broker. `None` shows SnapTrade's broker
     ///   picker.
-    pub async fn create_login_portal(
-        &self,
-        broker: Option<&str>,
-    ) -> Result<LoginPortalResponse> {
+    pub async fn create_login_portal(&self, broker: Option<&str>) -> Result<LoginPortalResponse> {
         let url = format!("{}/api/v1/sync/brokerage/login-portal", self.base_url);
         let body = serde_json::json!({ "broker": broker });
 
@@ -395,7 +392,17 @@ impl ConnectApiClient {
     /// in dev, and Chunk 4 will remove it once `team.plan` is populated.
     pub async fn has_broker_sync(&self) -> Result<bool> {
         // TODO(chunk-4): drop this bypass once /api/v1/user/me returns team.plan.
-        if std::env::var("CONNECT_BYPASS_PLAN_CHECK").as_deref() == Ok("true") {
+        //
+        // The bypass needs to work in production .dmg/.msi/.AppImage installs
+        // where there is no shell env at runtime (apps launched from Finder
+        // or Start Menu inherit no `CONNECT_BYPASS_*`). So we accept BOTH:
+        //   - compile-time value via `option_env!()` — set by CI's env block
+        //     so the GitHub Actions Variable bakes into release builds.
+        //   - runtime value via `std::env::var()` — used by tests and by
+        //     `pnpm tauri dev` shells that export the var locally.
+        const COMPILE_TIME_BYPASS: Option<&str> = option_env!("CONNECT_BYPASS_PLAN_CHECK");
+        let runtime_bypass = std::env::var("CONNECT_BYPASS_PLAN_CHECK").ok();
+        if COMPILE_TIME_BYPASS == Some("true") || runtime_bypass.as_deref() == Some("true") {
             debug!("[ConnectApi] CONNECT_BYPASS_PLAN_CHECK=true — skipping plan gate");
             return Ok(true);
         }
@@ -839,9 +846,8 @@ mod tests {
     #[serial_test::serial]
     async fn has_broker_sync_bypass_flag_short_circuits() {
         std::env::set_var("CONNECT_BYPASS_PLAN_CHECK", "true");
-        let client =
-            ConnectApiClient::new("http://127.0.0.1:1/never-reachable", "mizan-test-jwt")
-                .expect("client");
+        let client = ConnectApiClient::new("http://127.0.0.1:1/never-reachable", "mizan-test-jwt")
+            .expect("client");
         let result = client.has_broker_sync().await.expect("bypass returns Ok");
         assert!(result, "bypass returns true");
         std::env::remove_var("CONNECT_BYPASS_PLAN_CHECK");

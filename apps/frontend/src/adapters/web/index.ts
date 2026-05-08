@@ -77,6 +77,7 @@ export {
   checkActivitiesImport,
   checkExistingDuplicates,
   createActivity,
+  createFixedDeposit,
   deleteImportTemplate,
   deleteActivity,
   getImportTemplate,

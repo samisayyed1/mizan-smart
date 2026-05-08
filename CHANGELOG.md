@@ -4,6 +4,47 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.8] — 2026-05-09
+
+### Added
+
+- **Schedule a Fixed Deposit (end-to-end).** New action on every account page:
+  _Schedule Fixed Deposit_. Opens a dialog where the user enters principal,
+  annual rate, term in months, payment frequency (monthly / quarterly /
+  semi-annual / annual / at maturity), start date, currency, and optional notes.
+  The backend deterministically generates a series of `INTEREST` activities at
+  the configured cadence and inserts them into the account.
+  - Pure scheduling logic lives in `crates/core/src/activities/fd_scheduler.rs`.
+    Twelve unit tests cover every cadence (monthly through at-maturity),
+    pro-rated maturity payouts for non-12-month terms, zero-rate edge case,
+    term-shorter-than-cadence rejection, non-positive principal rejection, and
+    metadata traceability.
+  - The principal stays in the user's cash balance — Mizan does **not**
+    double-count it as a separate position, and the engine treats the emitted
+    INTEREST entries as gain (no `net_contribution` change), so the FD's
+    interest feeds CAGR/TWR through the same path as any broker-synced cash
+    sweep.
+  - Each emitted activity carries `source_system = "FD_SCHEDULE"` and a JSON
+    metadata blob with the originating principal/rate/term/start, so future
+    "delete this FD's schedule" or "show FD lineage" surfaces have the lineage
+    they need.
+  - New `create_fixed_deposit` Tauri command wired through both the Tauri and
+    web platform adapters, so the same call path works on macOS Apple Silicon,
+    macOS Intel, Windows, Linux, and the self-hosted server build.
+
+### Verified
+
+- Cash CAGR treatment confirmed via the existing test
+  `test_interest_increases_cash_but_not_net_contribution` (passes today): a
+  $5,000 deposit + $50 interest leaves cash at $5,050 but `net_contribution`
+  stays at $5,000 — so the CAGR engine sees only the $50 as gain. Documented the
+  source line in the test suite for future regression watches.
+- Gold live pricing path: the `metal_price_api` provider supports XAU, XAG, XPT,
+  XPD plus weight units (XAU-1KG, XAU-500G); existing network-gated tests
+  (`test_get_latest_quote_gold_usd`, `test_get_latest_quote_gold_chf`) prove the
+  chain works end-to-end once a real `METAL_PRICE_API_KEY` is provided in
+  Settings → Market Data.
+
 ## [3.3.7] — 2026-05-07
 
 ### Changed

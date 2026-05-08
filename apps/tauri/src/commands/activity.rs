@@ -5,10 +5,11 @@ use crate::context::ServiceContext;
 use log::debug;
 use mizan_core::activities::{
     Activity, ActivityBulkMutationRequest, ActivityBulkMutationResult, ActivityImport,
-    ActivitySearchResponse, ActivityUpdate, ImportActivitiesResult, ImportAssetCandidate,
-    ImportAssetPreviewItem, ImportMappingData, ImportTemplateData, NewActivity, ParseConfig,
-    ParsedCsvResult, Sort,
+    ActivitySearchResponse, ActivityUpdate, FdParams, FdPaymentFrequency, ImportActivitiesResult,
+    ImportAssetCandidate, ImportAssetPreviewItem, ImportMappingData, ImportTemplateData,
+    NewActivity, ParseConfig, ParsedCsvResult, Sort,
 };
+use rust_decimal::Decimal;
 use tauri::State;
 
 #[allow(clippy::too_many_arguments)]
@@ -62,6 +63,65 @@ pub async fn create_activity(
     state
         .activity_service()
         .create_activity(activity)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Frontend-facing payload for `create_fixed_deposit`. Mirrors `FdParams`
+/// but takes the start date as an ISO `YYYY-MM-DD` string (the frontend
+/// always sends dates as strings) and the payment frequency as a
+/// snake_case enum string the JS layer can build trivially.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateFixedDepositRequest {
+    pub account_id: String,
+    pub principal: Decimal,
+    /// Annual rate as a percent (5.0 = 5%).
+    pub annual_rate_percent: Decimal,
+    pub term_months: u32,
+    /// One of: monthly, quarterly, semi_annual, annual, at_maturity.
+    pub payment_frequency: FdPaymentFrequency,
+    /// `YYYY-MM-DD`.
+    pub start_date: String,
+    pub currency: String,
+    pub notes: Option<String>,
+}
+
+/// Schedule a fixed deposit: emits a series of INTEREST activities at
+/// the configured cadence into the chosen account. Returns the inserted
+/// activities so the frontend can surface counts / sums in the success
+/// toast without an extra round-trip.
+#[tauri::command]
+pub async fn create_fixed_deposit(
+    request: CreateFixedDepositRequest,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<Vec<Activity>, String> {
+    debug!(
+        "Creating fixed deposit: account={}, principal={}, rate={}%, term={}mo, freq={:?}",
+        request.account_id,
+        request.principal,
+        request.annual_rate_percent,
+        request.term_months,
+        request.payment_frequency
+    );
+
+    let start_date = chrono::NaiveDate::parse_from_str(&request.start_date, "%Y-%m-%d")
+        .map_err(|e| format!("Invalid start_date (expected YYYY-MM-DD): {}", e))?;
+
+    let params = FdParams {
+        account_id: request.account_id,
+        principal: request.principal,
+        annual_rate_percent: request.annual_rate_percent,
+        term_months: request.term_months,
+        payment_frequency: request.payment_frequency,
+        start_date,
+        currency: request.currency,
+        notes: request.notes,
+    };
+
+    state
+        .activity_service()
+        .create_fixed_deposit_schedule(params)
         .await
         .map_err(|e| e.to_string())
 }

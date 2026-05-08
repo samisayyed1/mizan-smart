@@ -106,6 +106,43 @@ export const createActivity = async (activity: ActivityCreate): Promise<Activity
   }
 };
 
+/**
+ * Fixed-deposit creation request. Mirrors the Rust `CreateFixedDepositRequest`
+ * struct on the Tauri command — Tauri's serde binding camelCases field
+ * names so we send `accountId`, `annualRatePercent`, etc.
+ */
+export type FdPaymentFrequency = "monthly" | "quarterly" | "semi_annual" | "annual" | "at_maturity";
+
+export interface CreateFixedDepositRequest {
+  accountId: string;
+  /** Decimal as string is also accepted by serde; sending number works for
+   *  the principal sizes we expect (< 1e15 USD). */
+  principal: string | number;
+  /** 5 = 5%. */
+  annualRatePercent: string | number;
+  termMonths: number;
+  paymentFrequency: FdPaymentFrequency;
+  /** YYYY-MM-DD. */
+  startDate: string;
+  currency: string;
+  notes?: string | null;
+}
+
+/**
+ * Schedule a fixed deposit. Backend emits a series of INTEREST activities
+ * at the configured cadence and returns them in payment-date order.
+ */
+export const createFixedDeposit = async (
+  request: CreateFixedDepositRequest,
+): Promise<Activity[]> => {
+  try {
+    return await invoke<Activity[]>("create_fixed_deposit", { request });
+  } catch (err) {
+    logger.error("Error creating fixed deposit.");
+    throw err;
+  }
+};
+
 export const updateActivity = async (activity: ActivityUpdate): Promise<Activity> => {
   try {
     return await invoke<Activity>("update_activity", { activity });

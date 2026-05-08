@@ -38,10 +38,10 @@ use log::warn;
 type QuoteCcyCache = HashMap<(String, Option<String>, Option<String>), Option<String>>;
 /// Cache key: (symbol, activity currency, ISIN) → symbol resolution result
 type SymbolResolutionKey = (String, String, Option<String>);
-use uuid::Uuid;
 use mizan_market_data::{
     exchanges_for_currency, mic_to_currency, yahoo_exchange_suffixes, yahoo_suffix_to_mic,
 };
+use uuid::Uuid;
 
 /// Return the Yahoo Finance ticker suffix (e.g., ".L") for a given MIC,
 /// or `None` if the exchange uses no suffix (US exchanges) or is unknown.
@@ -2844,6 +2844,31 @@ impl ActivityServiceTrait for ActivityService {
             date_to,
             instrument_type_filter,
         )
+    }
+
+    /// Generate the schedule of INTEREST activities for a fixed deposit
+    /// and insert each one. Pure scheduling logic lives in
+    /// `super::fd_scheduler` and is unit-tested in isolation; this layer
+    /// owns the side effects (insert, emit domain events, error mapping).
+    async fn create_fixed_deposit_schedule(
+        &self,
+        params: super::fd_scheduler::FdParams,
+    ) -> Result<Vec<Activity>> {
+        let schedule = super::fd_scheduler::generate_fd_schedule(&params).map_err(|e| {
+            crate::errors::Error::Validation(crate::errors::ValidationError::InvalidInput(format!(
+                "FD schedule rejected: {}",
+                e
+            )))
+        })?;
+        let mut inserted = Vec::with_capacity(schedule.len());
+        for activity in schedule {
+            // Reuse the standard create_activity path so domain events,
+            // idempotency, and validation behave identically to manually
+            // entered INTEREST entries.
+            let created = self.create_activity(activity).await?;
+            inserted.push(created);
+        }
+        Ok(inserted)
     }
 
     /// Creates a new activity

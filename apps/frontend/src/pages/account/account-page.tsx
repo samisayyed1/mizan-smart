@@ -22,6 +22,7 @@ import {
 import { useMemo, useState } from "react";
 
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
+import { FixedDepositDialog } from "@/components/fixed-deposit-dialog";
 import { PrivacyToggle } from "@/components/privacy-toggle";
 import { useAccounts } from "@/hooks/use-accounts";
 import { useRecalculatePortfolioMutation } from "@/hooks/use-calculate-portfolio";
@@ -124,6 +125,7 @@ const AccountPage = () => {
   const [selectedActivityDate, setSelectedActivityDate] = useState<string | null>(null);
   const [isActivitySheetOpen, setIsActivitySheetOpen] = useState(false);
   const [showBulkHoldingsForm, setShowBulkHoldingsForm] = useState(false);
+  const [showFixedDepositDialog, setShowFixedDepositDialog] = useState(false);
   const [accountDetailTab, setAccountDetailTab] = useState<AccountDetailTab>("holdings");
 
   const recalculatePortfolioMutation = useRecalculatePortfolioMutation();
@@ -384,6 +386,11 @@ const AccountPage = () => {
                                 onClick: () => setShowBulkHoldingsForm(true),
                               },
                             ]),
+                        {
+                          icon: Icons.BadgeDollarSign,
+                          label: "Schedule Fixed Deposit",
+                          onClick: () => setShowFixedDepositDialog(true),
+                        },
                         {
                           icon: Icons.Import,
                           label: "Import CSV",
@@ -755,6 +762,18 @@ const AccountPage = () => {
           setShowBulkHoldingsForm(false);
         }}
       />
+
+      {/* Schedule Fixed Deposit — generates INTEREST activities at the
+          chosen cadence into this account. Principal stays in the cash
+          balance; only the interest counts toward CAGR. */}
+      {account ? (
+        <FixedDepositDialog
+          open={showFixedDepositDialog}
+          onOpenChange={setShowFixedDepositDialog}
+          accountId={account.id}
+          defaultCurrency={account.currency}
+        />
+      ) : null}
     </Page>
   );
 };

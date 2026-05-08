@@ -179,6 +179,15 @@ pub trait ActivityServiceTrait: Send + Sync {
     fn list_import_templates(&self) -> Result<Vec<ImportTemplateData>>;
     fn get_import_template(&self, template_id: String) -> Result<ImportTemplateData>;
     async fn create_activity(&self, activity: NewActivity) -> Result<Activity>;
+    /// Generate the full INTEREST schedule for a fixed deposit and insert
+    /// every emitted activity. Returns the inserted activities in payment-
+    /// date order. Failure on any individual insert short-circuits — the
+    /// caller sees a partial result via the Err arm and can decide whether
+    /// to retry or roll back.
+    async fn create_fixed_deposit_schedule(
+        &self,
+        params: super::fd_scheduler::FdParams,
+    ) -> Result<Vec<Activity>>;
     async fn update_activity(&self, activity: ActivityUpdate) -> Result<Activity>;
     async fn delete_activity(&self, activity_id: String) -> Result<Activity>;
     async fn link_transfer_activities(

@@ -96,6 +96,7 @@ export const COMMANDS: CommandMap = {
   // Activities
   search_activities: { method: "POST", path: "/activities/search" },
   create_activity: { method: "POST", path: "/activities" },
+  create_fixed_deposit: { method: "POST", path: "/activities/fixed-deposit" },
   update_activity: { method: "PUT", path: "/activities" },
   save_activities: { method: "POST", path: "/activities/bulk" },
   delete_activity: { method: "DELETE", path: "/activities" },

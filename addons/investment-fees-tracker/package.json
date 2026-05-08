@@ -1,6 +1,6 @@
 {
   "name": "investment-fees-tracker-addon",
-  "version": "3.3.7",
+  "version": "3.3.8",
   "description": "An addon for tracking and analyzing investment fees across your portfolio",
   "type": "module",
   "main": "dist/addon.js",

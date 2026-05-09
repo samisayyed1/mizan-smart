@@ -93,10 +93,33 @@ export function useCalculatePerformanceHistory({
 
   const displayEndDate = dateRange?.to ? format(dateRange.to, "MMM d, yyyy") : "";
 
-  const displayDateRange =
-    displayStartDate && displayEndDate
-      ? `${displayStartDate} - ${displayEndDate}`
-      : "Compare account performance over time";
+  // Compute the actual data extent across all selected series. When the
+  // user requests a window wider than they have data for (typical on a
+  // freshly synced account with limited broker history), the chart will
+  // be effectively clamped — surface that to the caller so the header
+  // can be honest about what's actually shown.
+  const actualDataStart = (() => {
+    let earliest: string | undefined;
+    for (const series of chartData) {
+      const first = series?.returns?.[0]?.date;
+      if (!first) continue;
+      if (!earliest || first < earliest) earliest = first;
+    }
+    return earliest;
+  })();
+
+  const displayDateRange = (() => {
+    if (!displayStartDate || !displayEndDate) {
+      return "Compare account performance over time";
+    }
+    // If the actual data starts noticeably later than the requested window,
+    // tell the user the truth.
+    if (actualDataStart && startDate && actualDataStart > startDate) {
+      const formattedActual = format(new Date(actualDataStart), "MMM d, yyyy");
+      return `${formattedActual} – ${displayEndDate} · all available data (requested ${displayStartDate})`;
+    }
+    return `${displayStartDate} - ${displayEndDate}`;
+  })();
 
   return {
     data: chartData,
@@ -107,5 +130,6 @@ export function useCalculatePerformanceHistory({
     formattedStartDate: startDate,
     formattedEndDate: endDate,
     displayDateRange,
+    actualDataStart,
   };
 }

@@ -21,6 +21,7 @@ import {
   usePersistentState,
 } from "@mizan/ui";
 import { Skeleton } from "@mizan/ui/components/ui/skeleton";
+import { differenceInDays, format, parseISO } from "date-fns";
 import { useMemo, useState } from "react";
 import { AccountsSummary } from "./accounts-summary";
 import Balance from "./balance";
@@ -97,6 +98,24 @@ export function DashboardContent() {
 
   const isNegative = totalValue < 0;
 
+  // Sparse-data hint: when the user requests a wider window than they
+  // actually have data for, the chart looks identical across multiple
+  // intervals (1Y vs 3M etc) which feels broken. Detect that and surface
+  // a subtle "data starts X" annotation so the chart's silence makes sense.
+  const sparseDataHint = useMemo(() => {
+    if (isAllTime || !valuationHistory?.length || !dateRange?.from) {
+      return null;
+    }
+    const earliestRow = valuationHistory[0];
+    if (!earliestRow?.valuationDate) return null;
+    const earliestDataDate = parseISO(earliestRow.valuationDate);
+    // Threshold: if the earliest data point is more than 7 days after the
+    // requested window start, the chart is effectively clamped — tell the user.
+    const gapDays = differenceInDays(earliestDataDate, dateRange.from);
+    if (gapDays <= 7) return null;
+    return `Showing all available data — history starts ${format(earliestDataDate, "MMM d, yyyy")} (${valuationHistory.length} day${valuationHistory.length === 1 ? "" : "s"})`;
+  }, [valuationHistory, dateRange, isAllTime]);
+
   // Callback for IntervalSelector
   const handleIntervalSelect = (
     code: TimePeriod,
@@ -164,7 +183,7 @@ export function DashboardContent() {
         <div className="h-[280px]">
           <HistoryChart data={chartData} isLoading={isValuationHistoryLoading} />
           {valuationHistory && chartData.length > 0 && (
-            <div className="flex w-full justify-center">
+            <div className="flex w-full flex-col items-center gap-1">
               <IntervalSelector
                 className="pointer-events-auto relative z-20 w-full max-w-screen-sm sm:max-w-screen-md md:max-w-2xl lg:max-w-3xl"
                 onIntervalSelect={handleIntervalSelect}
@@ -173,6 +192,11 @@ export function DashboardContent() {
                 storageKey={INTERVAL_STORAGE_KEY}
                 defaultValue={DEFAULT_INTERVAL}
               />
+              {sparseDataHint && (
+                <p className="text-muted-foreground pointer-events-auto px-4 text-center text-[10px] tracking-wide sm:text-xs">
+                  {sparseDataHint}
+                </p>
+              )}
             </div>
           )}
         </div>

@@ -116,6 +116,21 @@ export function DashboardContent() {
     return `Showing all available data — history starts ${format(earliestDataDate, "MMM d, yyyy")} (${valuationHistory.length} day${valuationHistory.length === 1 ? "" : "s"})`;
   }, [valuationHistory, dateRange, isAllTime]);
 
+  // Headline interval label — when data is sparse vs the requested window,
+  // override "past 5 years" / "past year" with the actual extent so the
+  // gain/loss percentage isn't misleadingly labeled. e.g. requesting 5Y
+  // on a 3-month-old account: instead of "-14.57% past 5 years" (which
+  // sounds like a 5-year drawdown), render "-14.57% past 92 days".
+  const displayedIntervalDescription = useMemo(() => {
+    if (sparseDataHint && valuationHistory?.length) {
+      const days = valuationHistory.length;
+      if (days < 31) return `past ${days} days`;
+      const months = Math.round(days / 30);
+      return `past ${months} month${months === 1 ? "" : "s"}`;
+    }
+    return selectedIntervalDescription;
+  }, [sparseDataHint, valuationHistory, selectedIntervalDescription]);
+
   // Callback for IntervalSelector
   const handleIntervalSelect = (
     code: TimePeriod,
@@ -162,9 +177,9 @@ export function DashboardContent() {
                     ></GainPercent>
                   </>
                 )}
-                {selectedIntervalDescription && (
+                {displayedIntervalDescription && (
                   <span className="lg:text-md text-muted-foreground ml-1 text-sm font-light">
-                    {selectedIntervalDescription}
+                    {displayedIntervalDescription}
                   </span>
                 )}
               </div>

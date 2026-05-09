@@ -122,6 +122,54 @@ pub async fn execute_health_fix(
         return Ok(());
     }
 
+    // Handle fetch_fx action - refresh all FX rates by syncing all quotes.
+    // The pair_ids in the payload are currency pairs like "EUR:USD"; we
+    // can't trivially map those to asset_ids without resolving FX symbols,
+    // so we just trigger a full incremental quote sync, which refreshes
+    // FX rates alongside everything else. Same UX as Recalculate History
+    // but lighter (Incremental, not BackfillHistory).
+    if action.id == "fetch_fx" {
+        let pair_ids: Vec<String> = serde_json::from_value(action.payload.clone())
+            .map_err(|e| format!("Failed to parse FX pair IDs: {}", e))?;
+
+        info!(
+            "Refreshing FX rates for {} pair(s): {:?} (via full incremental quote sync)",
+            pair_ids.len(),
+            pair_ids
+        );
+
+        if let Err(e) = app_handle.emit(MARKET_SYNC_START, &()) {
+            error!("Failed to emit market:sync-start event: {}", e);
+        }
+
+        let quote_service = state.quote_service();
+        match quote_service.sync(SyncMode::Incremental, None).await {
+            Ok(result) => {
+                if !result.failures.is_empty() {
+                    let failed_symbols: Vec<_> =
+                        result.failures.iter().map(|(s, _)| s.as_str()).collect();
+                    warn!("Some assets failed to sync: {:?}", failed_symbols);
+                }
+                let result_payload = MarketSyncResult {
+                    failed_syncs: result.failures,
+                };
+                if let Err(e) = app_handle.emit(MARKET_SYNC_COMPLETE, &result_payload) {
+                    error!("Failed to emit market:sync-complete event: {}", e);
+                }
+            }
+            Err(e) => {
+                if let Err(e_emit) = app_handle.emit(MARKET_SYNC_ERROR, &e.to_string()) {
+                    error!("Failed to emit market:sync-error event: {}", e_emit);
+                }
+                return Err(format!("Failed to refresh FX rates: {}", e));
+            }
+        }
+
+        // Clear health cache so next check reflects the refreshed rates
+        state.health_service().clear_cache().await;
+        return Ok(());
+    }
+
     // Handle sync_prices and retry_sync actions - emit market sync events
     if action.id == "sync_prices" || action.id == "retry_sync" {
         let asset_ids: Vec<String> = serde_json::from_value(action.payload.clone())

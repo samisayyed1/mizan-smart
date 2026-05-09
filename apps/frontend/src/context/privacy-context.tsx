@@ -1,8 +1,5 @@
 import { createContext } from "react";
-import {
-  useBalancePrivacy as useBalancePrivacyHook,
-  type BalancePrivacyHook,
-} from "@mizan/ui";
+import { useBalancePrivacy as useBalancePrivacyHook, type BalancePrivacyHook } from "@mizan/ui";
 
 type PrivacyContextType = BalancePrivacyHook;
 

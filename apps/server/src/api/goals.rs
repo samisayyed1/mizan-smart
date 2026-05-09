@@ -11,8 +11,6 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use rust_decimal::prelude::ToPrimitive;
-use serde::Deserialize;
 use mizan_core::{
     accounts::AccountServiceTrait,
     goals::{
@@ -26,6 +24,8 @@ use mizan_core::{
         RetirementOverview, ScenarioResult, SorrScenario, StressTestResult,
     },
 };
+use rust_decimal::prelude::ToPrimitive;
+use serde::Deserialize;
 
 async fn get_goals(State(state): State<Arc<AppState>>) -> ApiResult<Json<Vec<Goal>>> {
     let goals = state.goal_service.get_goals()?;

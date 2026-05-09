@@ -1,9 +1,9 @@
 use chrono::Utc;
 use log::{debug, info, warn};
+use mizan_core::sync::{SyncEntity, SyncOperation};
 use std::sync::Arc;
 use std::time::Duration;
 use uuid::Uuid;
-use mizan_core::sync::{SyncEntity, SyncOperation};
 
 use crate::{ApiRetryClass, SyncPushEventRequest, SyncPushRequest, SyncState};
 
@@ -1254,10 +1254,10 @@ where
 mod tests {
     use super::*;
     use async_trait::async_trait;
+    use mizan_core::sync::SyncEngineStatus;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
     use tokio::sync::Mutex;
-    use mizan_core::sync::SyncEngineStatus;
 
     #[derive(Clone)]
     struct TestPorts {

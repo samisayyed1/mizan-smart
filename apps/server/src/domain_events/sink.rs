@@ -5,7 +5,6 @@
 
 use std::sync::{Arc, RwLock};
 
-use tokio::sync::mpsc;
 use mizan_connect::{BrokerSyncServiceTrait, TokenLifecycleState};
 use mizan_core::{
     assets::AssetServiceTrait,
@@ -13,6 +12,7 @@ use mizan_core::{
     goals::GoalServiceTrait,
     secrets::SecretStore,
 };
+use tokio::sync::mpsc;
 
 use super::queue_worker::{event_queue_worker, QueueWorkerDeps};
 use crate::events::EventBus;

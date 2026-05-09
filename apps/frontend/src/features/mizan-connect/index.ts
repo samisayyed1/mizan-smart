@@ -2,10 +2,7 @@
 // ============================
 
 // Provider and hook
-export {
-  MizanConnectProvider,
-  useMizanConnect,
-} from "./providers/mizan-connect-provider";
+export { MizanConnectProvider, useMizanConnect } from "./providers/mizan-connect-provider";
 
 // Components
 export { ConnectedView } from "./components/connected-view";

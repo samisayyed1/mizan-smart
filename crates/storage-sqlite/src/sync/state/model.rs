@@ -2,8 +2,8 @@
 
 use chrono::{DateTime, Utc};
 use diesel::prelude::*;
-use serde::{Deserialize, Serialize};
 use mizan_connect::broker_ingest::{BrokerSyncState, SyncStatus};
+use serde::{Deserialize, Serialize};
 
 /// Database model for broker sync state
 #[derive(

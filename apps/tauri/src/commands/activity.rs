@@ -7,7 +7,7 @@ use mizan_core::activities::{
     Activity, ActivityBulkMutationRequest, ActivityBulkMutationResult, ActivityImport,
     ActivitySearchResponse, ActivityUpdate, FdParams, FdPaymentFrequency, ImportActivitiesResult,
     ImportAssetCandidate, ImportAssetPreviewItem, ImportMappingData, ImportTemplateData,
-    NewActivity, ParseConfig, ParsedCsvResult, Sort,
+    NewActivity, ParseConfig, ParsedCsvResult, RspFrequency, RspParams, Sort,
 };
 use rust_decimal::Decimal;
 use tauri::State;
@@ -122,6 +122,70 @@ pub async fn create_fixed_deposit(
     state
         .activity_service()
         .create_fixed_deposit_schedule(params)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Frontend-facing payload for `create_recurring_buy_plan`. Mirrors
+/// `RspParams` but takes the start date as an ISO `YYYY-MM-DD` string
+/// (the frontend always sends dates as strings) and the frequency as a
+/// snake_case enum string the JS layer can build trivially.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateRecurringBuyPlanRequest {
+    pub account_id: String,
+    pub symbol: String,
+    pub exchange_mic: Option<String>,
+    pub amount_per_buy: Decimal,
+    pub unit_price: Decimal,
+    /// One of: weekly, biweekly, monthly, quarterly, semi_annual, annual.
+    pub frequency: RspFrequency,
+    /// `YYYY-MM-DD`.
+    pub start_date: String,
+    pub installments: u32,
+    pub currency: String,
+    pub notes: Option<String>,
+}
+
+/// Schedule a recurring stock-purchase plan: emits a series of BUY
+/// activities at the configured cadence into the chosen account, each
+/// for `amount_per_buy / unit_price` shares of the chosen symbol.
+/// Returns the inserted activities so the frontend can surface counts /
+/// sums in the success toast without an extra round-trip.
+#[tauri::command]
+pub async fn create_recurring_buy_plan(
+    request: CreateRecurringBuyPlanRequest,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<Vec<Activity>, String> {
+    debug!(
+        "Creating recurring buy plan: account={}, symbol={}, amount={}, price={}, freq={:?}, n={}",
+        request.account_id,
+        request.symbol,
+        request.amount_per_buy,
+        request.unit_price,
+        request.frequency,
+        request.installments
+    );
+
+    let start_date = chrono::NaiveDate::parse_from_str(&request.start_date, "%Y-%m-%d")
+        .map_err(|e| format!("Invalid start_date (expected YYYY-MM-DD): {}", e))?;
+
+    let params = RspParams {
+        account_id: request.account_id,
+        symbol: request.symbol,
+        exchange_mic: request.exchange_mic,
+        amount_per_buy: request.amount_per_buy,
+        unit_price: request.unit_price,
+        frequency: request.frequency,
+        start_date,
+        installments: request.installments,
+        currency: request.currency,
+        notes: request.notes,
+    };
+
+    state
+        .activity_service()
+        .create_recurring_buy_plan(params)
         .await
         .map_err(|e| e.to_string())
 }

@@ -42,6 +42,11 @@ pub struct AccountStateSnapshotDB {
     pub cash_total_base_currency: String,
     #[diesel(sql_type = Text)]
     pub source: String,
+    /// JSON blob: { "<asset_id>": RealizedGainEntry, ... }. Defaults to
+    /// `{}` for snapshots written before realized P&L was tracked; the
+    /// next portfolio recalc repopulates it from the SELL activity stream.
+    #[diesel(sql_type = Text)]
+    pub realized_gains: String,
 }
 
 // Conversion from DB model to Domain model
@@ -76,6 +81,7 @@ impl From<AccountStateSnapshotDB> for AccountStateSnapshot {
             }),
             source: serde_json::from_str(&format!("\"{}\"", db.source))
                 .unwrap_or(SnapshotSource::Calculated),
+            realized_gains: serde_json::from_str(&db.realized_gains).unwrap_or_default(),
         }
     }
 }
@@ -117,6 +123,8 @@ impl From<AccountStateSnapshot> for AccountStateSnapshotDB {
                 .unwrap_or_else(|_| "\"CALCULATED\"".to_string())
                 .trim_matches('"')
                 .to_string(),
+            realized_gains: serde_json::to_string(&domain.realized_gains)
+                .unwrap_or_else(|_| "{}".to_string()),
         }
     }
 }

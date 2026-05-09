@@ -3,9 +3,9 @@
 //! These tests verify that universal properties hold across all valid inputs,
 //! using the `proptest` crate for random test case generation.
 
+use mizan_core::health::{HealthCategory, HealthIssue, HealthStatus, Severity};
 use proptest::prelude::*;
 use std::collections::HashSet;
-use mizan_core::health::{HealthCategory, HealthIssue, HealthStatus, Severity};
 
 // =============================================================================
 // Generators

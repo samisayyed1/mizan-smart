@@ -169,9 +169,9 @@ export default function GuidePage({ country }: { country?: string }) {
         <Section title="Italian retirement setup (fondo pensione, TFR, INPS)">
           <div className="space-y-4">
             <Term t="Investment portfolio (Golden Butterfly, All-Weather…)">
-              This is your main portfolio — the value Mizan tracks. Set your return
-              assumptions, fee drag, and monthly contribution here. It is the primary accumulation
-              engine of your retirement plan.
+              This is your main portfolio — the value Mizan tracks. Set your return assumptions, fee
+              drag, and monthly contribution here. It is the primary accumulation engine of your
+              retirement plan.
             </Term>
             <Term t="Fondo pensione integrativo (supplementary pension fund)">
               Use Add pension fund. Enter the current fund balance, monthly contribution, expected

@@ -5,9 +5,6 @@ use crate::{
     ai_environment::ServerAiEnvironment, auth::AuthManager, config::Config,
     domain_events::WebDomainEventSink, events::EventBus, secrets::build_secret_store,
 };
-use tracing::{error, warn};
-use tracing_subscriber::prelude::*;
-use tracing_subscriber::{fmt, EnvFilter};
 use mizan_ai::{AiProviderService, AiProviderServiceTrait, ChatConfig, ChatService};
 use mizan_connect::{
     BrokerSyncService, BrokerSyncServiceTrait, CoreImportRunRepositoryAdapter,
@@ -59,6 +56,9 @@ use mizan_storage_sqlite::{
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
     taxonomies::TaxonomyRepository,
 };
+use tracing::{error, warn};
+use tracing_subscriber::prelude::*;
+use tracing_subscriber::{fmt, EnvFilter};
 
 pub struct AppState {
     /// Domain event sink for emitting events after mutations.
@@ -242,12 +242,11 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         )
         .await?,
     );
-    let custom_provider_service = Arc::new(
-        mizan_core::custom_provider::CustomProviderService::new(
+    let custom_provider_service =
+        Arc::new(mizan_core::custom_provider::CustomProviderService::new(
             custom_provider_repository.clone(),
             secret_store.clone(),
-        ),
-    );
+        ));
 
     // Create taxonomy service for auto-classification
     let taxonomy_repository = Arc::new(TaxonomyRepository::new(pool.clone(), writer.clone()));

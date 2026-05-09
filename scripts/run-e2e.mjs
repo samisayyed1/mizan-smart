@@ -8,8 +8,16 @@ const BACKEND_URL = process.env.WF_E2E_BACKEND_URL || "http://localhost:8088";
 const cliArgs = process.argv.slice(2);
 const shouldUseUi = cliArgs.includes("--ui");
 
-const buildHealthUrl = (base, path = "/") =>
-  new URL(path, `${base.replace(/\/$/, "")}/`).toString();
+const buildHealthUrl = (base, path = "/") => {
+  // If the base URL already includes a path beyond root, use it verbatim
+  // (so callers can target a real health endpoint like /api/v1/healthz).
+  // Otherwise, append the default path.
+  const url = new URL(base);
+  if (url.pathname && url.pathname !== "/") {
+    return url.toString();
+  }
+  return new URL(path, `${base.replace(/\/$/, "")}/`).toString();
+};
 
 const waitForServer = async (url, serverProcess, { timeout = 60_000, interval = 500 } = {}) => {
   const deadline = Date.now() + timeout;

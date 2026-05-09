@@ -1,9 +1,8 @@
 # Activity Types Reference
 
 This document provides a comprehensive reference for Activity types used in
-Mizan. Understanding these types is essential for tracking portfolio
-movements and for creating activities programmatically through addons or CSV
-imports.
+Mizan. Understanding these types is essential for tracking portfolio movements
+and for creating activities programmatically through addons or CSV imports.
 
 ## Overview
 

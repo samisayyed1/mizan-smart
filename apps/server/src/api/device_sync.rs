@@ -631,8 +631,7 @@ async fn confirm_pairing_endpoint(
         .map_err(|e| ApiError::Internal(e.to_string()))?;
 
     if let Some(min_created_at) = body.min_snapshot_created_at.as_deref() {
-        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at)
-        {
+        if let Ok(parsed_min) = mizan_device_sync::parse_sync_datetime_to_utc(min_created_at) {
             let max_allowed = chrono::Utc::now() + chrono::Duration::minutes(10);
             if parsed_min > max_allowed {
                 warn!(

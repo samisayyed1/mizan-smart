@@ -1,12 +1,11 @@
 # @mizan/ui
 
-Mizan's shared UI component library built on top of shadcn/ui and Tailwind
-CSS.
+Mizan's shared UI component library built on top of shadcn/ui and Tailwind CSS.
 
 ## Overview
 
-The `@mizan/ui` package provides a complete design system for Mizan
-addons, ensuring consistent styling and user experience across all extensions.
+The `@mizan/ui` package provides a complete design system for Mizan addons,
+ensuring consistent styling and user experience across all extensions.
 
 ## Features
 
@@ -239,5 +238,5 @@ npx shadcn@latest add accordion alert-dialog alert avatar badge button calendar 
 npm run build
 ```
 
-This strategy ensures consistent UI/UX across the entire Mizan ecosystem
-while maintaining developer efficiency and user experience.
+This strategy ensures consistent UI/UX across the entire Mizan ecosystem while
+maintaining developer efficiency and user experience.

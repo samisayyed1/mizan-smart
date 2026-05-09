@@ -237,6 +237,32 @@ impl HoldingsService {
                 .map(|id| id == snapshot_pos.asset_id)
                 .unwrap_or(false);
 
+            // Surface lifetime realized P&L for this asset, if any.
+            // The snapshot's realized_gains accumulator is populated by
+            // every SELL the calculator has processed up to this date —
+            // here we just read both currency rails and compute the % vs
+            // cost basis of the disposed lots.
+            let (realized_gain_view, realized_gain_pct_view) = latest_snapshot
+                .realized_gains
+                .get(&snapshot_pos.asset_id)
+                .map(|entry| {
+                    let local = entry.realized_gain_account_ccy();
+                    let base = entry.realized_gain_base_ccy();
+                    let pct = if entry.cost_basis_base_ccy != Decimal::ZERO {
+                        Some((base / entry.cost_basis_base_ccy).round_dp(4))
+                    } else if base != Decimal::ZERO {
+                        // Cost basis was zero but proceeds non-zero —
+                        // can happen for transferred-in lots without a
+                        // recorded basis. Express as 100% gain so the UI
+                        // surfaces a meaningful number rather than null.
+                        Some(Decimal::ONE)
+                    } else {
+                        Some(Decimal::ZERO)
+                    };
+                    (Some(MonetaryValue { local, base }), pct)
+                })
+                .unwrap_or((None, None));
+
             let holding_view = Holding {
                 id: format!("{}-{}-{}", id_prefix, account_id, snapshot_pos.asset_id),
                 account_id: account_id.to_string(),
@@ -259,8 +285,8 @@ impl HoldingsService {
                 purchase_price: asset_info.purchase_price,
                 unrealized_gain: None,
                 unrealized_gain_pct: None,
-                realized_gain: None,
-                realized_gain_pct: None,
+                realized_gain: realized_gain_view,
+                realized_gain_pct: realized_gain_pct_view,
                 total_gain: None,
                 total_gain_pct: None,
                 day_change: None,

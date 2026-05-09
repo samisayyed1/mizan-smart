@@ -143,6 +143,55 @@ export const createFixedDeposit = async (
   }
 };
 
+/**
+ * Recurring stock-purchase plan creation request. Mirrors the Rust
+ * `CreateRecurringBuyPlanRequest` struct on the Tauri command — Tauri's
+ * serde binding camelCases field names so we send `accountId`,
+ * `amountPerBuy`, etc.
+ */
+export type RspFrequency =
+  | "weekly"
+  | "biweekly"
+  | "monthly"
+  | "quarterly"
+  | "semi_annual"
+  | "annual";
+
+export interface CreateRecurringBuyPlanRequest {
+  accountId: string;
+  /** Ticker symbol (e.g. "VTI", "AAPL"). Resolved to an asset on insert. */
+  symbol: string;
+  /** Optional MIC code for dual-listed tickers. */
+  exchangeMic?: string | null;
+  /** Cash spent per scheduled buy. */
+  amountPerBuy: string | number;
+  /** Per-share price applied to every emitted BUY. quantity = amount / price. */
+  unitPrice: string | number;
+  frequency: RspFrequency;
+  /** YYYY-MM-DD. */
+  startDate: string;
+  /** Number of buys to generate (1..=240). */
+  installments: number;
+  currency: string;
+  notes?: string | null;
+}
+
+/**
+ * Schedule a recurring stock-purchase plan. Backend emits a series of
+ * BUY activities at the configured cadence and returns them in
+ * purchase-date order.
+ */
+export const createRecurringBuyPlan = async (
+  request: CreateRecurringBuyPlanRequest,
+): Promise<Activity[]> => {
+  try {
+    return await invoke<Activity[]>("create_recurring_buy_plan", { request });
+  } catch (err) {
+    logger.error("Error creating recurring buy plan.");
+    throw err;
+  }
+};
+
 export const updateActivity = async (activity: ActivityUpdate): Promise<Activity> => {
   try {
     return await invoke<Activity>("update_activity", { activity });

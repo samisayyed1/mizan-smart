@@ -1,11 +1,4 @@
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-  Skeleton,
-} from "@mizan/ui";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, Skeleton } from "@mizan/ui";
 import { Icons } from "@mizan/ui/components/ui/icons";
 import type { FC } from "react";
 

@@ -59,10 +59,7 @@ export function FloatingNavigationBar({ navigation }: FloatingNavigationBarProps
   const hasOverflow = overflowItems.length > 0;
   const hasAddons = addonItems.length > 0;
   const columnCount =
-    visibleItems.length +
-    launcherColumn +
-    (hasOverflow ? 1 : 0) +
-    (hasAddons ? 1 : 0);
+    visibleItems.length + launcherColumn + (hasOverflow ? 1 : 0) + (hasAddons ? 1 : 0);
 
   return (
     <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40">

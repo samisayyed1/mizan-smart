@@ -4,6 +4,119 @@ All notable changes to Mizan desktop ship from this file. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning follows
 [SemVer](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.1] — 2026-05-09
+
+### Added
+
+- **Realized P&L is computed, stored, and surfaced.** When a SELL activity is
+  processed, the holdings calculator now derives
+  `realized_gain = proceeds − cost_basis − fees` from the FIFO disposal that was
+  already happening (and already producing the right `cost_basis_removed` number
+  — it was just being thrown away). Both currency rails are tracked using
+  trade-date FX:
+  - **Account currency** (the account's reporting currency at trade date).
+  - **Base currency** (the portfolio's base currency at trade date).
+  - Gross numbers stored separately (proceeds / cost basis / sell-side fees) so
+    an annual realized-gains report can reconcile back to broker statements
+    column-for-column.
+- **Lifetime accumulator persisted on every snapshot.** `AccountStateSnapshot`
+  carries a new `realized_gains: HashMap<asset_id, RealizedGainEntry>` that
+  accumulates across every SELL the calculator has processed up to that snapshot
+  date — kept signed (so realized losses surface as negative numbers) and
+  forward-rolled automatically via the existing daily snapshot clone. Each entry
+  also tracks `quantity_sold` and the most-recent `last_sale_date` for
+  downstream views.
+- **Holdings table now shows realized gain.** The existing performance column
+  header is correctly relabelled `Total Return` (it now genuinely reflects
+  unrealized + realized, since `total_gain` is the sum of both). A new
+  `Realized Gain` column — hidden by default, available via the column toggle —
+  renders the lifetime realized P&L per holding with account / base currency
+  display respecting the existing convert-to-base toggle. Holdings with no SELLs
+  ever show an em-dash so the column stays uncluttered for typical buy-and-hold
+  portfolios.
+- **`Holding.total_gain` and `Holding.total_gain_pct` correctly populated.**
+  Previously the valuation service zeroed `realized_gain` back to `None` at the
+  end of every valuation pass and copied `unrealized_gain` straight into
+  `total_gain` — meaning even when realized data existed in the snapshot, the
+  engine threw it away before the frontend could see it. New
+  `populate_total_gain()` helper folds unrealized + realized into total at the
+  three valuation exit-points (security, alternative asset, expired option).
+
+### Verified
+
+- 935 / 935 mizan-core unit tests pass (3 new realized-gain tests + 201 existing
+  portfolio tests including the full sell-activity matrix).
+  `test_sell_activity_updates_holdings_and_cash` extended to assert the exact
+  realized-gain math for the existing scenario: selling 5 of 10 AAPL @ 160 CAD
+  against avg cost 150 with a 2 CAD fee produces +48 CAD realized gain.
+- `test_realized_gain_accumulates_across_multiple_sells` proves the accumulator
+  carries forward across daily snapshots — two trims of the same NVDA position
+  on different days correctly cumulate to the sum of their individual realized
+  gains.
+- `test_realized_loss_recorded_correctly` covers the loss case (selling PLTR at
+  $20 against $50 cost basis lands as a $-301 realized loss, fee included).
+
+### Backfill
+
+- Realized gains backfill automatically. The portfolio-recalculate path rebuilds
+  snapshots from scratch, processing every historical SELL through the new code,
+  so existing users see their lifetime realized P&L populate on the next
+  recalculation tick — no migration step needed, no manual intervention.
+
+### Notes
+
+- The current ship surfaces realized gains for **currently-held** positions in
+  the holdings table. A dedicated "Realized Gains" view for fully-sold positions
+  (where the lifetime accumulator still holds the data but the position itself
+  is gone from the live holdings list) and an annual realized-gains CSV export
+  are reserved for `3.4.2`. The accumulator already stores everything those
+  views need — the 3.4.2 work is purely a UI surface, no further engine changes.
+
+## [3.4.0] — 2026-05-09
+
+### Added
+
+- **Schedule a Recurring Buy / SIP / DCA (end-to-end).** New action on every
+  account page: _Schedule Recurring Buy_. Opens a dialog where the user enters
+  symbol, cash amount per buy, reference price per share, frequency (weekly /
+  biweekly / monthly / quarterly / semi-annual / annual), start date, number of
+  installments (1–240), currency, and optional notes. The backend
+  deterministically generates a series of `BUY` activities at the configured
+  cadence and inserts them into the account.
+  - Pure scheduling logic lives in
+    `crates/core/src/activities/rsp_scheduler.rs`. Thirteen unit tests cover
+    every cadence (weekly through annual), fractional- share rounding to 6 d.p.,
+    symbol normalisation (uppercase, trimmed), exchange MIC pass-through, and
+    the full validation matrix (non-positive amount, non-positive price, empty
+    symbol, zero installments, >240 installments, plus metadata traceability).
+  - Each emitted BUY has `quantity = amount_per_buy / unit_price` (rounded to 6
+    d.p. — the precision most brokers report for fractional fills) and
+    `unit_price = unit_price`, so the engine treats it identically to any
+    manually-entered or broker-synced BUY. Activities land as `POSTED` — the
+    portfolio reflects the plan immediately.
+  - Each emitted activity carries `source_system = "RSP_SCHEDULE"` and a JSON
+    metadata blob with the originating
+    symbol/amount/price/frequency/installments/ start, so future "delete this
+    RSP's schedule" or "show RSP lineage" surfaces have the lineage they need.
+  - New `create_recurring_buy_plan` Tauri command wired through both the Tauri
+    and web platform adapters, so the same call path works on macOS Apple
+    Silicon, macOS Intel, Windows, Linux, and the self-hosted server build.
+
+### Notes
+
+- The `unit_price` in the dialog is a **reference / planned price** applied to
+  every emitted BUY in the schedule. For past dates this is the historical close
+  the user is modelling; for future dates this is their estimate. Users can edit
+  individual emitted BUY activities afterwards (e.g. once a real fill price is
+  known) — the schedule itself is deterministic so the portfolio reflects the
+  plan immediately, and individual fills can be reconciled later without
+  rebuilding the rule.
+- Live-price auto-execution (auto-fill `unit_price` from the close on the
+  scheduled date via the market-data resolver, on a startup tick) is reserved
+  for a follow-up release. The current ship is the full schedule-and-emit loop
+  end-to-end; the auto-reconcile-with-real-prices loop layers on top without
+  changing the user-facing flow.
+
 ## [3.3.8] — 2026-05-09
 
 ### Added

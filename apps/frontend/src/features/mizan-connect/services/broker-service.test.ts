@@ -68,8 +68,6 @@ describe("listBrokerConnections", () => {
       new Error("Failed to parse connections: invalid type: map"),
     );
 
-    await expect(listBrokerConnections()).rejects.toThrow(
-      /Failed to parse connections/,
-    );
+    await expect(listBrokerConnections()).rejects.toThrow(/Failed to parse connections/);
   });
 });

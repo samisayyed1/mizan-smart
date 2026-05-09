@@ -122,6 +122,7 @@ export const HoldingsTable = ({
           symbolName: false,
           holdingType: false,
           bookValue: false,
+          realizedGain: false,
         }}
         defaultSorting={[{ id: "symbol", desc: false }]}
         scrollable={true}
@@ -386,11 +387,11 @@ const getColumns = (
       <DataTableColumnHeader
         className="justify-end"
         column={column}
-        title={showTotalReturn ? "Unrealized Gain" : "Day Change"}
+        title={showTotalReturn ? "Total Return" : "Day Change"}
       />
     ),
     meta: {
-      label: "Unrealized Gain",
+      label: "Total Return",
     },
     cell: ({ row }) => {
       const holding = row.original;
@@ -419,6 +420,48 @@ const getColumns = (
       const valueB = (showTotalReturn ? holdingB.totalGain?.base : holdingB.dayChange?.base) ?? 0;
 
       return valueA - valueB;
+    },
+  },
+  {
+    id: "realizedGain",
+    accessorFn: (row) => row.realizedGain?.base ?? 0,
+    enableHiding: true,
+    header: ({ column }) => (
+      <DataTableColumnHeader className="justify-end" column={column} title="Realized Gain" />
+    ),
+    meta: {
+      label: "Realized Gain",
+    },
+    cell: ({ row }) => {
+      const holding = row.original;
+      const valueBase = holding.realizedGain?.base;
+      const pct = holding.realizedGainPct;
+
+      if (valueBase == null || Number(valueBase) === 0) {
+        return (
+          <div className="flex min-h-[40px] flex-col items-end justify-center px-4">
+            <span className="text-muted-foreground text-xs">—</span>
+          </div>
+        );
+      }
+
+      const { value, currency } = getDisplayValueAndCurrency(
+        holding,
+        valueBase,
+        showConvertedValues,
+      );
+
+      return (
+        <div className="flex min-h-[40px] flex-col items-end justify-center px-4">
+          <AmountDisplay value={value} currency={currency} colorFormat={true} isHidden={isHidden} />
+          {pct != null ? <GainPercent className="text-xs" value={pct} /> : null}
+        </div>
+      );
+    },
+    sortingFn: (rowA, rowB) => {
+      const valueA = rowA.original.realizedGain?.base ?? 0;
+      const valueB = rowB.original.realizedGain?.base ?? 0;
+      return Number(valueA) - Number(valueB);
     },
   },
   {

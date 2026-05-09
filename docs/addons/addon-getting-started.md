@@ -14,15 +14,15 @@ npm install -g pnpm
 Requirements:
 
 - Node.js 20+ and pnpm
-- Mizan desktop app (optional but recommended: running in development mode
-  for live reload and testing)
+- Mizan desktop app (optional but recommended: running in development mode for
+  live reload and testing)
 - Basic TypeScript and React knowledge
 - Code editor (VS Code recommended)
 
 ## Start Mizan (Recommended)
 
-For the best development experience with live reload and testing, start
-Mizan in addon development mode:
+For the best development experience with live reload and testing, start Mizan in
+addon development mode:
 
 ```bash
 # Clone Mizan repository (if not already done)
@@ -526,5 +526,5 @@ You now understand:
 Continue with:
 
 - [API Reference](/docs/addons/api-reference) - All available APIs
-- [Examples](https://github.com/afadil/mizan/tree/main/addons/) - Real
-  addon implementations
+- [Examples](https://github.com/afadil/mizan/tree/main/addons/) - Real addon
+  implementations

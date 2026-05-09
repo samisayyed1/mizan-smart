@@ -14,11 +14,11 @@ mod secrets;
 use api::app_router;
 use config::Config;
 use main_lib::{build_state, init_tracing};
+#[cfg(feature = "device-sync")]
+use mizan_device_sync::SyncState;
 use tower_http::services::{ServeDir, ServeFile};
 #[cfg(feature = "device-sync")]
 use tracing::{info, warn};
-#[cfg(feature = "device-sync")]
-use mizan_device_sync::SyncState;
 
 #[cfg(feature = "device-sync")]
 fn is_expected_startup_token_warmup_error(err: &crate::error::ApiError) -> bool {

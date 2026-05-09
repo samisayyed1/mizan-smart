@@ -2871,6 +2871,32 @@ impl ActivityServiceTrait for ActivityService {
         Ok(inserted)
     }
 
+    /// Generate the schedule of BUY activities for a recurring stock-
+    /// purchase plan and insert each one. Pure scheduling logic lives in
+    /// `super::rsp_scheduler` and is unit-tested in isolation; this layer
+    /// owns the side effects (insert, asset resolution via the standard
+    /// path, emit domain events, error mapping).
+    async fn create_recurring_buy_plan(
+        &self,
+        params: super::rsp_scheduler::RspParams,
+    ) -> Result<Vec<Activity>> {
+        let schedule = super::rsp_scheduler::generate_rsp_schedule(&params).map_err(|e| {
+            crate::errors::Error::Validation(crate::errors::ValidationError::InvalidInput(format!(
+                "RSP schedule rejected: {}",
+                e
+            )))
+        })?;
+        let mut inserted = Vec::with_capacity(schedule.len());
+        for activity in schedule {
+            // Reuse the standard create_activity path so domain events,
+            // asset resolution, idempotency, and validation behave
+            // identically to manually entered BUY entries.
+            let created = self.create_activity(activity).await?;
+            inserted.push(created);
+        }
+        Ok(inserted)
+    }
+
     /// Creates a new activity
     async fn create_activity(&self, activity: NewActivity) -> Result<Activity> {
         let prepared = self.prepare_new_activity(activity).await?;

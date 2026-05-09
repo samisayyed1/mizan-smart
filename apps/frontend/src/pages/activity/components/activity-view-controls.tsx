@@ -3,13 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ActivityType, ActivityTypeNames, INSTRUMENT_TYPE_OPTIONS } from "@/lib/constants";
 import { Account } from "@/lib/types";
-import {
-  AnimatedToggleGroup,
-  Button,
-  FacetedFilter,
-  FacetedSearchInput,
-  Icons,
-} from "@mizan/ui";
+import { AnimatedToggleGroup, Button, FacetedFilter, FacetedSearchInput, Icons } from "@mizan/ui";
 import type { ActivityStatusFilter } from "../hooks/use-activity-search";
 
 export type ActivityViewMode = "table" | "datagrid";

@@ -9,10 +9,7 @@ import {
 import { toast } from "@mizan/ui/components/ui/use-toast";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BrokerLoginPortalResponse } from "@/adapters/shared/connect";
-import {
-  createBrokerLoginPortal,
-  listBrokerConnections,
-} from "../services/broker-service";
+import { createBrokerLoginPortal, listBrokerConnections } from "../services/broker-service";
 import type { BrokerConnection } from "../types";
 
 const POLL_INTERVAL_MS = 5_000;
@@ -72,9 +69,7 @@ export function useCreateBrokerLoginPortal(): readonly [
     if (stopTimerRef.current !== null) {
       clearTimeout(stopTimerRef.current);
     }
-    const cached = queryClient.getQueryData<BrokerConnection[]>([
-      QueryKeys.BROKER_CONNECTIONS,
-    ]);
+    const cached = queryClient.getQueryData<BrokerConnection[]>([QueryKeys.BROKER_CONNECTIONS]);
     baselineCountRef.current = cached?.length ?? 0;
     setIsPolling(true);
     stopTimerRef.current = setTimeout(stop, POLL_DURATION_MS);
@@ -108,11 +103,7 @@ export function useCreateBrokerLoginPortal(): readonly [
   // Clean up the timeout on unmount.
   useEffect(() => stop, [stop]);
 
-  const mutation = useMutation<
-    BrokerLoginPortalResponse,
-    Error,
-    string | undefined
-  >({
+  const mutation = useMutation<BrokerLoginPortalResponse, Error, string | undefined>({
     mutationFn: async (broker?: string) => createBrokerLoginPortal(broker),
     onSuccess: ({ url }) => {
       void openUrlInBrowser(url);

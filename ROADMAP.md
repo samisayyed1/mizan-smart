@@ -18,8 +18,8 @@ easy-to-use tool to track their investments and goals.
 1. **Your Privacy**: Your money info stays on your computer. You retain complete
    control over your financial information.
 2. **Easy to Use**: Anyone can track their investments with our simple design.
-3. **No Lock-in**: Free or pay once to support. Mizan Connect as optional
-   paid subscription to sync broker data and devices.
+3. **No Lock-in**: Free or pay once to support. Mizan Connect as optional paid
+   subscription to sync broker data and devices.
 4. **Extensible**: Through the addons system and catalog, users can easily
    enhance functionality.
 5. **Beautiful and Focused**: We believe in crafting an app that's visually
@@ -86,10 +86,9 @@ easy-to-use tool to track their investments and goals.
 
 ---
 
-We're building Mizan to be a great alternative to online investment
-trackers. Our plan might change based on what users tell us they want, but we'll
-always focus on keeping your data private and helping you manage your money
-better.
+We're building Mizan to be a great alternative to online investment trackers.
+Our plan might change based on what users tell us they want, but we'll always
+focus on keeping your data private and helping you manage your money better.
 
 Ideas and feedback welcome - open an issue or join our
 [Discord](https://discord.gg/WDMCY6aPWK).

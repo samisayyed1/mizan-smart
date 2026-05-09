@@ -1,7 +1,7 @@
 //! AI assistant error types.
 
-use thiserror::Error;
 use mizan_core::Error as CoreError;
+use thiserror::Error;
 
 /// AI assistant errors.
 #[derive(Debug, Error)]

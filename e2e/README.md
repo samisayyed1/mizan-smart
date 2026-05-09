@@ -1,8 +1,8 @@
 # E2E Tests
 
-Mizan E2E tests use [Playwright](https://playwright.dev/) and run against
-the **web app** (not the Tauri desktop app). There are **no mocks** — both
-frontend and backend must be running against a fresh database.
+Mizan E2E tests use [Playwright](https://playwright.dev/) and run against the
+**web app** (not the Tauri desktop app). There are **no mocks** — both frontend
+and backend must be running against a fresh database.
 
 ---
 

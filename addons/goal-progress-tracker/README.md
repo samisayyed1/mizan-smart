@@ -5,8 +5,8 @@ financial goals using an interactive calendar-style representation.
 
 ## Features
 
-- **Goal Integration**: Seamlessly integrates with your existing Mizan
-  goals through a searchable dropdown selector
+- **Goal Integration**: Seamlessly integrates with your existing Mizan goals
+  through a searchable dropdown selector
 - **Visual Progress Tracking**: Calendar grid visualization where each dot
   represents a milestone towards your goal
 - **Real-time Portfolio Sync**: Automatically calculates progress using your
@@ -24,8 +24,8 @@ financial goals using an interactive calendar-style representation.
 
 ## How It Works
 
-1. **Select a Goal**: Choose from your existing Mizan goals using the
-   searchable dropdown, or work without a goal for custom tracking
+1. **Select a Goal**: Choose from your existing Mizan goals using the searchable
+   dropdown, or work without a goal for custom tracking
 2. **View Real-time Progress**: The addon calculates your current progress
    using:
    - Your actual portfolio holdings and valuations

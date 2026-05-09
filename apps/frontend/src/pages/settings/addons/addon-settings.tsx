@@ -114,8 +114,8 @@ export default function AddonSettingsPage() {
                 <div className="space-y-2">
                   <h4 className="font-medium">🔌 Add-ons & Extensions</h4>
                   <p className="text-muted-foreground text-sm">
-                    Add-ons let you extend Mizan with new features, custom analytics, and
-                    additional functionality to enhance your financial management experience.
+                    Add-ons let you extend Mizan with new features, custom analytics, and additional
+                    functionality to enhance your financial management experience.
                   </p>
                 </div>
                 <div className="border-t pt-2">
@@ -286,8 +286,7 @@ export default function AddonSettingsPage() {
                 <EmptyPlaceholder.Icon name="Package" />
                 <EmptyPlaceholder.Title>No add-ons installed</EmptyPlaceholder.Title>
                 <EmptyPlaceholder.Description>
-                  Get started by installing your first add-on to extend Mizan&apos;s
-                  functionality.
+                  Get started by installing your first add-on to extend Mizan&apos;s functionality.
                 </EmptyPlaceholder.Description>
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:gap-3">
                   <Button onClick={() => setActiveTab("store")} className="w-full sm:w-auto">

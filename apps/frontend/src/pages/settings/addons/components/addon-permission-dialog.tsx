@@ -9,12 +9,7 @@ import {
   DialogTitle,
 } from "@mizan/ui/components/ui/dialog";
 import { Icons } from "@mizan/ui/components/ui/icons";
-import type {
-  AddonManifest,
-  Permission,
-  PermissionCategory,
-  RiskLevel,
-} from "@mizan/addon-sdk";
+import type { AddonManifest, Permission, PermissionCategory, RiskLevel } from "@mizan/addon-sdk";
 import { AlertFeedback } from "@mizan/ui";
 import { PermissionCategoriesDisplay } from "./permission-categories-display";
 

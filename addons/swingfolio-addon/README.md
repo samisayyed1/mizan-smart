@@ -1,7 +1,7 @@
 # Swingfolio - Advanced Swing Trading Tracker
 
-A comprehensive Mizan addon for tracking and analyzing swing trading
-performance with detailed analytics, calendar views, and performance metrics.
+A comprehensive Mizan addon for tracking and analyzing swing trading performance
+with detailed analytics, calendar views, and performance metrics.
 
 ## Features
 
@@ -97,8 +97,8 @@ performance with detailed analytics, calendar views, and performance metrics.
 
 ## Data Privacy & Security
 
-- All preferences and selections are stored securely using Mizan's
-  encrypted storage
+- All preferences and selections are stored securely using Mizan's encrypted
+  storage
 - No data is transmitted outside of your Mizan instance
 - Full privacy protection for sensitive financial information
 

@@ -18,10 +18,10 @@ use crate::sync::{
     should_sync_outbox_for_snapshot_source,
 };
 use crate::taxonomies::AssetTaxonomyAssignmentDB;
-use uuid::Uuid;
 use mizan_core::portfolio::snapshot::SnapshotSource;
 use mizan_core::sync::SyncEntity;
 use mizan_core::sync::SyncOperation;
+use uuid::Uuid;
 
 impl SyncOutboxModel for AccountDB {
     const ENTITY: SyncEntity = SyncEntity::Account;

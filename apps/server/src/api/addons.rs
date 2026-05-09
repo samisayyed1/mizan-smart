@@ -8,9 +8,7 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine as _};
-use mizan_core::addons::{
-    AddonManifest, AddonUpdateCheckResult, ExtractedAddon, InstalledAddon,
-};
+use mizan_core::addons::{AddonManifest, AddonUpdateCheckResult, ExtractedAddon, InstalledAddon};
 
 #[derive(serde::Deserialize)]
 struct InstallZipBody {

@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::{DateTime, NaiveDate, Utc};
+use mizan_core::errors::Result;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use mizan_core::errors::Result;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]

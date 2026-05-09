@@ -11,12 +11,7 @@ import { Icons, type Icon } from "@mizan/ui/components/ui/icons";
 import { useShallow } from "zustand/shallow";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@mizan/ui/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from "@mizan/ui/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "@mizan/ui/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@mizan/ui/components/ui/tooltip";
 import { TooltipIconButton } from "./tooltip-icon-button";
 

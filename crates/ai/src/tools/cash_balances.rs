@@ -237,12 +237,12 @@ mod tests {
         MockAccountService, MockEnvironment, MockHoldingsService, MockValuationService,
     };
     use chrono::{NaiveDate, Utc};
-    use rust_decimal::Decimal;
     use mizan_core::{
         accounts::Account,
         holdings::{Holding, HoldingType, Instrument, MonetaryValue},
         valuation::DailyAccountValuation,
     };
+    use rust_decimal::Decimal;
 
     fn cash_holding(
         account_id: &str,

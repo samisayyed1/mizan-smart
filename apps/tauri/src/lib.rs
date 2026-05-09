@@ -337,6 +337,7 @@ pub fn run() {
             commands::activity::search_activities,
             commands::activity::create_activity,
             commands::activity::create_fixed_deposit,
+            commands::activity::create_recurring_buy_plan,
             commands::activity::update_activity,
             commands::activity::save_activities,
             commands::activity::delete_activity,

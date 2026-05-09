@@ -1,7 +1,7 @@
 # Chunk 2 — Manual smoke test
 
-This is a one-time verification doc. Delete it after the smoke test passes
-and you're ready to tag Chunk 2 as shipped.
+This is a one-time verification doc. Delete it after the smoke test passes and
+you're ready to tag Chunk 2 as shipped.
 
 ## Pre-flight
 
@@ -20,9 +20,9 @@ curl -s http://localhost:8080/health | jq
 ### Terminal 2 — paste your Supabase anon key
 
 Open `/Users/samisayyed/Documents/Mizan-4/.env` and replace
-`__I_WILL_PASTE_THIS_MANUALLY__` on the `CONNECT_AUTH_PUBLISHABLE_KEY` line
-with the real anon key from
-**Supabase Dashboard → Project Settings → API → "anon public" key**.
+`__I_WILL_PASTE_THIS_MANUALLY__` on the `CONNECT_AUTH_PUBLISHABLE_KEY` line with
+the real anon key from **Supabase Dashboard → Project Settings → API → "anon
+public" key**.
 
 It is the publishable key — starts with `sb_publishable_…` or is a JWT with
 `"role":"anon"`. **Never** paste the `service_role` secret.
@@ -52,12 +52,13 @@ window opens, the Mizan dashboard should appear.
 4. Open the **Connect** nav entry (sidebar, secondary list).
 
 **Expected:**
+
 - App boots cleanly, no console errors related to Connect.
-- The Connect page shows the empty-state hero (logo + "Optional" badge +
-  feature grid + "Get Started with Connect" / "Login to your account" CTAs).
-  This is `ConnectEmptyState` — it doesn't try to call any API.
-- Clicking "Login to your account" navigates to `/settings/connect` and
-  shows the new "Mizan Connect is disabled in this build" placeholder.
+- The Connect page shows the empty-state hero (logo + "Optional" badge + feature
+  grid + "Get Started with Connect" / "Login to your account" CTAs). This is
+  `ConnectEmptyState` — it doesn't try to call any API.
+- Clicking "Login to your account" navigates to `/settings/connect` and shows
+  the new "Mizan Connect is disabled in this build" placeholder.
 - DevTools Network tab: zero requests to `localhost:8080`.
 - DevTools Console: zero errors, no `CONNECT_AUTH_URL is NOT set` runtime
   warning (the build-time warning at compile is OK).
@@ -80,8 +81,9 @@ window opens, the Mizan dashboard should appear.
 7. Submit.
 
 **Expected:**
-- Supabase responds with a verification-email-required state. Check your
-  inbox; click the verification link or use the magic-link prompt.
+
+- Supabase responds with a verification-email-required state. Check your inbox;
+  click the verification link or use the magic-link prompt.
 - After verification, the form transitions to the signed-in `ConnectedView`.
 
 ### /api/v1/user/me round-trip
@@ -91,8 +93,8 @@ window opens, the Mizan dashboard should appear.
    - **One request to `http://localhost:8080/api/v1/user/me`** with
      `Authorization: Bearer eyJ…` header.
 
-**Expected response (Chunk 1 backend, after the alias is added per the
-follow-up prompt):**
+**Expected response (Chunk 1 backend, after the alias is added per the follow-up
+prompt):**
 
 ```http
 HTTP/1.1 200 OK
@@ -124,9 +126,9 @@ x-request-id: <uuid>
    - "Brokerage sync — Coming soon" placeholder.
    - "Device sync — Coming soon" placeholder.
 
-DevTools Console: no errors, no failed fetches except possibly an expected
-404 on `/api/v1/subscription/plans` (this is fine — it'll be a clean 501
-once the backend stub lands per the follow-up prompt).
+DevTools Console: no errors, no failed fetches except possibly an expected 404
+on `/api/v1/subscription/plans` (this is fine — it'll be a clean 501 once the
+backend stub lands per the follow-up prompt).
 
 ### Sign-in (already-registered user)
 
@@ -142,8 +144,8 @@ once the backend stub lands per the follow-up prompt).
 16. Verify in DevTools → Application → Local Storage that the
     `sb-jtdtfnusgloizwclhobf-auth-token-code-verifier` key is removed (or at
     least cleared).
-17. macOS users: open Keychain Access, search for `mizan_sync_refresh_token`
-    — the entry should be gone after sign-out.
+17. macOS users: open Keychain Access, search for `mizan_sync_refresh_token` —
+    the entry should be gone after sign-out.
 
 ## Pass / fail summary
 

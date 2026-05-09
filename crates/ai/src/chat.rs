@@ -10,6 +10,7 @@
 use futures::stream::BoxStream;
 use futures::StreamExt;
 use log::{debug, error, info};
+use mizan_core::utils::time_utils::{parse_user_timezone, DEFAULT_VALUATION_TZ};
 use reqwest::Client as HttpClient;
 use rig::{
     agent::{Agent, MultiTurnStreamItem},
@@ -35,7 +36,6 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::mpsc;
 use uuid::Uuid;
-use mizan_core::utils::time_utils::{parse_user_timezone, DEFAULT_VALUATION_TZ};
 
 use crate::env::AiEnvironment;
 use crate::error::AiError;

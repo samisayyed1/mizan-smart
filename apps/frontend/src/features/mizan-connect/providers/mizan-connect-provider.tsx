@@ -113,9 +113,7 @@ interface MizanConnectContextValue {
   refetchUserInfo: () => Promise<void>;
 }
 
-const MizanConnectContext = createContext<MizanConnectContextValue | undefined>(
-  undefined,
-);
+const MizanConnectContext = createContext<MizanConnectContextValue | undefined>(undefined);
 
 // Disabled context value - used when CONNECT_ENABLED is false
 // All methods are no-ops that return resolved promises
@@ -700,8 +698,7 @@ function EnabledMizanConnectProvider({ children }: { children: ReactNode }) {
           throw resendError;
         }
       } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "Failed to resend confirmation email";
+        const message = err instanceof Error ? err.message : "Failed to resend confirmation email";
         setError(message);
         throw err;
       } finally {
@@ -823,11 +820,7 @@ function EnabledMizanConnectProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return (
-    <MizanConnectContext.Provider value={value}>
-      {children}
-    </MizanConnectContext.Provider>
-  );
+  return <MizanConnectContext.Provider value={value}>{children}</MizanConnectContext.Provider>;
 }
 
 // Main provider that chooses enabled/disabled path based on configuration

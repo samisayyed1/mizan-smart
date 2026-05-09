@@ -17,9 +17,6 @@ use crate::broker_ingest::{
 };
 use crate::platform::Platform;
 use chrono::{DateTime, Months, NaiveDate, Utc};
-use rust_decimal::prelude::FromPrimitive;
-use rust_decimal::Decimal;
-use std::collections::{HashMap, HashSet};
 use mizan_core::accounts::{Account, AccountServiceTrait, NewAccount, TrackingMode};
 use mizan_core::activities::{
     compute_idempotency_key, ActivityRepositoryTrait, ActivityServiceTrait, ActivityUpsert,
@@ -38,6 +35,9 @@ use mizan_core::quotes::constants::DATA_SOURCE_BROKER;
 use mizan_core::quotes::model::Quote;
 use mizan_core::quotes::store::QuoteStore;
 use mizan_core::utils::time_utils::valuation_date_today;
+use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::Decimal;
+use std::collections::{HashMap, HashSet};
 
 const DEFAULT_BROKERAGE_PROVIDER: &str = "snaptrade";
 /// Precision used for holdings normalization/diff comparisons.
@@ -782,9 +782,8 @@ impl BrokerSyncServiceTrait for BrokerSyncService {
             }
 
             // Normalize OCC symbol
-            let normalized_ticker =
-                mizan_core::utils::occ_symbol::normalize_option_symbol(&ticker)
-                    .unwrap_or_else(|| ticker.clone());
+            let normalized_ticker = mizan_core::utils::occ_symbol::normalize_option_symbol(&ticker)
+                .unwrap_or_else(|| ticker.clone());
 
             let currency = opt_pos
                 .currency
@@ -1005,6 +1004,7 @@ impl BrokerSyncServiceTrait for BrokerSyncService {
             net_contribution_base: Decimal::ZERO,
             cash_total_account_currency: cash_total,
             cash_total_base_currency: Decimal::ZERO,
+            realized_gains: HashMap::new(),
             calculated_at: now.naive_utc(),
             source: SnapshotSource::BrokerImported,
         };
@@ -1259,6 +1259,7 @@ impl BrokerSyncService {
             net_contribution_base: earliest.net_contribution_base,
             cash_total_account_currency: earliest.cash_total_account_currency,
             cash_total_base_currency: earliest.cash_total_base_currency,
+            realized_gains: earliest.realized_gains,
         };
 
         self.snapshot_repository
@@ -1426,8 +1427,8 @@ mod tests {
     use std::str::FromStr;
 
     use chrono::{NaiveDate, Utc};
-    use rust_decimal::Decimal;
     use mizan_core::portfolio::snapshot::{AccountStateSnapshot, Position, SnapshotSource};
+    use rust_decimal::Decimal;
 
     use super::BrokerSyncService;
 

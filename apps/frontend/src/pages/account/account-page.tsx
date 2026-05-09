@@ -24,6 +24,7 @@ import { useMemo, useState } from "react";
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
 import { FixedDepositDialog } from "@/components/fixed-deposit-dialog";
 import { PrivacyToggle } from "@/components/privacy-toggle";
+import { RecurringBuyDialog } from "@/components/recurring-buy-dialog";
 import { useAccounts } from "@/hooks/use-accounts";
 import { useRecalculatePortfolioMutation } from "@/hooks/use-calculate-portfolio";
 import { useValuationHistory } from "@/hooks/use-valuation-history";
@@ -126,6 +127,7 @@ const AccountPage = () => {
   const [isActivitySheetOpen, setIsActivitySheetOpen] = useState(false);
   const [showBulkHoldingsForm, setShowBulkHoldingsForm] = useState(false);
   const [showFixedDepositDialog, setShowFixedDepositDialog] = useState(false);
+  const [showRecurringBuyDialog, setShowRecurringBuyDialog] = useState(false);
   const [accountDetailTab, setAccountDetailTab] = useState<AccountDetailTab>("holdings");
 
   const recalculatePortfolioMutation = useRecalculatePortfolioMutation();
@@ -390,6 +392,11 @@ const AccountPage = () => {
                           icon: Icons.BadgeDollarSign,
                           label: "Schedule Fixed Deposit",
                           onClick: () => setShowFixedDepositDialog(true),
+                        },
+                        {
+                          icon: Icons.TrendingUp,
+                          label: "Schedule Recurring Buy",
+                          onClick: () => setShowRecurringBuyDialog(true),
                         },
                         {
                           icon: Icons.Import,
@@ -770,6 +777,19 @@ const AccountPage = () => {
         <FixedDepositDialog
           open={showFixedDepositDialog}
           onOpenChange={setShowFixedDepositDialog}
+          accountId={account.id}
+          defaultCurrency={account.currency}
+        />
+      ) : null}
+
+      {/* Schedule Recurring Buy — generates BUY activities at the chosen
+          cadence into this account (SIP / DCA / RSP). Each buy spends
+          amount at price for amount/price shares; lands as POSTED so the
+          portfolio reflects the plan immediately. */}
+      {account ? (
+        <RecurringBuyDialog
+          open={showRecurringBuyDialog}
+          onOpenChange={setShowRecurringBuyDialog}
           accountId={account.id}
           defaultCurrency={account.currency}
         />

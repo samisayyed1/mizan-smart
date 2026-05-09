@@ -1,7 +1,6 @@
 # Addon Development Packages
 
-A comprehensive guide to the packages available for developing Mizan
-addons.
+A comprehensive guide to the packages available for developing Mizan addons.
 
 ## Core Packages
 
@@ -399,8 +398,8 @@ export default defineConfig({
 Always use compatible versions:
 
 | SDK Version | Mizan Version | React Version |
-| ----------- | ------------------- | ------------- |
-| 1.0.0       | 1.0.0+              | ^19.1.1       |
+| ----------- | ------------- | ------------- |
+| 1.0.0       | 1.0.0+        | ^19.1.1       |
 
 ### Breaking Changes
 

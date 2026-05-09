@@ -1,13 +1,13 @@
-Mizan addons are TypeScript modules that extend the application's
-functionality. This guide covers how to build, test, and distribute addons.
+Mizan addons are TypeScript modules that extend the application's functionality.
+This guide covers how to build, test, and distribute addons.
 
 **New to addon development?** Start with our
 [Quick Start Guide](/docs/addons/getting-started) to create your first addon.
 
 ## What are Mizan Addons?
 
-Addons are TypeScript/React-based extensions that provide access to
-Mizan's financial data and UI system.
+Addons are TypeScript/React-based extensions that provide access to Mizan's
+financial data and UI system.
 
 **Technical Foundation** Each addon is a JavaScript function that receives an
 `AddonContext` object with access to APIs, UI components, and event system.

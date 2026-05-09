@@ -2,8 +2,8 @@
 
 use diesel::prelude::*;
 use diesel::SqliteConnection;
-use serde::{Deserialize, Serialize};
 use mizan_core::sync::{SyncEntity, SyncOperation};
+use serde::{Deserialize, Serialize};
 
 use super::model::{CategoryDB, TaxonomyDB};
 use crate::db::write_actor::WriteProjection;

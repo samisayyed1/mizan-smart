@@ -4,14 +4,7 @@ import { Button } from "@mizan/ui/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@mizan/ui/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@mizan/ui/components/ui/tabs";
 import { usePlatform } from "@/hooks/use-platform";
-import {
-  ScrollArea,
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@mizan/ui";
+import { ScrollArea, Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@mizan/ui";
 import { downloadSampleCsv, downloadSampleHoldingsCsv } from "./utils/sample-csv";
 
 // ─────────────────────────────────────────────────────────────────────────────

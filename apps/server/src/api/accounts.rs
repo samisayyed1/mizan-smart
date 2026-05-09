@@ -11,8 +11,8 @@ use axum::{
     routing::{get, put},
     Json, Router,
 };
-use serde::Deserialize;
 use mizan_core::accounts::AccountServiceTrait;
+use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]

@@ -837,7 +837,7 @@ mod tests {
         let only = &connections[0];
         assert_eq!(only.id, "auth-alpaca-1");
         assert_eq!(only.status.as_deref(), Some("connected"));
-        assert_eq!(only.disabled, false);
+        assert!(!only.disabled);
         let brk = only.brokerage.as_ref().expect("brokerage present");
         assert_eq!(brk.slug.as_deref(), Some("ALPACA-PAPER"));
         assert_eq!(brk.display_name.as_deref(), Some("Alpaca Paper"));

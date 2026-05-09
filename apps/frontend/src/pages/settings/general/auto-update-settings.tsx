@@ -51,8 +51,8 @@ export function AutoUpdateSettings() {
               Enable automatic update checks
             </Label>
             <p className="text-muted-foreground text-xs">
-              When enabled, Mizan will automatically check for updates when the application
-              starts. You can still manually check for updates from the Help menu.
+              When enabled, Mizan will automatically check for updates when the application starts.
+              You can still manually check for updates from the Help menu.
             </p>
           </div>
           <Switch

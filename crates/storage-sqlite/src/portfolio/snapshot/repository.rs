@@ -908,10 +908,10 @@ mod tests {
     use chrono::NaiveDate;
     use diesel::dsl::count_star;
     use diesel::RunQueryDsl;
+    use mizan_core::portfolio::snapshot::SnapshotSource;
     use rust_decimal::Decimal;
     use std::collections::HashMap;
     use tempfile::tempdir;
-    use mizan_core::portfolio::snapshot::SnapshotSource;
 
     /// Creates a test repository with an in-memory-like temp database
     /// Returns the repository, pool (for creating test accounts), and temp dir (to keep it alive)
@@ -980,6 +980,7 @@ mod tests {
             net_contribution_base: Decimal::ZERO,
             cash_total_account_currency: Decimal::ZERO,
             cash_total_base_currency: Decimal::ZERO,
+            realized_gains: HashMap::new(),
             calculated_at: chrono::Utc::now().naive_utc(),
             source,
         }

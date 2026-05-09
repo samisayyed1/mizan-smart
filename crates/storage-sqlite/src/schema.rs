@@ -282,6 +282,7 @@ diesel::table! {
         cash_total_account_currency -> Text,
         cash_total_base_currency -> Text,
         source -> Text,
+        realized_gains -> Text,
     }
 }
 

@@ -1,9 +1,9 @@
 //! Central projector for transactional sync outbox appends.
 
 use diesel::sqlite::SqliteConnection;
-use serde_json::Value;
 use mizan_core::errors::Result;
 use mizan_core::sync::{SyncEntity, SyncOperation};
+use serde_json::Value;
 
 use super::repository::{insert_outbox_event, OutboxWriteRequest};
 use crate::sync::SyncOutboxModel;

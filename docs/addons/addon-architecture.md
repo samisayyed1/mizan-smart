@@ -4,10 +4,9 @@ A straightforward explanation of how Mizan's addon system works.
 
 ## What Are Mizan Addons?
 
-Addons are TypeScript modules that extend Mizan's functionality. Each
-addon is a JavaScript function that receives an `AddonContext` object and can
-register UI components, add navigation items, and access financial data through
-APIs.
+Addons are TypeScript modules that extend Mizan's functionality. Each addon is a
+JavaScript function that receives an `AddonContext` object and can register UI
+components, add navigation items, and access financial data through APIs.
 
 ## Basic Structure
 

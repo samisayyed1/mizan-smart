@@ -10,6 +10,7 @@ mod csv_parser;
 mod fd_scheduler;
 mod idempotency;
 mod import_run_model;
+mod rsp_scheduler;
 
 #[cfg(test)]
 mod activities_service_tests;
@@ -44,3 +45,4 @@ pub use import_run_model::{
     ImportRun, ImportRunMode, ImportRunRepositoryTrait, ImportRunStatus, ImportRunSummary,
     ImportRunType, ReviewMode,
 };
+pub use rsp_scheduler::{generate_rsp_schedule, RspFrequency, RspParams, RspSchedulerError};

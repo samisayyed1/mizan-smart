@@ -83,6 +83,49 @@ impl HoldingsCalculationResult {
     }
 }
 
+/// Lifetime realized-P&L accumulator for a single asset within an account.
+///
+/// Built up by every SELL (and disposal-like activity) the calculator has
+/// processed up to the snapshot date. We track gross numbers separately
+/// (proceeds, cost-basis-of-sold-lots, sell-side fees) so downstream views
+/// can compute gain/loss in either currency without going back to the
+/// activity stream — and so an annual-realized-gains report can read this
+/// entry directly.
+///
+/// All Decimal fields are signed totals in the named currency. `_account_ccy`
+/// is the account's reporting currency at the moment of each sell (FX
+/// converted at trade-date); `_base_ccy` is the portfolio's base currency,
+/// also at trade-date FX. Carry-forward across daily snapshots is
+/// automatic via `AccountStateSnapshot::clone()` in the calculator.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RealizedGainEntry {
+    /// Gross proceeds (qty × price × multiplier) — sell-side fee NOT yet deducted.
+    pub proceeds_account_ccy: Decimal,
+    pub proceeds_base_ccy: Decimal,
+    /// FIFO cost basis of the lots removed by this asset's sells.
+    pub cost_basis_account_ccy: Decimal,
+    pub cost_basis_base_ccy: Decimal,
+    /// Total sell-side fees, summed across all sells for this asset.
+    pub fees_account_ccy: Decimal,
+    pub fees_base_ccy: Decimal,
+    /// Total quantity disposed across all sells for this asset.
+    pub quantity_sold: Decimal,
+    /// Most recent sale date — useful for "last sold" display and YTD reports.
+    pub last_sale_date: Option<NaiveDate>,
+}
+
+impl RealizedGainEntry {
+    /// Net realized gain in account currency: proceeds − cost basis − fees.
+    pub fn realized_gain_account_ccy(&self) -> Decimal {
+        self.proceeds_account_ccy - self.cost_basis_account_ccy - self.fees_account_ccy
+    }
+    /// Net realized gain in base currency.
+    pub fn realized_gain_base_ccy(&self) -> Decimal {
+        self.proceeds_base_ccy - self.cost_basis_base_ccy - self.fees_base_ccy
+    }
+}
+
 /// Represents the comprehensive state of an account at the close of a specific day.
 /// This becomes the primary data structure stored and retrieved by the ValuationRepository.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -119,6 +162,16 @@ pub struct AccountStateSnapshot {
     #[serde(default)]
     pub cash_total_base_currency: Decimal,
 
+    /// Lifetime realized P&L accumulator, keyed by asset_id. Each SELL the
+    /// calculator processes adds to the matching entry (creating one if
+    /// the position is being touched for the first time). Carries forward
+    /// across daily snapshots automatically; never decreases.
+    ///
+    /// Defaulted so historical snapshots without this field still
+    /// deserialize cleanly — they re-acquire data on the next recalc.
+    #[serde(default)]
+    pub realized_gains: HashMap<String, RealizedGainEntry>,
+
     pub calculated_at: NaiveDateTime, // When this snapshot was generated
 
     /// Source of this snapshot (how it was created)
@@ -140,6 +193,7 @@ impl Default for AccountStateSnapshot {
             net_contribution_base: Decimal::ZERO,
             cash_total_account_currency: Decimal::ZERO,
             cash_total_base_currency: Decimal::ZERO,
+            realized_gains: HashMap::new(),
             calculated_at: Utc::now().naive_utc(),
             source: SnapshotSource::default(),
         }

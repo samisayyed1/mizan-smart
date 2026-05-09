@@ -17,14 +17,14 @@
 
 ## Attribution
 
-Mizan is a fork of [Wealthfolio](https://github.com/afadil/wealthfolio)
-by Teymz Inc., licensed under AGPL-3.0. Massive thanks to the original
-authors. See [NOTICE](./NOTICE) and [CHANGES.md](./CHANGES.md).
+Mizan is a fork of [Wealthfolio](https://github.com/afadil/wealthfolio) by Teymz
+Inc., licensed under AGPL-3.0. Massive thanks to the original authors. See
+[NOTICE](./NOTICE) and [CHANGES.md](./CHANGES.md).
 
 ## Introduction
 
-**Mizan** is a Beautiful and Boring Investment Tracker, with Local
-Data Storage. No Subscriptions, No Cloud.
+**Mizan** is a Beautiful and Boring Investment Tracker, with Local Data Storage.
+No Subscriptions, No Cloud.
 
 ### ✨ Key Features
 
@@ -109,8 +109,8 @@ Contributions are welcome! Open an issue or pull request.
 
 ## License
 
-This project is licensed under the AGPL-3.0 license. See the [LICENSE](./LICENSE)
-file for details.
+This project is licensed under the AGPL-3.0 license. See the
+[LICENSE](./LICENSE) file for details.
 
 Mizan is a fork of Wealthfolio. "Wealthfolio" and the Wealthfolio logo are
 trademarks of Teymz Inc. and are not used by this fork. See [NOTICE](./NOTICE)

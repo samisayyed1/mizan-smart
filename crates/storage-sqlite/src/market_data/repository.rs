@@ -827,9 +827,9 @@ mod tests {
     use super::*;
     use crate::db::{create_pool, run_migrations, write_actor::spawn_writer};
     use chrono::{NaiveDate, TimeZone, Utc};
+    use mizan_core::quotes::Quote;
     use rust_decimal::Decimal;
     use tempfile::tempdir;
-    use mizan_core::quotes::Quote;
 
     async fn create_test_repository() -> (MarketDataRepository, tempfile::TempDir) {
         std::env::set_var("CONNECT_API_URL", "http://test.local");

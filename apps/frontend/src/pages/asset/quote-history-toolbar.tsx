@@ -1,14 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  Button,
-  Icons,
-  Label,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Switch,
-} from "@mizan/ui";
+import { Button, Icons, Label, Popover, PopoverContent, PopoverTrigger, Switch } from "@mizan/ui";
 
 interface QuoteHistoryToolbarProps {
   selectedRowCount: number;

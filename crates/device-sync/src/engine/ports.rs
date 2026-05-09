@@ -1,6 +1,6 @@
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use mizan_core::sync::{SyncEngineStatus, SyncEntity, SyncOperation, SyncOutboxEvent};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     ApiRetryClass, ReconcileReadyStateResponse, SyncCursorResponse, SyncPullResponse,

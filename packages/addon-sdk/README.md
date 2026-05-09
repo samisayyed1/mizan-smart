@@ -213,18 +213,18 @@ Create a `manifest.json` file in your addon root:
 
 ### Optional Fields
 
-| Field                   | Type           | Description                            |
-| ----------------------- | -------------- | -------------------------------------- |
-| `description`           | `string`       | Brief description of functionality     |
-| `author`                | `string`       | Author name or organization            |
-| `homepage`              | `string`       | Project homepage URL                   |
-| `license`               | `string`       | License identifier                     |
-| `main`                  | `string`       | Entry point file (default: "addon.js") |
-| `sdkVersion`            | `string`       | Compatible SDK version                 |
-| `permissions`           | `Permission[]` | Security permissions required          |
-| `minMizanVersion` | `string`       | Minimum Mizan version required   |
-| `keywords`              | `string[]`     | Keywords for discoverability           |
-| `icon`                  | `string`       | Addon icon (base64 or relative path)   |
+| Field             | Type           | Description                            |
+| ----------------- | -------------- | -------------------------------------- |
+| `description`     | `string`       | Brief description of functionality     |
+| `author`          | `string`       | Author name or organization            |
+| `homepage`        | `string`       | Project homepage URL                   |
+| `license`         | `string`       | License identifier                     |
+| `main`            | `string`       | Entry point file (default: "addon.js") |
+| `sdkVersion`      | `string`       | Compatible SDK version                 |
+| `permissions`     | `Permission[]` | Security permissions required          |
+| `minMizanVersion` | `string`       | Minimum Mizan version required         |
+| `keywords`        | `string[]`     | Keywords for discoverability           |
+| `icon`            | `string`       | Addon icon (base64 or relative path)   |
 
 ## 🔨 Development Guide
 
@@ -844,8 +844,8 @@ if (ctx.api.logger.isLevelEnabled('debug')) {
 
 ### Shared QueryClient Integration
 
-The SDK provides access to Mizan's shared React Query client for
-consistent data fetching and caching:
+The SDK provides access to Mizan's shared React Query client for consistent data
+fetching and caching:
 
 ```typescript
 // Access the shared QueryClient instance
@@ -1326,12 +1326,12 @@ We welcome contributions to improve the addon SDK!
 
 ### Package Details
 
-| Field            | Value                                                             |
-| ---------------- | ----------------------------------------------------------------- |
+| Field            | Value                                                       |
+| ---------------- | ----------------------------------------------------------- |
 | **Package Name** | `@mizan/addon-sdk`                                          |
 | **Scope**        | `@mizan`                                                    |
 | **Registry**     | [npmjs.com](https://www.npmjs.com/package/@mizan/addon-sdk) |
-| **License**      | MIT                                                               |
+| **License**      | MIT                                                         |
 | **Repository**   | [GitHub](https://github.com/afadil/mizan)                   |
 
 ### Version History
@@ -1345,9 +1345,9 @@ We follow [Semantic Versioning](https://semver.org/) (SemVer):
 #### Version Compatibility
 
 | SDK Version | Mizan Version | Node.js   | React   |
-| ----------- | ------------------- | --------- | ------- |
-| 1.0.x       | >= 1.0.0            | >= 18.0.0 | ^18.0.0 |
-| 0.9.x       | >= 0.9.0            | >= 16.0.0 | ^17.0.0 |
+| ----------- | ------------- | --------- | ------- |
+| 1.0.x       | >= 1.0.0      | >= 18.0.0 | ^18.0.0 |
+| 0.9.x       | >= 0.9.0      | >= 16.0.0 | ^17.0.0 |
 
 ### Installation from Registry
 

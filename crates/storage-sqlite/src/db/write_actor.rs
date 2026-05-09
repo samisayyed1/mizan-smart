@@ -3,12 +3,12 @@ use crate::errors::StorageError;
 use crate::sync::app_sync::ProjectedChange;
 use crate::sync::{flush_projected_outbox, OutboxWriteRequest, SyncOutboxModel};
 use diesel::SqliteConnection;
+use mizan_core::errors::{DatabaseError, Error, Result};
+use mizan_core::sync::SyncOperation;
 use std::any::Any;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
-use mizan_core::errors::{DatabaseError, Error, Result};
-use mizan_core::sync::SyncOperation;
 
 struct WriteJobResult {
     value: Box<dyn Any + Send + 'static>,
@@ -311,11 +311,11 @@ mod tests {
     use super::*;
     use crate::db::{create_pool, init, run_migrations};
     use crate::sync::OutboxWriteRequest;
+    use mizan_core::sync::{SyncEntity, SyncOperation};
     use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use tempfile::tempdir;
     use tokio::sync::oneshot as tokio_oneshot;
-    use mizan_core::sync::{SyncEntity, SyncOperation};
 
     fn setup_pool() -> DbPool {
         let app_data = tempdir()

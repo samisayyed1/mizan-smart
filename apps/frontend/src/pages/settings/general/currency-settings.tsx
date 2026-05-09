@@ -3,13 +3,7 @@ import { useForm } from "react-hook-form";
 import * as z from "zod";
 
 import { Button } from "@mizan/ui/components/ui/button";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@mizan/ui/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@mizan/ui/components/ui/form";
 import { CurrencyInput } from "@mizan/ui";
 import { useSettingsContext } from "@/lib/settings-provider";
 import {

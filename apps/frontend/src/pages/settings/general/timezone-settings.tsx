@@ -11,13 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@mizan/ui/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormField,
-  FormItem,
-  FormMessage,
-} from "@mizan/ui/components/ui/form";
+import { Form, FormControl, FormField, FormItem, FormMessage } from "@mizan/ui/components/ui/form";
 import { useSettingsContext } from "@/lib/settings-provider";
 import { TimezoneInput } from "./timezone-input";
 

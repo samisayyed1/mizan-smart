@@ -1,7 +1,7 @@
 # Mizan Addons Documentation Index
 
-> This page lists all documentation files in this directory for Mizan
-> addon development. Use the links below to navigate to the relevant guide or
+> This page lists all documentation files in this directory for Mizan addon
+> development. Use the links below to navigate to the relevant guide or
 > reference.
 
 ## 📄 Documentation Files

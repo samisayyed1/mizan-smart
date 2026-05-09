@@ -1,9 +1,5 @@
 import { ReactNode } from "react";
-import {
-  HoverCard,
-  HoverCardContent,
-  HoverCardTrigger,
-} from "@mizan/ui/components/ui/hover-card";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@mizan/ui/components/ui/hover-card";
 import { Button } from "@mizan/ui/components/ui/button";
 import { Badge } from "@mizan/ui/components/ui/badge";
 import { Icons } from "@mizan/ui/components/ui/icons";

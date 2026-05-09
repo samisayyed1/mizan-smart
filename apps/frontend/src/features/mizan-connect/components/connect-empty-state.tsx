@@ -121,8 +121,8 @@ export function ConnectEmptyState() {
             )}
           </div>
           <p className="text-muted-foreground/70 text-xs">
-            Opens a SnapTrade portal in your browser. After you finish in the
-            broker, your accounts appear here automatically.
+            Opens a SnapTrade portal in your browser. After you finish in the broker, your accounts
+            appear here automatically.
           </p>
           <ExternalLink
             href="https://mizan.app/connect/"

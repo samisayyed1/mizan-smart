@@ -290,9 +290,9 @@ mod tests {
     use super::*;
     use crate::env::test_env::{MockAccountService, MockEnvironment, MockQuoteService};
     use chrono::Utc;
-    use std::sync::RwLock;
     use mizan_core::accounts::Account;
     use mizan_core::quotes::SymbolSearchResult;
+    use std::sync::RwLock;
 
     fn account(id: &str, name: &str, currency: &str) -> Account {
         Account {

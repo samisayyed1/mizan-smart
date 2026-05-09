@@ -318,9 +318,8 @@ export function createAddonContext(addonId: string): AddonContext {
           // Navigation functions
           navigateToRoute: async (route: string) => {
             // Use the browser's navigation API through React Router
-            const navigate = (
-              window as unknown as { __mizan_navigate__?: (r: string) => void }
-            ).__mizan_navigate__;
+            const navigate = (window as unknown as { __mizan_navigate__?: (r: string) => void })
+              .__mizan_navigate__;
             if (navigate) {
               navigate(route);
             } else {
@@ -342,9 +341,8 @@ export function createAddonContext(addonId: string): AddonContext {
             interface QueryClientLike {
               invalidateQueries: (opts: { queryKey: string[]; exact?: boolean }) => unknown;
             }
-            const queryClient = (
-              window as unknown as { __mizan_query_client__?: QueryClientLike }
-            ).__mizan_query_client__;
+            const queryClient = (window as unknown as { __mizan_query_client__?: QueryClientLike })
+              .__mizan_query_client__;
             if (queryClient) {
               queryClient.invalidateQueries({
                 queryKey: Array.isArray(queryKey) ? queryKey : [queryKey],
@@ -356,9 +354,8 @@ export function createAddonContext(addonId: string): AddonContext {
             interface QueryClientLike {
               refetchQueries: (opts: { queryKey: string[]; exact?: boolean }) => unknown;
             }
-            const queryClient = (
-              window as unknown as { __mizan_query_client__?: QueryClientLike }
-            ).__mizan_query_client__;
+            const queryClient = (window as unknown as { __mizan_query_client__?: QueryClientLike })
+              .__mizan_query_client__;
             if (queryClient) {
               queryClient.refetchQueries({
                 queryKey: Array.isArray(queryKey) ? queryKey : [queryKey],

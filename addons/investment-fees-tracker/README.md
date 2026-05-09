@@ -1,8 +1,8 @@
 # Investment Fees Tracker
 
-A comprehensive Mizan addon that helps you track and analyze investment
-fees across your portfolio, providing detailed insights into your investment
-costs and their impact on returns.
+A comprehensive Mizan addon that helps you track and analyze investment fees
+across your portfolio, providing detailed insights into your investment costs
+and their impact on returns.
 
 ## Features
 

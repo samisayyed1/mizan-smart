@@ -35,5 +35,4 @@ sudo cp mizan.service.example /etc/systemd/system/mizan.service
 sudo systemctl enable --now mizan
 ```
 
-Full self-host docs:
-<https://github.com/afadil/mizan/blob/main/docs/self-host/>
+Full self-host docs: <https://github.com/afadil/mizan/blob/main/docs/self-host/>

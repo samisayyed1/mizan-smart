@@ -1,4 +1,4 @@
-import { createFixedDeposit, type FdPaymentFrequency } from "@/adapters";
+import { createRecurringBuyPlan, type RspFrequency } from "@/adapters";
 import { QueryKeys } from "@/lib/query-keys";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -34,84 +34,91 @@ import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-const FREQUENCIES: readonly { value: FdPaymentFrequency; label: string; perYear: string }[] = [
-  { value: "monthly", label: "Monthly", perYear: "12 payments/year" },
-  { value: "quarterly", label: "Quarterly", perYear: "4 payments/year" },
-  { value: "semi_annual", label: "Semi-annually", perYear: "2 payments/year" },
-  { value: "annual", label: "Annually", perYear: "1 payment/year" },
-  { value: "at_maturity", label: "At maturity", perYear: "Single lump sum at end of term" },
+const FREQUENCIES: readonly { value: RspFrequency; label: string; cadence: string }[] = [
+  { value: "weekly", label: "Weekly", cadence: "Every 7 days" },
+  { value: "biweekly", label: "Biweekly", cadence: "Every 14 days" },
+  { value: "monthly", label: "Monthly", cadence: "Same day each month" },
+  { value: "quarterly", label: "Quarterly", cadence: "Every 3 months" },
+  { value: "semi_annual", label: "Semi-annually", cadence: "Every 6 months" },
+  { value: "annual", label: "Annually", cadence: "Same day each year" },
 ] as const;
 
-const fdSchema = z.object({
-  principal: z.coerce
-    .number({ invalid_type_error: "Principal must be a number" })
-    .positive("Principal must be greater than zero"),
-  annualRatePercent: z.coerce
-    .number({ invalid_type_error: "Rate must be a number" })
-    .min(0, "Rate cannot be negative")
-    .max(100, "Rate above 100% looks like a typo — verify and re-enter"),
-  termMonths: z.coerce
-    .number({ invalid_type_error: "Term must be a whole number of months" })
-    .int("Term must be whole months")
-    .min(1, "Term must be at least 1 month")
-    .max(600, "Term capped at 600 months (50 years) — split into two FDs if longer"),
-  paymentFrequency: z.enum(["monthly", "quarterly", "semi_annual", "annual", "at_maturity"]),
+const rspSchema = z.object({
+  symbol: z
+    .string()
+    .min(1, "Symbol required")
+    .max(32)
+    .regex(/^[A-Za-z0-9.\-:]+$/u, "Use letters, digits, dot, dash, or colon"),
+  amountPerBuy: z.coerce
+    .number({ invalid_type_error: "Amount must be a number" })
+    .positive("Amount must be greater than zero"),
+  unitPrice: z.coerce
+    .number({ invalid_type_error: "Reference price must be a number" })
+    .positive("Reference price must be greater than zero"),
+  frequency: z.enum(["weekly", "biweekly", "monthly", "quarterly", "semi_annual", "annual"]),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/u, "Start date must be YYYY-MM-DD"),
+  installments: z.coerce
+    .number({ invalid_type_error: "Number of buys must be a whole number" })
+    .int("Must be a whole number")
+    .min(1, "At least 1 buy required")
+    .max(240, "Capped at 240 buys — split into multiple plans if longer"),
   currency: z.string().min(3, "Currency code required").max(8),
   notes: z.string().max(500).optional(),
 });
 
-type FdFormValues = z.infer<typeof fdSchema>;
+type RspFormValues = z.infer<typeof rspSchema>;
 
-interface FixedDepositDialogProps {
+interface RecurringBuyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Account that holds the principal — interest activities post into here. */
+  /** Account that holds the buys — BUY activities post into here. */
   accountId: string;
   /** Default currency to pre-fill (the account's currency). */
   defaultCurrency: string;
 }
 
 /**
- * Schedule a fixed deposit. Posts to the `create_fixed_deposit` Tauri
- * command which generates a series of INTEREST activities at the chosen
- * cadence into the selected account. The principal stays in the user's
- * cash balance (not double-counted), and the engine treats the interest
- * payments as gain (no `net_contribution` change), so they feed CAGR/TWR
- * through the same path as any broker-synced interest payment.
+ * Schedule a recurring stock-purchase plan (RSP / SIP / DCA). Posts to
+ * the `create_recurring_buy_plan` Tauri command which generates a series
+ * of BUY activities at the chosen cadence into the selected account.
+ * Each emitted BUY has `quantity = amountPerBuy / unitPrice` (rounded to
+ * 6 d.p. for fractional shares) and lands as POSTED — the portfolio
+ * reflects the plan immediately, just like manually-entered buys.
  */
-export function FixedDepositDialog({
+export function RecurringBuyDialog({
   open,
   onOpenChange,
   accountId,
   defaultCurrency,
-}: FixedDepositDialogProps) {
+}: RecurringBuyDialogProps) {
   const queryClient = useQueryClient();
   const today = new Date().toISOString().slice(0, 10);
 
-  const form = useForm<FdFormValues>({
-    resolver: zodResolver(fdSchema),
+  const form = useForm<RspFormValues>({
+    resolver: zodResolver(rspSchema),
     defaultValues: {
-      principal: 10_000,
-      annualRatePercent: 5,
-      termMonths: 12,
-      paymentFrequency: "quarterly",
+      symbol: "",
+      amountPerBuy: 500,
+      unitPrice: 100,
+      frequency: "monthly",
       startDate: today,
+      installments: 12,
       currency: defaultCurrency,
       notes: "",
     },
   });
 
-  // Reset form whenever the dialog opens — avoids carrying over stale
-  // values if the user closes mid-edit and re-opens.
+  // Reset whenever the dialog opens — avoids carrying over stale values
+  // if the user closes mid-edit and re-opens.
   useEffect(() => {
     if (open) {
       form.reset({
-        principal: 10_000,
-        annualRatePercent: 5,
-        termMonths: 12,
-        paymentFrequency: "quarterly",
+        symbol: "",
+        amountPerBuy: 500,
+        unitPrice: 100,
+        frequency: "monthly",
         startDate: today,
+        installments: 12,
         currency: defaultCurrency,
         notes: "",
       });
@@ -121,28 +128,33 @@ export function FixedDepositDialog({
   }, [open, defaultCurrency]);
 
   const mutation = useMutation({
-    mutationFn: (values: FdFormValues) =>
-      createFixedDeposit({
+    mutationFn: async (values: RspFormValues) => {
+      const result = await createRecurringBuyPlan({
         accountId,
-        principal: values.principal,
-        annualRatePercent: values.annualRatePercent,
-        termMonths: values.termMonths,
-        paymentFrequency: values.paymentFrequency,
+        symbol: values.symbol.trim().toUpperCase(),
+        amountPerBuy: values.amountPerBuy,
+        unitPrice: values.unitPrice,
+        frequency: values.frequency,
         startDate: values.startDate,
+        installments: values.installments,
         currency: values.currency.toUpperCase(),
         notes: values.notes && values.notes.length > 0 ? values.notes : null,
-      }),
-    onSuccess: (activities) => {
-      const total = activities.reduce(
-        (sum, a) => sum + Number.parseFloat(String(a.amount ?? 0)),
+      });
+      return { activities: result, symbol: values.symbol.trim().toUpperCase() };
+    },
+    onSuccess: ({ activities, symbol }) => {
+      const totalCash = activities.reduce(
+        (sum, a) =>
+          sum +
+          Number.parseFloat(String(a.quantity ?? 0)) * Number.parseFloat(String(a.unitPrice ?? 0)),
         0,
       );
-      toast.success(`Fixed deposit scheduled`, {
-        description: `${activities.length} interest payment${
+      toast.success(`Recurring buy plan scheduled`, {
+        description: `${activities.length} buy${
           activities.length === 1 ? "" : "s"
-        } generated · total ${total.toLocaleString(undefined, {
+        } of ${symbol} generated · total ${totalCash.toLocaleString(undefined, {
           maximumFractionDigits: 2,
-        })} expected`,
+        })} committed`,
       });
       void queryClient.invalidateQueries({ queryKey: [QueryKeys.ACTIVITIES] });
       void queryClient.invalidateQueries({ queryKey: [QueryKeys.ACCOUNTS] });
@@ -155,8 +167,8 @@ export function FixedDepositDialog({
           ? err.message
           : typeof err === "string"
             ? err
-            : "Couldn't schedule the deposit. Try again.";
-      toast.error(`Couldn't schedule fixed deposit: ${message}`);
+            : "Couldn't schedule the plan. Try again.";
+      toast.error(`Couldn't schedule recurring buy: ${message}`);
     },
   });
 
@@ -164,11 +176,12 @@ export function FixedDepositDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Schedule a fixed deposit</DialogTitle>
+          <DialogTitle>Schedule a recurring buy</DialogTitle>
           <DialogDescription>
-            Generates a series of <span className="font-mono">INTEREST</span> activities at the
-            chosen cadence. Principal stays in your cash balance — only the interest counts toward
-            CAGR.
+            Generates a series of <span className="font-mono">BUY</span> activities at the chosen
+            cadence — your SIP / DCA / RSP, modelled deterministically. Each buy spends{" "}
+            <span className="font-mono">amount</span> at <span className="font-mono">price</span>{" "}
+            for <span className="font-mono">amount / price</span> shares.
           </DialogDescription>
         </DialogHeader>
 
@@ -180,17 +193,16 @@ export function FixedDepositDialog({
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
-                name="principal"
+                name="symbol"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Principal</FormLabel>
+                    <FormLabel>Symbol</FormLabel>
                     <FormControl>
                       <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
-                        min="0"
-                        placeholder="10000"
+                        placeholder="VTI"
+                        autoCapitalize="characters"
+                        autoComplete="off"
+                        spellCheck={false}
                         {...field}
                       />
                     </FormControl>
@@ -216,18 +228,17 @@ export function FixedDepositDialog({
             <div className="grid grid-cols-2 gap-3">
               <FormField
                 control={form.control}
-                name="annualRatePercent"
+                name="amountPerBuy"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Annual rate (%)</FormLabel>
+                    <FormLabel>Amount per buy</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
                         inputMode="decimal"
                         step="0.01"
                         min="0"
-                        max="100"
-                        placeholder="5.0"
+                        placeholder="500"
                         {...field}
                       />
                     </FormControl>
@@ -237,18 +248,17 @@ export function FixedDepositDialog({
               />
               <FormField
                 control={form.control}
-                name="termMonths"
+                name="unitPrice"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Term (months)</FormLabel>
+                    <FormLabel>Reference price / share</FormLabel>
                     <FormControl>
                       <Input
                         type="number"
-                        inputMode="numeric"
-                        step="1"
-                        min="1"
-                        max="600"
-                        placeholder="12"
+                        inputMode="decimal"
+                        step="0.0001"
+                        min="0"
+                        placeholder="245.30"
                         {...field}
                       />
                     </FormControl>
@@ -258,33 +268,56 @@ export function FixedDepositDialog({
               />
             </div>
 
-            <FormField
-              control={form.control}
-              name="paymentFrequency"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Payment frequency</FormLabel>
-                  <Select value={field.value} onValueChange={field.onChange}>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField
+                control={form.control}
+                name="frequency"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Frequency</FormLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <FormControl>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                      </FormControl>
+                      <SelectContent>
+                        {FREQUENCIES.map((f) => (
+                          <SelectItem key={f.value} value={f.value}>
+                            <div className="flex flex-col">
+                              <span>{f.label}</span>
+                              <span className="text-muted-foreground text-xs">{f.cadence}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="installments"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Number of buys</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
+                      <Input
+                        type="number"
+                        inputMode="numeric"
+                        step="1"
+                        min="1"
+                        max="240"
+                        placeholder="12"
+                        {...field}
+                      />
                     </FormControl>
-                    <SelectContent>
-                      {FREQUENCIES.map((f) => (
-                        <SelectItem key={f.value} value={f.value}>
-                          <div className="flex flex-col">
-                            <span>{f.label}</span>
-                            <span className="text-muted-foreground text-xs">{f.perYear}</span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
 
             <FormField
               control={form.control}
@@ -307,7 +340,11 @@ export function FixedDepositDialog({
                 <FormItem>
                   <FormLabel>Notes (optional)</FormLabel>
                   <FormControl>
-                    <Textarea rows={2} placeholder="HSBC AED FD @ 5%, 12-month tenor" {...field} />
+                    <Textarea
+                      rows={2}
+                      placeholder="Monthly VTI SIP — $500/mo into IRA"
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -330,7 +367,7 @@ export function FixedDepositDialog({
                     Scheduling…
                   </>
                 ) : (
-                  "Schedule deposit"
+                  "Schedule plan"
                 )}
               </Button>
             </DialogFooter>

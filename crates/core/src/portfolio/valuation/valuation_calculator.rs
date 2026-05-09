@@ -269,6 +269,7 @@ mod tests {
             net_contribution_base: dec!(0),
             cash_total_account_currency: dec!(0),
             cash_total_base_currency: dec!(0),
+            realized_gains: HashMap::new(),
             calculated_at: Utc::now().naive_utc(),
             source: SnapshotSource::Calculated,
         };

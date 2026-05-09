@@ -230,9 +230,7 @@ impl From<mizan_core::taxonomies::NewCategory> for NewCategoryDB {
     }
 }
 
-impl From<mizan_core::taxonomies::NewAssetTaxonomyAssignment>
-    for NewAssetTaxonomyAssignmentDB
-{
+impl From<mizan_core::taxonomies::NewAssetTaxonomyAssignment> for NewAssetTaxonomyAssignmentDB {
     fn from(domain: mizan_core::taxonomies::NewAssetTaxonomyAssignment) -> Self {
         let now = chrono::Utc::now().to_rfc3339();
         Self {

@@ -30,9 +30,10 @@ cargo run --release
 
 ### Terminal 2 — confirm the SnapTrade dashboard redirect URI
 
-In <https://dashboard.snaptrade.com> add `http://localhost:8080/api/v1/sync/snaptrade/callback`
-to the **Connection Portal Redirect URIs** allowlist. Without this, the
-SnapTrade portal will redirect to a non-allowed URL and the callback fails.
+In <https://dashboard.snaptrade.com> add
+`http://localhost:8080/api/v1/sync/snaptrade/callback` to the **Connection
+Portal Redirect URIs** allowlist. Without this, the SnapTrade portal will
+redirect to a non-allowed URL and the callback fails.
 
 ### Terminal 3 — desktop with the bypass flag
 
@@ -48,22 +49,23 @@ CONNECT_BYPASS_PLAN_CHECK=true pnpm tauri dev
 ```
 
 First run takes a few minutes (Tauri release-debug build + the new
-`mizan-connect` crate compile). When the window opens, you should see the
-Mizan dashboard.
+`mizan-connect` crate compile). When the window opens, you should see the Mizan
+dashboard.
 
 ## Test 1 — empty state shows the live "Connect a broker" button
 
 1. Open **Connect** in the sidebar (or click the Connect tab in
    `/settings/connect`).
-2. If the user is signed in to Mizan Connect, the empty state should
-   show a **gold gradient "Connect a broker" button** (the new one). The
-   secondary "Sign in to Mizan Connect first" link only appears when the
-   user is NOT signed in.
+2. If the user is signed in to Mizan Connect, the empty state should show a
+   **gold gradient "Connect a broker" button** (the new one). The secondary
+   "Sign in to Mizan Connect first" link only appears when the user is NOT
+   signed in.
 
 **Expected (signed in):**
+
 - DevTools console: zero errors.
-- Network tab (filter by `localhost:8080`): no traffic yet — the button
-  hasn't been clicked.
+- Network tab (filter by `localhost:8080`): no traffic yet — the button hasn't
+  been clicked.
 
 ## Test 2 — full broker connection round-trip
 
@@ -75,26 +77,26 @@ Mizan dashboard.
    `POST /api/v1/sync/brokerage/login-portal` with `Authorization: Bearer eyJ…`
    returning **200** with body `{"url":"...", "expires_at":"..."}`.
 
-5. In the browser, pick a sandbox-supported broker. **Robinhood** has a
-   built-in paper-trading sandbox; SnapTrade also exposes a "TEST" broker
-   that returns deterministic mock data.
+5. In the browser, pick a sandbox-supported broker. **Robinhood** has a built-in
+   paper-trading sandbox; SnapTrade also exposes a "TEST" broker that returns
+   deterministic mock data.
 
 6. Complete the broker login. SnapTrade redirects to
    `http://localhost:8080/api/v1/sync/snaptrade/callback?state=...&authorizationId=...`
-   and the backend renders a minimal HTML success page that says
-   "Broker linked — You can close this window and return to Mizan."
+   and the backend renders a minimal HTML success page that says "Broker linked
+   — You can close this window and return to Mizan."
 
 7. Close the browser window. Return to the Mizan desktop app.
 
 8. Within 5–60 seconds, the broker connection should appear:
-   - The **`Connect a broker`** button keeps showing `Spinner — Waiting for
-     broker...` for the full 60 s polling window.
-   - When the next 5-second poll fires, the empty state is replaced with
-     the real `BrokerConnectionsCard` showing the broker logo and name,
-     plus an Accounts card listing the broker's accounts.
+   - The **`Connect a broker`** button keeps showing
+     `Spinner — Waiting for broker...` for the full 60 s polling window.
+   - When the next 5-second poll fires, the empty state is replaced with the
+     real `BrokerConnectionsCard` showing the broker logo and name, plus an
+     Accounts card listing the broker's accounts.
    - In the Network tab you'll see ~12 calls to
-     `GET /api/v1/sync/brokerage/connections` and the matching
-     `/accounts` calls during the polling window.
+     `GET /api/v1/sync/brokerage/connections` and the matching `/accounts` calls
+     during the polling window.
 
 **Capture in this doc:**
 
@@ -108,27 +110,34 @@ Mizan dashboard.
 ## Test 3 — failure modes
 
 ### Rate limit (10/hr/user)
-Click the "Connect a broker" button 11 times in quick succession. The
-11th call should produce a toast: `Couldn't start broker connection:
-too many login-portal requests; try again later.` (Status 429.)
+
+Click the "Connect a broker" button 11 times in quick succession. The 11th call
+should produce a toast:
+`Couldn't start broker connection: too many login-portal requests; try again later.`
+(Status 429.)
 
 ### Backend down
+
 Stop the backend (`Ctrl-C` in Terminal 1). Click the button. Toast:
 `Couldn't start broker connection: error sending request…` or similar.
 
 ### Plan-gate fallback
-Restart the desktop **without** `CONNECT_BYPASS_PLAN_CHECK`. Click
-**Connect a broker** — the IPC under the hood (`broker_ingest_run` for
-sync, NOT login-portal) will fail with `"Plan does not include broker
-sync"` once you try to sync. Login-portal itself does NOT call
-`has_broker_sync()` so it will still mint URLs — but `broker_ingest_run`
-won't run. This is the documented behavior for Chunk 3 → Chunk 4 hand-off.
+
+Restart the desktop **without** `CONNECT_BYPASS_PLAN_CHECK`. Click **Connect a
+broker** — the IPC under the hood (`broker_ingest_run` for sync, NOT
+login-portal) will fail with `"Plan does not include broker sync"` once you try
+to sync. Login-portal itself does NOT call `has_broker_sync()` so it will still
+mint URLs — but `broker_ingest_run` won't run. This is the documented behavior
+for Chunk 3 → Chunk 4 hand-off.
 
 ## Pass / fail summary
 
-- [ ] Test 1: empty-state shows the new Connect-a-broker button; no console errors.
-- [ ] Test 2: end-to-end portal → broker login → polling → connection visible in desktop.
-- [ ] Test 2 network: exactly one `/login-portal` 200; subsequent `/connections` 200s during polling.
+- [ ] Test 1: empty-state shows the new Connect-a-broker button; no console
+      errors.
+- [ ] Test 2: end-to-end portal → broker login → polling → connection visible in
+      desktop.
+- [ ] Test 2 network: exactly one `/login-portal` 200; subsequent `/connections`
+      200s during polling.
 - [ ] Test 3 rate-limit: 11th call returns 429 toast.
 - [ ] Test 3 backend-down: clean error toast, no crash.
 
@@ -137,7 +146,8 @@ If any line fails, capture the error + a network screenshot before filing.
 ## Cleanup
 
 After successful smoke:
+
 - Stop both processes.
 - Optional: revoke the test broker authorization with
-  `DELETE /api/v1/sync/brokerage/connections/<id>` to free up your
-  sandbox connection slot (SnapTrade free tier caps at ~5).
+  `DELETE /api/v1/sync/brokerage/connections/<id>` to free up your sandbox
+  connection slot (SnapTrade free tier caps at ~5).

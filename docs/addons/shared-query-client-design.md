@@ -3,8 +3,8 @@
 ## Overview
 
 This document describes the design for sharing the React Query client between
-the main Mizan application and addons, enabling automatic cache
-invalidation and data synchronization.
+the main Mizan application and addons, enabling automatic cache invalidation and
+data synchronization.
 
 ## Architecture
 

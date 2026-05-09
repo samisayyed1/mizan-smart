@@ -1,7 +1,7 @@
 # Contributing to Mizan
 
-Thank you for your interest in contributing to Mizan! We welcome
-contributions from the community.
+Thank you for your interest in contributing to Mizan! We welcome contributions
+from the community.
 
 ## Contributor License Agreement (CLA)
 

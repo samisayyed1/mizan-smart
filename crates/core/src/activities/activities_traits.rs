@@ -188,6 +188,15 @@ pub trait ActivityServiceTrait: Send + Sync {
         &self,
         params: super::fd_scheduler::FdParams,
     ) -> Result<Vec<Activity>>;
+    /// Generate the full BUY schedule for a recurring stock-purchase
+    /// plan and insert every emitted activity. Returns the inserted
+    /// activities in purchase-date order. Failure on any individual
+    /// insert short-circuits — the caller sees a partial result via the
+    /// Err arm and can decide whether to retry or roll back.
+    async fn create_recurring_buy_plan(
+        &self,
+        params: super::rsp_scheduler::RspParams,
+    ) -> Result<Vec<Activity>>;
     async fn update_activity(&self, activity: ActivityUpdate) -> Result<Activity>;
     async fn delete_activity(&self, activity_id: String) -> Result<Activity>;
     async fn link_transfer_activities(

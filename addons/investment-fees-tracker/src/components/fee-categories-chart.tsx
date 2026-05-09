@@ -1,11 +1,4 @@
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  EmptyPlaceholder,
-  Skeleton,
-} from "@mizan/ui";
+import { Card, CardContent, CardHeader, CardTitle, EmptyPlaceholder, Skeleton } from "@mizan/ui";
 import { useMemo, useState } from "react";
 import { DonutChart } from "./donut-chart";
 

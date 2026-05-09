@@ -2,11 +2,7 @@ import { getIncomeSummary } from "@/adapters";
 import { Badge } from "@mizan/ui/components/ui/badge";
 import { Button } from "@mizan/ui/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@mizan/ui/components/ui/card";
-import {
-  ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
-} from "@mizan/ui/components/ui/chart";
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@mizan/ui/components/ui/chart";
 import { EmptyPlaceholder } from "@mizan/ui/components/ui/empty-placeholder";
 import { Icons } from "@mizan/ui/components/ui/icons";
 import { Skeleton } from "@mizan/ui/components/ui/skeleton";

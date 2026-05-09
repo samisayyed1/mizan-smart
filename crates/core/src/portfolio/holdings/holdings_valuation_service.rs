@@ -253,10 +253,9 @@ impl HoldingsValuationService {
             holding.day_change = None;
             holding.day_change_pct = None;
             holding.prev_close_value = None;
-            holding.realized_gain = None;
-            holding.realized_gain_pct = None;
-            holding.total_gain = holding.unrealized_gain.clone();
-            holding.total_gain_pct = holding.unrealized_gain_pct;
+            // Preserve the realized-gain pre-populated by the holdings
+            // service from the snapshot accumulator; fold into total.
+            populate_total_gain(holding);
             return Ok(());
         }
 
@@ -398,10 +397,9 @@ impl HoldingsValuationService {
             holding.prev_close_value = None;
         }
 
-        holding.realized_gain = None;
-        holding.realized_gain_pct = None;
-        holding.total_gain = holding.unrealized_gain.clone();
-        holding.total_gain_pct = holding.unrealized_gain_pct;
+        // Realized gain comes pre-populated from the snapshot accumulator.
+        // Total = unrealized + realized.
+        populate_total_gain(holding);
 
         Ok(())
     }
@@ -591,10 +589,9 @@ impl HoldingsValuationService {
             holding.prev_close_value = None;
         }
 
-        holding.realized_gain = None;
-        holding.realized_gain_pct = None;
-        holding.total_gain = holding.unrealized_gain.clone();
-        holding.total_gain_pct = holding.unrealized_gain_pct;
+        // Realized gain comes pre-populated from the snapshot accumulator.
+        // Total = unrealized + realized.
+        populate_total_gain(holding);
 
         Ok(())
     }
@@ -655,6 +652,49 @@ impl HoldingsValuationService {
 
         Ok(())
     }
+}
+
+/// Compute `total_gain` (and `total_gain_pct`) on a holding by summing
+/// the previously-populated `unrealized_gain` and `realized_gain` fields.
+///
+/// `unrealized_gain` is set on the same valuation pass; `realized_gain`
+/// is pre-populated from the snapshot's lifetime accumulator by
+/// `holdings_service::build_live_holdings_from_snapshot`. This helper
+/// just folds the two together so consumers get a single "total return
+/// on this position" number.
+///
+/// The percentage is expressed against current-position cost basis (the
+/// denominator the existing unrealized-gain-pct uses) — a reasonable
+/// approximation that's well-defined when the position still holds
+/// shares. For fully-disposed positions the value lives in the snapshot
+/// accumulator and is surfaced in the dedicated realized-gains view.
+fn populate_total_gain(holding: &mut Holding) {
+    let unrealized = holding.unrealized_gain.as_ref();
+    let realized = holding.realized_gain.as_ref();
+
+    let total = match (unrealized, realized) {
+        (Some(u), Some(r)) => Some(MonetaryValue {
+            local: u.local + r.local,
+            base: u.base + r.base,
+        }),
+        (Some(u), None) => Some(u.clone()),
+        (None, Some(r)) => Some(r.clone()),
+        (None, None) => None,
+    };
+
+    holding.total_gain = total;
+
+    // Percentage. Use current-position cost basis as the denominator
+    // (matches unrealized_gain_pct's denominator and is well-defined
+    // while shares are still held).
+    holding.total_gain_pct = match (holding.total_gain.as_ref(), holding.cost_basis.as_ref()) {
+        (Some(total), Some(cost)) if cost.base != Decimal::ZERO => {
+            Some((total.base / cost.base).round_dp(4))
+        }
+        (Some(total), Some(_)) if total.base != Decimal::ZERO => Some(Decimal::ONE),
+        (Some(_), Some(_)) => Some(Decimal::ZERO),
+        _ => None,
+    };
 }
 
 /// Returns true if the holding metadata indicates an option contract that has expired.

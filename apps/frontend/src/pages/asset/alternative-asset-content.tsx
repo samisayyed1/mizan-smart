@@ -13,13 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@mizan/ui/components/ui/alert-dialog";
-import {
-  Icons,
-  IntervalSelector,
-  EmptyPlaceholder,
-  AmountDisplay,
-  formatPercent,
-} from "@mizan/ui";
+import { Icons, IntervalSelector, EmptyPlaceholder, AmountDisplay, formatPercent } from "@mizan/ui";
 import HistoryChart from "@/components/history-chart-symbol";
 import { ValueHistoryDataGrid } from "./alternative-assets";
 import {

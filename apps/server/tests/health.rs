@@ -1,7 +1,7 @@
 use axum::{body::Body, http::Request};
+use mizan_server::{api::app_router, build_state, config::Config};
 use tempfile::tempdir;
 use tower::ServiceExt;
-use mizan_server::{api::app_router, build_state, config::Config};
 
 #[tokio::test]
 async fn healthz_works() {

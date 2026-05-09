@@ -78,6 +78,7 @@ export {
   checkExistingDuplicates,
   createActivity,
   createFixedDeposit,
+  createRecurringBuyPlan,
   deleteImportTemplate,
   deleteActivity,
   getImportTemplate,

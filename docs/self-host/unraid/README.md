@@ -1,7 +1,7 @@
 # Mizan on Unraid
 
-Mizan runs as a standard Docker container managed through Unraid's Docker
-tab. The Community Apps (CA) template lives next to this README at
+Mizan runs as a standard Docker container managed through Unraid's Docker tab.
+The Community Apps (CA) template lives next to this README at
 [`template.xml`](./template.xml). CA fetches it directly from the repo.
 
 📘 **Full setup guide:**
@@ -11,8 +11,8 @@ tab. The Community Apps (CA) template lives next to this README at
 
 ### From Community Apps (one-click)
 
-**Apps** tab → search for **Mizan** → **Install** → fill in
-`WF_SECRET_KEY`, `WF_AUTH_PASSWORD_HASH`, `WF_CORS_ALLOW_ORIGINS` → **Apply**.
+**Apps** tab → search for **Mizan** → **Install** → fill in `WF_SECRET_KEY`,
+`WF_AUTH_PASSWORD_HASH`, `WF_CORS_ALLOW_ORIGINS` → **Apply**.
 
 ### Manual sideload
 

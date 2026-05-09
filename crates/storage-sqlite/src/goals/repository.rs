@@ -15,10 +15,10 @@ use diesel::prelude::*;
 use diesel::r2d2::{self, Pool};
 use diesel::SqliteConnection;
 
+use mizan_core::errors::ValidationError;
 use std::collections::HashMap;
 use std::sync::Arc;
 use uuid::Uuid;
-use mizan_core::errors::ValidationError;
 
 fn validate_goal_funding_capacity(
     conn: &mut SqliteConnection,

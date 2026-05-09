@@ -8,13 +8,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use tokio::sync::mpsc;
 use mizan_connect::{
     ensure_valid_access_token, BrokerSyncServiceTrait, TokenLifecycleConfig, TokenLifecycleState,
 };
 use mizan_core::{
     assets::AssetServiceTrait, events::DomainEvent, goals::GoalServiceTrait, secrets::SecretStore,
 };
+use tokio::sync::mpsc;
 
 use super::planner::{plan_asset_enrichment, plan_broker_sync, plan_portfolio_job};
 use crate::events::EventBus;
@@ -269,9 +269,9 @@ async fn run_portfolio_job(
         ServerEvent, MARKET_SYNC_COMPLETE, MARKET_SYNC_ERROR, MARKET_SYNC_START,
         PORTFOLIO_UPDATE_COMPLETE, PORTFOLIO_UPDATE_ERROR, PORTFOLIO_UPDATE_START,
     };
-    use serde_json::json;
     use mizan_core::accounts::AccountServiceTrait;
     use mizan_core::constants::PORTFOLIO_TOTAL_ACCOUNT_ID;
+    use serde_json::json;
 
     let event_bus = deps.event_bus.clone();
     let snapshot_mode = config
@@ -438,8 +438,8 @@ async fn run_portfolio_job(
 
 /// Refreshes cached summary fields for all active goals after valuation changes.
 async fn refresh_all_goal_summaries(deps: Arc<QueueWorkerDeps>) {
-    use rust_decimal::prelude::ToPrimitive;
     use mizan_core::accounts::AccountServiceTrait;
+    use rust_decimal::prelude::ToPrimitive;
 
     let goals = match deps.goal_service.get_goals() {
         Ok(goals) => goals,

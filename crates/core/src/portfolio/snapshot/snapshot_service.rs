@@ -988,6 +988,11 @@ impl SnapshotService {
             // For TOTAL snapshot, account_currency == base_currency
             cash_total_account_currency: cash_total_base.round_dp(DECIMAL_PRECISION),
             cash_total_base_currency: cash_total_base.round_dp(DECIMAL_PRECISION),
+            // TOTAL aggregate doesn't carry per-asset realized gains —
+            // those are read from per-account snapshots directly. An
+            // aggregate keyed by asset_id would conflict across accounts
+            // holding the same symbol with different bases.
+            realized_gains: HashMap::new(),
             calculated_at: Utc::now().naive_utc(),
             source: SnapshotSource::Calculated,
         })
@@ -1110,6 +1115,7 @@ impl SnapshotService {
             net_contribution_base: Decimal::ZERO,
             cash_total_account_currency: Decimal::ZERO,
             cash_total_base_currency: Decimal::ZERO,
+            realized_gains: HashMap::new(),
             calculated_at: Utc::now().naive_utc(),
             source: SnapshotSource::Calculated,
         }
@@ -1818,6 +1824,7 @@ impl SnapshotServiceTrait for SnapshotService {
             net_contribution_base: earliest.net_contribution_base,
             cash_total_account_currency: earliest.cash_total_account_currency,
             cash_total_base_currency: earliest.cash_total_base_currency,
+            realized_gains: earliest.realized_gains,
         };
 
         self.snapshot_repository

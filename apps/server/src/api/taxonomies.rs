@@ -7,13 +7,13 @@ use axum::{
     routing::{delete, get, post},
     Json, Router,
 };
-use serde::Deserialize;
-use tracing::debug;
 use mizan_core::health::{MigrationResult, MigrationStatus};
 use mizan_core::taxonomies::{
     AssetTaxonomyAssignment, Category, NewAssetTaxonomyAssignment, NewCategory, NewTaxonomy,
     Taxonomy, TaxonomyWithCategories,
 };
+use serde::Deserialize;
+use tracing::debug;
 
 /// Request body for move_category endpoint
 #[derive(Debug, Clone, Deserialize)]

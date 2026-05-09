@@ -1924,9 +1924,9 @@ impl ActivityRepositoryTrait for ActivityRepository {
 mod tests {
     use super::*;
     use crate::db::{create_pool, get_connection, init, run_migrations, write_actor::spawn_writer};
+    use mizan_core::activities::{import_type, ActivityUpsert};
     use rust_decimal::Decimal;
     use tempfile::tempdir;
-    use mizan_core::activities::{import_type, ActivityUpsert};
 
     fn setup_db() -> (Arc<Pool<ConnectionManager<SqliteConnection>>>, WriteHandle) {
         std::env::set_var("CONNECT_API_URL", "http://test.local");

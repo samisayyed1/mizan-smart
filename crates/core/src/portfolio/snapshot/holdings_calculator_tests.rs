@@ -482,6 +482,7 @@ mod tests {
             net_contribution_base: Decimal::ZERO,
             cash_total_account_currency: Decimal::ZERO,
             cash_total_base_currency: Decimal::ZERO,
+            realized_gains: HashMap::new(),
             source: SnapshotSource::Calculated,
         }
     }
@@ -754,6 +755,187 @@ mod tests {
             next_state.net_contribution,
             previous_snapshot.net_contribution
         ); // Sell does not change net contribution
+
+        // Realized P&L should be recorded for AAPL.
+        // Sold 5 shares @ 160 (gross proceeds 800 CAD) with FIFO cost basis
+        // 5 × 150 = 750 CAD and a 2 CAD sell-side fee, so net realized
+        // gain = 800 − 750 − 2 = 48 CAD. Account ccy = base ccy = CAD.
+        let realized = next_state
+            .realized_gains
+            .get("AAPL")
+            .expect("realized gain entry should exist after a SELL");
+        assert_eq!(realized.proceeds_account_ccy, dec!(800));
+        assert_eq!(realized.proceeds_base_ccy, dec!(800));
+        assert_eq!(realized.cost_basis_account_ccy, dec!(750));
+        assert_eq!(realized.cost_basis_base_ccy, dec!(750));
+        assert_eq!(realized.fees_account_ccy, dec!(2));
+        assert_eq!(realized.fees_base_ccy, dec!(2));
+        assert_eq!(realized.quantity_sold, dec!(5));
+        assert_eq!(realized.realized_gain_account_ccy(), dec!(48));
+        assert_eq!(realized.realized_gain_base_ccy(), dec!(48));
+        assert_eq!(realized.last_sale_date, Some(target_date));
+    }
+
+    #[test]
+    fn test_realized_gain_accumulates_across_multiple_sells() {
+        // Sells the same position twice on consecutive days; the
+        // realized-gain entry should accumulate, not overwrite.
+        let mock_fx_service = Arc::new(MockFxService::new());
+        let account_currency = "USD";
+        let base_currency = Arc::new(RwLock::new(account_currency.to_string()));
+        let calculator = create_calculator(mock_fx_service.clone(), base_currency);
+
+        // Initial: 10 NVDA bought at 100/share (cost 1000)
+        let mut snap0 = create_initial_snapshot("acc_1", account_currency, "2024-01-01");
+        let initial_pos = Position {
+            id: "NVDA_acc_1".to_string(),
+            account_id: "acc_1".to_string(),
+            asset_id: "NVDA".to_string(),
+            quantity: dec!(10),
+            average_cost: dec!(100),
+            total_cost_basis: dec!(1000),
+            currency: account_currency.to_string(),
+            inception_date: Utc.from_utc_datetime(
+                &NaiveDate::from_str("2024-01-01")
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            ),
+            lots: VecDeque::from(vec![Lot {
+                id: "buy_lot".to_string(),
+                position_id: "NVDA_acc_1".to_string(),
+                acquisition_date: Utc.from_utc_datetime(
+                    &NaiveDate::from_str("2024-01-01")
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
+                ),
+                quantity: dec!(10),
+                cost_basis: dec!(1000),
+                acquisition_price: dec!(100),
+                acquisition_fees: Decimal::ZERO,
+                fx_rate_to_position: None,
+            }]),
+            created_at: Utc::now(),
+            last_updated: Utc::now(),
+            is_alternative: false,
+            contract_multiplier: Decimal::ONE,
+        };
+        snap0.positions.insert("NVDA".to_string(), initial_pos);
+
+        // Day 1: trim 3 shares @ 150
+        let trim_a = create_default_activity(
+            "sell_a",
+            ActivityType::Sell,
+            "NVDA",
+            dec!(3),
+            dec!(150),
+            Decimal::ZERO,
+            account_currency,
+            "2024-02-01",
+        );
+        let target_a = NaiveDate::from_str("2024-02-01").unwrap();
+        let snap1 = calculator
+            .calculate_next_holdings(&snap0, &[trim_a], target_a)
+            .expect("calc 1")
+            .snapshot;
+
+        let entry_after_day_1 = snap1.realized_gains.get("NVDA").expect("entry day 1");
+        // Day 1 realized: (3*150) - (3*100) - 0 = 150
+        assert_eq!(entry_after_day_1.realized_gain_account_ccy(), dec!(150));
+        assert_eq!(entry_after_day_1.quantity_sold, dec!(3));
+
+        // Day 2: trim another 2 shares @ 200
+        let trim_b = create_default_activity(
+            "sell_b",
+            ActivityType::Sell,
+            "NVDA",
+            dec!(2),
+            dec!(200),
+            Decimal::ZERO,
+            account_currency,
+            "2024-03-01",
+        );
+        let target_b = NaiveDate::from_str("2024-03-01").unwrap();
+        let snap2 = calculator
+            .calculate_next_holdings(&snap1, &[trim_b], target_b)
+            .expect("calc 2")
+            .snapshot;
+
+        let entry_after_day_2 = snap2.realized_gains.get("NVDA").expect("entry day 2");
+        // Day 2 added: (2*200) - (2*100) = 200; cumulative = 150 + 200 = 350
+        assert_eq!(entry_after_day_2.realized_gain_account_ccy(), dec!(350));
+        assert_eq!(entry_after_day_2.quantity_sold, dec!(5));
+        assert_eq!(entry_after_day_2.proceeds_account_ccy, dec!(850));
+        assert_eq!(entry_after_day_2.cost_basis_account_ccy, dec!(500));
+        assert_eq!(entry_after_day_2.last_sale_date, Some(target_b));
+    }
+
+    #[test]
+    fn test_realized_loss_recorded_correctly() {
+        // Selling below cost should produce a negative realized gain.
+        let mock_fx_service = Arc::new(MockFxService::new());
+        let account_currency = "USD";
+        let base_currency = Arc::new(RwLock::new(account_currency.to_string()));
+        let calculator = create_calculator(mock_fx_service.clone(), base_currency);
+
+        let mut snap0 = create_initial_snapshot("acc_1", account_currency, "2024-01-01");
+        let initial_pos = Position {
+            id: "PLTR_acc_1".to_string(),
+            account_id: "acc_1".to_string(),
+            asset_id: "PLTR".to_string(),
+            quantity: dec!(10),
+            average_cost: dec!(50),
+            total_cost_basis: dec!(500),
+            currency: account_currency.to_string(),
+            inception_date: Utc.from_utc_datetime(
+                &NaiveDate::from_str("2024-01-01")
+                    .unwrap()
+                    .and_hms_opt(0, 0, 0)
+                    .unwrap(),
+            ),
+            lots: VecDeque::from(vec![Lot {
+                id: "buy_high".to_string(),
+                position_id: "PLTR_acc_1".to_string(),
+                acquisition_date: Utc.from_utc_datetime(
+                    &NaiveDate::from_str("2024-01-01")
+                        .unwrap()
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
+                ),
+                quantity: dec!(10),
+                cost_basis: dec!(500),
+                acquisition_price: dec!(50),
+                acquisition_fees: Decimal::ZERO,
+                fx_rate_to_position: None,
+            }]),
+            created_at: Utc::now(),
+            last_updated: Utc::now(),
+            is_alternative: false,
+            contract_multiplier: Decimal::ONE,
+        };
+        snap0.positions.insert("PLTR".to_string(), initial_pos);
+
+        let stop_loss = create_default_activity(
+            "sell_loss",
+            ActivityType::Sell,
+            "PLTR",
+            dec!(10),
+            dec!(20),
+            dec!(1),
+            account_currency,
+            "2024-04-01",
+        );
+        let target = NaiveDate::from_str("2024-04-01").unwrap();
+        let snap1 = calculator
+            .calculate_next_holdings(&snap0, &[stop_loss], target)
+            .expect("calc")
+            .snapshot;
+
+        let realized = snap1.realized_gains.get("PLTR").expect("entry");
+        // (10 * 20) - 500 - 1 = -301
+        assert_eq!(realized.realized_gain_account_ccy(), dec!(-301));
+        assert_eq!(realized.quantity_sold, dec!(10));
     }
 
     #[test]

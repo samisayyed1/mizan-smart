@@ -25,12 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@mizan/ui/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@mizan/ui/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@mizan/ui/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,

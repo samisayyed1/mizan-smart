@@ -175,19 +175,15 @@ test.describe("Onboarding And Main Flow", () => {
     await expect(step2ContinueButton).toBeEnabled();
     await step2ContinueButton.click();
 
-    // Step 3: Appearance - Select Light theme
+    // Step 3: Appearance — final step. Select Light theme, then Get Started.
     const lightThemeButton = page.getByTestId("theme-light-button");
     await expect(lightThemeButton).toBeVisible({ timeout: 5000 });
     await lightThemeButton.click();
     // Verify Light theme is selected
     await expect(lightThemeButton).toHaveClass(/border-primary/);
 
-    // Click Continue to proceed to connect step
-    const step3ContinueButton = page.getByRole("button", { name: "Continue" });
-    await expect(step3ContinueButton).toBeEnabled();
-    await step3ContinueButton.click();
-
-    // Step 4: Connect - Click "Get Started" to complete onboarding
+    // Click Get Started to complete onboarding (this is the final step;
+    // there is no longer a separate Connect step).
     const getStartedButton = page.getByTestId("onboarding-finish-button");
     await expect(getStartedButton).toBeVisible({ timeout: 15000 });
     await getStartedButton.click();

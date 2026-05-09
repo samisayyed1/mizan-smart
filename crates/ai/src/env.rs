@@ -5,7 +5,6 @@
 //! and Axum backends implement this trait with their specific service instances.
 
 use async_trait::async_trait;
-use std::sync::Arc;
 use mizan_core::{
     accounts::AccountServiceTrait,
     activities::ActivityServiceTrait,
@@ -20,6 +19,7 @@ use mizan_core::{
     secrets::SecretStore,
     settings::SettingsServiceTrait,
 };
+use std::sync::Arc;
 
 use crate::types::ChatRepositoryTrait;
 
@@ -80,8 +80,6 @@ pub trait AiEnvironment: Send + Sync {
 pub mod test_env {
     use super::*;
     use chrono::{DateTime, NaiveDate, Utc};
-    use std::collections::{HashMap, HashSet};
-    use std::sync::RwLock;
     use mizan_core::{
         accounts::TrackingMode,
         accounts::{Account, AccountServiceTrait, AccountUpdate, NewAccount},
@@ -124,6 +122,8 @@ pub mod test_env {
         },
         Error as CoreError, Result as CoreResult,
     };
+    use std::collections::{HashMap, HashSet};
+    use std::sync::RwLock;
 
     /// Mock secret store for testing.
     #[derive(Default)]
@@ -313,14 +313,28 @@ pub mod test_env {
             _import_type: String,
         ) -> CoreResult<ImportMappingData> {
             // Return error to simulate no saved mapping (tests will use auto-detection)
-            Err(mizan_core::errors::DatabaseError::NotFound(
-                "No saved import mapping".to_string(),
+            Err(
+                mizan_core::errors::DatabaseError::NotFound("No saved import mapping".to_string())
+                    .into(),
             )
-            .into())
         }
 
         async fn create_activity(&self, _activity: NewActivity) -> CoreResult<Activity> {
             unimplemented!("MockActivityService::create_activity")
+        }
+
+        async fn create_fixed_deposit_schedule(
+            &self,
+            _params: mizan_core::activities::FdParams,
+        ) -> CoreResult<Vec<Activity>> {
+            unimplemented!("MockActivityService::create_fixed_deposit_schedule")
+        }
+
+        async fn create_recurring_buy_plan(
+            &self,
+            _params: mizan_core::activities::RspParams,
+        ) -> CoreResult<Vec<Activity>> {
+            unimplemented!("MockActivityService::create_recurring_buy_plan")
         }
 
         async fn update_activity(&self, _activity: ActivityUpdate) -> CoreResult<Activity> {

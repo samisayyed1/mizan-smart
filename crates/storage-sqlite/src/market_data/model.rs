@@ -6,9 +6,7 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 
-use mizan_core::quotes::{
-    MarketDataProviderSetting, ProviderCapabilities, Quote, QuoteSyncState,
-};
+use mizan_core::quotes::{MarketDataProviderSetting, ProviderCapabilities, Quote, QuoteSyncState};
 
 /// Database model for quotes
 ///

@@ -13,8 +13,8 @@ use axum::{
     Json, Router,
 };
 use futures_core::stream::Stream;
-use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 use mizan_core::quotes::{MarketSyncMode, DEFAULT_HISTORY_DAYS};
+use tokio_stream::wrappers::{errors::BroadcastStreamRecvError, BroadcastStream};
 
 async fn update_portfolio(
     State(state): State<Arc<AppState>>,

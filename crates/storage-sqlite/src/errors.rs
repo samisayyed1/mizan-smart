@@ -4,8 +4,8 @@
 //! them to the database-agnostic error types defined in `mizan_core`.
 
 use diesel::result::Error as DieselError;
-use thiserror::Error;
 use mizan_core::errors::{DatabaseError, Error};
+use thiserror::Error;
 
 /// Storage-specific errors that wrap Diesel and r2d2 types.
 ///
@@ -102,9 +102,7 @@ impl DieselErrorExt for diesel::ConnectionError {
 }
 
 /// Helper function to convert a Diesel Result to a core Result.
-pub fn map_diesel_err<T>(
-    result: std::result::Result<T, DieselError>,
-) -> mizan_core::Result<T> {
+pub fn map_diesel_err<T>(result: std::result::Result<T, DieselError>) -> mizan_core::Result<T> {
     result.map_err(|e| e.into_core_error())
 }
 

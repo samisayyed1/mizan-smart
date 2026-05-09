@@ -3,10 +3,10 @@ use axum::{
     response::{IntoResponse, Response},
     Json,
 };
-use serde::Serialize;
-use thiserror::Error;
 use mizan_ai::ProviderApiError;
 use mizan_core::errors::Error as CoreError;
+use serde::Serialize;
+use thiserror::Error;
 
 #[allow(dead_code)]
 #[derive(Error, Debug)]

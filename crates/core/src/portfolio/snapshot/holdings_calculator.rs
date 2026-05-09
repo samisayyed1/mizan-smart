@@ -328,7 +328,10 @@ impl HoldingsCalculator {
 
     /// Handle SELL activity.
     /// Books cash inflow in account currency when fx_rate is provided,
-    /// otherwise in activity currency.
+    /// otherwise in activity currency. Also accumulates realized P&L into
+    /// `state.realized_gains` (account currency + base currency, both at
+    /// trade-date FX) by combining the FIFO cost-basis-removed with the
+    /// proceeds and sell-side fee.
     fn handle_sell(
         &self,
         activity: &Activity,
@@ -338,6 +341,7 @@ impl HoldingsCalculator {
     ) -> Result<()> {
         let activity_currency = &activity.currency;
         let asset_id = activity.asset_id.as_deref().unwrap_or("");
+        let activity_date = self.activity_local_date(activity);
 
         // Ensure cache is populated for multiplier lookup
         self.ensure_asset_cached(asset_id, activity_currency, asset_cache);
@@ -347,27 +351,127 @@ impl HoldingsCalculator {
             .get(asset_id)
             .map(|(_, _, m)| *m)
             .unwrap_or(Decimal::ONE);
-        let total_proceeds = (activity.qty() * activity.price() * multiplier) - activity.fee_amt();
+        let gross_proceeds_activity_ccy = activity.qty() * activity.price() * multiplier;
+        let fee_activity_ccy = activity.fee_amt();
+        let net_proceeds_activity_ccy = gross_proceeds_activity_ccy - fee_activity_ccy;
         if activity_currency != account_currency {
             if let Some(fx_rate) = activity.fx_rate.filter(|r| *r != Decimal::ZERO) {
                 // Broker converted at transaction time — book in account currency
-                add_cash(state, account_currency, total_proceeds * fx_rate);
+                add_cash(state, account_currency, net_proceeds_activity_ccy * fx_rate);
             } else {
                 // No fx_rate — book in activity currency (multi-currency account)
-                add_cash(state, activity_currency, total_proceeds);
+                add_cash(state, activity_currency, net_proceeds_activity_ccy);
             }
         } else {
-            add_cash(state, activity_currency, total_proceeds);
+            add_cash(state, activity_currency, net_proceeds_activity_ccy);
         }
 
-        if let Some(position) = state.positions.get_mut(asset_id) {
-            let _reduction = position.reduce_lots_fifo(activity.qty())?;
-        } else {
+        // Reduce lots via FIFO and capture cost basis. Position currency
+        // is read BEFORE the reduction so we have it even if the position
+        // ends up at zero quantity afterwards.
+        let Some(position) = state.positions.get_mut(asset_id) else {
             warn!(
                 "Attempted to Sell non-existent/zero position {} via activity {}. Applying cash effect only.",
                 asset_id, activity.id
             );
+            return Ok(());
+        };
+        let position_currency = position.currency.clone();
+        let reduction = position.reduce_lots_fifo(activity.qty())?;
+        let cost_basis_removed_pos_ccy = reduction.cost_basis_removed;
+
+        // Accumulate realized P&L. We track gross proceeds, cost basis,
+        // and fees separately so downstream views can compute either net
+        // realized gain (proceeds − cost − fees) or gross figures, and
+        // an annual report can reconcile back to broker statements.
+        if position_currency.is_empty() {
+            warn!(
+                "Sell {} on position {} with empty currency — skipping realized-gain accumulation.",
+                activity.id, asset_id
+            );
+            return Ok(());
         }
+
+        let proceeds_account_ccy = self.convert_to_account_currency(
+            gross_proceeds_activity_ccy,
+            activity,
+            account_currency,
+            "Realized Gain Proceeds",
+        );
+        let fees_account_ccy = self.convert_to_account_currency(
+            fee_activity_ccy,
+            activity,
+            account_currency,
+            "Realized Gain Fee",
+        );
+        let cost_basis_account_ccy = self.convert_position_amount_to_account_currency(
+            cost_basis_removed_pos_ccy,
+            &position_currency,
+            activity,
+            account_currency,
+            "Realized Gain Cost Basis",
+        );
+
+        let base_ccy = self.base_currency.read().unwrap().clone();
+        let proceeds_base_ccy = self
+            .fx_service
+            .convert_currency_for_date(
+                gross_proceeds_activity_ccy,
+                activity_currency,
+                &base_ccy,
+                activity_date,
+            )
+            .unwrap_or_else(|e| {
+                warn!(
+                    "Realized Gain Proceeds (Sell {}): {}->{} on {}: {}. Falling back to activity-ccy magnitude.",
+                    activity.id, activity_currency, &base_ccy, activity_date, e
+                );
+                gross_proceeds_activity_ccy
+            });
+        let fees_base_ccy = self
+            .fx_service
+            .convert_currency_for_date(
+                fee_activity_ccy,
+                activity_currency,
+                &base_ccy,
+                activity_date,
+            )
+            .unwrap_or_else(|e| {
+                warn!(
+                    "Realized Gain Fee (Sell {}): {}->{} on {}: {}. Falling back to activity-ccy magnitude.",
+                    activity.id, activity_currency, &base_ccy, activity_date, e
+                );
+                fee_activity_ccy
+            });
+        let cost_basis_base_ccy = self
+            .fx_service
+            .convert_currency_for_date(
+                cost_basis_removed_pos_ccy,
+                &position_currency,
+                &base_ccy,
+                activity_date,
+            )
+            .unwrap_or_else(|e| {
+                warn!(
+                    "Realized Gain Cost Basis (Sell {}): {}->{} on {}: {}. Falling back to position-ccy magnitude.",
+                    activity.id, &position_currency, &base_ccy, activity_date, e
+                );
+                cost_basis_removed_pos_ccy
+            });
+
+        let entry = state
+            .realized_gains
+            .entry(asset_id.to_string())
+            .or_default();
+        entry.proceeds_account_ccy += proceeds_account_ccy;
+        entry.proceeds_base_ccy += proceeds_base_ccy;
+        entry.cost_basis_account_ccy += cost_basis_account_ccy;
+        entry.cost_basis_base_ccy += cost_basis_base_ccy;
+        entry.fees_account_ccy += fees_account_ccy;
+        entry.fees_base_ccy += fees_base_ccy;
+        entry.quantity_sold += reduction.quantity_reduced;
+        entry.last_sale_date = Some(activity_date);
+
         Ok(())
     }
 

@@ -914,7 +914,18 @@ impl<P: SyncProgressReporter> SyncOrchestrator<P> {
             ));
         }
 
-        Ok((None, None))
+        // First-ever sync for this account: explicitly request a wide
+        // historical window so the upstream broker integration doesn't
+        // default to a short rolling window (e.g. 90 days). Five years
+        // covers most retail investors' meaningful holding period; if
+        // the upstream caps it lower, no harm done — the response will
+        // just be truncated to whatever they support. If they support
+        // more, the user gets their full history on first sync.
+        let initial_start = end_date - chrono::Days::new(365 * 5);
+        Ok((
+            Some(initial_start.format("%Y-%m-%d").to_string()),
+            Some(end_date.format("%Y-%m-%d").to_string()),
+        ))
     }
 }
 

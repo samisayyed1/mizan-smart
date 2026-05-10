@@ -131,10 +131,13 @@ export function DashboardContent() {
     if (!earliestRow?.valuationDate) return null;
     const earliestDataDate = parseISO(earliestRow.valuationDate);
     // Threshold: if the earliest data point is more than 7 days after the
-    // requested window start, the chart is effectively clamped — tell the user.
+    // requested window start, the chart is effectively clamped. Tell the
+    // user with short, readable text — long hint strings overflow narrow
+    // viewports and look bad in the monospace font we use here.
     const gapDays = differenceInDays(earliestDataDate, dateRange.from);
     if (gapDays <= 7) return null;
-    return `Showing all available data — history starts ${format(earliestDataDate, "MMM d, yyyy")} (${valuationHistory.length} day${valuationHistory.length === 1 ? "" : "s"})`;
+    const days = valuationHistory.length;
+    return `Earliest data ${format(earliestDataDate, "MMM d, yyyy")} · ${days} day${days === 1 ? "" : "s"}`;
   }, [valuationHistory, dateRange, isAllTime]);
 
   // Headline interval label — when data is sparse vs the requested window,
@@ -219,7 +222,7 @@ export function DashboardContent() {
         <div className="h-[280px]">
           <HistoryChart data={chartData} isLoading={isValuationHistoryLoading} />
           {valuationHistory && chartData.length > 0 && (
-            <div className="flex w-full flex-col items-center gap-1">
+            <div className="flex w-full flex-col items-center gap-3 pt-1">
               {!useEstimatedHistory && (
                 <IntervalSelector
                   className="pointer-events-auto relative z-20 w-full max-w-screen-sm sm:max-w-screen-md md:max-w-2xl lg:max-w-3xl"
@@ -230,27 +233,32 @@ export function DashboardContent() {
                   defaultValue={DEFAULT_INTERVAL}
                 />
               )}
-              {sparseDataHint && !useEstimatedHistory && (
-                <p className="text-muted-foreground pointer-events-auto px-4 text-center text-[10px] tracking-wide sm:text-xs">
-                  {sparseDataHint}
-                </p>
-              )}
-              {useEstimatedHistory && (
-                <p className="pointer-events-auto px-4 text-center text-[10px] tracking-wide text-amber-500/80 sm:text-xs">
-                  Estimated history — current holdings × historical prices. Doesn&apos;t reflect
-                  past trades, splits, or contributions.
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => {
-                  setUseEstimatedHistory((v) => !v);
-                  triggerHaptic();
-                }}
-                className="text-muted-foreground hover:text-foreground pointer-events-auto cursor-pointer px-3 py-0.5 text-[10px] tracking-wide transition-colors sm:text-xs"
-              >
-                {useEstimatedHistory ? "← Back to actual history" : "Estimate full history →"}
-              </button>
+              <div className="flex w-full max-w-md flex-col items-center gap-2 px-4">
+                {sparseDataHint && !useEstimatedHistory && (
+                  <p
+                    className="text-muted-foreground pointer-events-auto max-w-full truncate text-center text-[11px] leading-tight tracking-wide sm:text-xs"
+                    title={sparseDataHint}
+                  >
+                    {sparseDataHint}
+                  </p>
+                )}
+                {useEstimatedHistory && (
+                  <p className="pointer-events-auto text-balance text-center text-[11px] leading-snug tracking-wide text-amber-500/85 sm:text-xs">
+                    Estimated. Current holdings priced against historical quotes &mdash; past
+                    trades, splits, and contributions are not reflected.
+                  </p>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUseEstimatedHistory((v) => !v);
+                    triggerHaptic();
+                  }}
+                  className="border-border/60 bg-background/60 text-muted-foreground hover:text-foreground hover:border-border pointer-events-auto cursor-pointer rounded-full border px-3 py-1 text-[11px] font-medium tracking-wide transition-colors sm:text-xs"
+                >
+                  {useEstimatedHistory ? "Back to actual history" : "Estimate full history"}
+                </button>
+              </div>
             </div>
           )}
         </div>

@@ -51,6 +51,22 @@ export const getLatestValuations = async (accountIds: string[]): Promise<Account
   return invoke<AccountValuation[]>("get_latest_valuations", { accountIds });
 };
 
+/**
+ * Estimated historical valuations for an account, computed from current
+ * holdings × historical quote prices. Useful when the broker integration
+ * only delivers a current snapshot (no lot acquisition dates) and the
+ * regular activity-driven path can't reach back far enough.
+ *
+ * The result is **estimated** — it assumes the user held current
+ * positions throughout the returned date range, ignoring contributions,
+ * sales, splits, dividends, and rebalances. Surface as such in the UI.
+ */
+export const getEstimatedHistoricalValuation = async (
+  accountId: string,
+): Promise<AccountValuation[]> => {
+  return invoke<AccountValuation[]>("get_estimated_historical_valuation", { accountId });
+};
+
 export const calculatePerformanceHistory = async (
   itemType: "account" | "symbol",
   itemId: string,

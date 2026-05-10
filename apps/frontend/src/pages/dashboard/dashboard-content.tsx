@@ -1,7 +1,9 @@
+import { getEstimatedHistoricalValuation } from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
 import { useHapticFeedback } from "@/hooks";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useValuationHistory } from "@/hooks/use-valuation-history";
+import type { AccountValuation } from "@/lib/types";
 import {
   HoldingType,
   isAlternativeAssetKind,
@@ -22,6 +24,7 @@ import {
 } from "@mizan/ui";
 import { Skeleton } from "@mizan/ui/components/ui/skeleton";
 import { differenceInDays, format, parseISO } from "date-fns";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { AccountsSummary } from "./accounts-summary";
 import Balance from "./balance";
@@ -69,7 +72,25 @@ export function DashboardContent() {
       .reduce((acc, holding) => acc + (holding.marketValue?.base ?? 0), 0);
   }, [allHoldings]);
 
-  const { valuationHistory, isLoading: isValuationHistoryLoading } = useValuationHistory(dateRange);
+  // Toggle: when ON, the chart shows an *estimated* historical curve
+  // computed by pricing current holdings against historical quotes (good
+  // for accounts where the broker only delivered a current snapshot).
+  const [useEstimatedHistory, setUseEstimatedHistory] = useState(false);
+
+  const { valuationHistory: realValuationHistory, isLoading: isRealHistoryLoading } =
+    useValuationHistory(useEstimatedHistory ? undefined : dateRange);
+
+  const { data: estimatedValuationHistory, isLoading: isEstimatedLoading } = useQuery<
+    AccountValuation[]
+  >({
+    queryKey: ["estimated-historical-valuation", PORTFOLIO_ACCOUNT_ID],
+    queryFn: () => getEstimatedHistoricalValuation(PORTFOLIO_ACCOUNT_ID),
+    enabled: useEstimatedHistory,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const valuationHistory = useEstimatedHistory ? estimatedValuationHistory : realValuationHistory;
+  const isValuationHistoryLoading = useEstimatedHistory ? isEstimatedLoading : isRealHistoryLoading;
 
   const { settings } = useSettingsContext();
   const baseCurrency = settings?.baseCurrency ?? "USD";
@@ -199,19 +220,37 @@ export function DashboardContent() {
           <HistoryChart data={chartData} isLoading={isValuationHistoryLoading} />
           {valuationHistory && chartData.length > 0 && (
             <div className="flex w-full flex-col items-center gap-1">
-              <IntervalSelector
-                className="pointer-events-auto relative z-20 w-full max-w-screen-sm sm:max-w-screen-md md:max-w-2xl lg:max-w-3xl"
-                onIntervalSelect={handleIntervalSelect}
-                onHaptic={triggerHaptic}
-                isLoading={isValuationHistoryLoading}
-                storageKey={INTERVAL_STORAGE_KEY}
-                defaultValue={DEFAULT_INTERVAL}
-              />
-              {sparseDataHint && (
+              {!useEstimatedHistory && (
+                <IntervalSelector
+                  className="pointer-events-auto relative z-20 w-full max-w-screen-sm sm:max-w-screen-md md:max-w-2xl lg:max-w-3xl"
+                  onIntervalSelect={handleIntervalSelect}
+                  onHaptic={triggerHaptic}
+                  isLoading={isValuationHistoryLoading}
+                  storageKey={INTERVAL_STORAGE_KEY}
+                  defaultValue={DEFAULT_INTERVAL}
+                />
+              )}
+              {sparseDataHint && !useEstimatedHistory && (
                 <p className="text-muted-foreground pointer-events-auto px-4 text-center text-[10px] tracking-wide sm:text-xs">
                   {sparseDataHint}
                 </p>
               )}
+              {useEstimatedHistory && (
+                <p className="pointer-events-auto px-4 text-center text-[10px] tracking-wide text-amber-500/80 sm:text-xs">
+                  Estimated history — current holdings × historical prices. Doesn&apos;t reflect
+                  past trades, splits, or contributions.
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setUseEstimatedHistory((v) => !v);
+                  triggerHaptic();
+                }}
+                className="text-muted-foreground hover:text-foreground pointer-events-auto cursor-pointer px-3 py-0.5 text-[10px] tracking-wide transition-colors sm:text-xs"
+              >
+                {useEstimatedHistory ? "← Back to actual history" : "Estimate full history →"}
+              </button>
             </div>
           )}
         </div>

@@ -149,6 +149,7 @@ export {
   deleteSnapshot,
   getAssetHoldings,
   getHistoricalValuations,
+  getEstimatedHistoricalValuation,
   getHolding,
   getHoldings,
   getHoldingsByAllocation,

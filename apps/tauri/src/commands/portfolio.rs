@@ -191,6 +191,66 @@ pub async fn get_historical_valuations(
         .map_err(|e| e.to_string())
 }
 
+/// Estimated historical valuations for an account, computed from current
+/// holdings × historical quote prices. Useful when the broker integration
+/// only delivered a current-snapshot view (e.g. Zerodha via SnapTrade) and
+/// the regular activity-driven snapshot path can't reach back far enough.
+///
+/// The result is **estimated**, not actual: it assumes the user held their
+/// current positions throughout the returned date range, ignoring past
+/// contributions, sales, splits, dividends, and rebalances. The frontend
+/// should label it accordingly.
+#[tauri::command]
+pub async fn get_estimated_historical_valuation(
+    account_id: String,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<Vec<DailyAccountValuation>, String> {
+    debug!(
+        "Get estimated historical valuation for account: {}",
+        account_id
+    );
+
+    let base_currency = state
+        .account_service()
+        .get_base_currency()
+        .unwrap_or_else(|| "USD".to_string());
+    // For the magic TOTAL portfolio id, treat account currency as the
+    // portfolio base currency — TOTAL isn't a row in the accounts table.
+    let account_currency = if account_id == mizan_core::constants::PORTFOLIO_TOTAL_ACCOUNT_ID {
+        base_currency.clone()
+    } else {
+        state
+            .account_service()
+            .get_account(&account_id)
+            .map_err(|e| format!("Failed to load account {}: {}", account_id, e))?
+            .currency
+    };
+
+    let holdings = state
+        .holdings_service()
+        .get_holdings(&account_id, &base_currency)
+        .await
+        .map_err(|e| format!("Failed to load holdings: {}", e))?;
+
+    if holdings.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let today = chrono::Utc::now().date_naive();
+
+    mizan_core::portfolio::synthesis::synthesize_account_history(
+        &account_id,
+        &account_currency,
+        &base_currency,
+        &holdings,
+        state.quote_service().as_ref(),
+        state.fx_service().as_ref(),
+        today,
+    )
+    .await
+    .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub async fn get_latest_valuations(
     state: State<'_, Arc<ServiceContext>>,

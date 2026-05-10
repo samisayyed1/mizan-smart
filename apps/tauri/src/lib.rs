@@ -127,6 +127,17 @@ mod desktop {
             scheduler::run_startup_sync(&startup_handle, &startup_context).await;
         });
 
+        // Auto-refresh FX rates on startup if any are stale (24h+).
+        // Pre-empts the red dot on Data Health by silently
+        // refreshing rates before the user notices they're stale.
+        // Runs after a brief delay so it doesn't compete with
+        // run_startup_sync on the same network connection.
+        let fx_handle = handle.clone();
+        let fx_context = Arc::clone(&context);
+        tauri::async_runtime::spawn(async move {
+            scheduler::run_startup_fx_refresh(&fx_handle, &fx_context).await;
+        });
+
         // Start periodic market data sync (6h interval, 2min initial delay)
         let periodic_quote_service = Arc::clone(&context.quote_service);
         tauri::async_runtime::spawn(async move {

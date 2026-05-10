@@ -106,3 +106,89 @@ pub async fn run_startup_sync(handle: &AppHandle, context: &Arc<ServiceContext>)
 
 #[cfg(not(feature = "connect-sync"))]
 pub async fn run_startup_sync(_handle: &AppHandle, _context: &std::sync::Arc<ServiceContext>) {}
+
+/// FX rates older than this are considered stale enough to silently
+/// auto-refresh on startup. Matches the health check's "warning"
+/// threshold so users never see the red dot for stale FX in the
+/// normal case (open the app, FX rates auto-refresh in the background,
+/// red dot never materialises).
+const FX_AUTO_REFRESH_STALE_HOURS: i64 = 24;
+
+/// Auto-refresh FX rates on app startup if any are stale or missing.
+///
+/// **Why this exists**: Mizan's health check raises a Critical "Exchange
+/// rate update needed" issue whenever any FX rate is older than the
+/// critical threshold (72h by default). The user's "Fix" button on
+/// that issue triggers a portfolio recalculate. We can pre-empt the
+/// red dot entirely by doing the same recalc proactively at startup
+/// whenever rates are even slightly stale (24h+).
+///
+/// Cheap check: just iterate latest exchange rates and look at their
+/// timestamps. If any are missing entirely (no rate for a held
+/// currency) the existing periodic + on-activity sync paths catch it
+/// — but for stale rates that ARE present, we trigger an early
+/// recalc rather than wait for the 6-hour periodic.
+///
+/// Runs after a brief delay so it doesn't compete with the broker
+/// startup sync on a single network connection. Non-blocking and
+/// silent — same UX as the periodic sync that already runs every
+/// 6 hours.
+pub async fn run_startup_fx_refresh(handle: &AppHandle, context: &std::sync::Arc<ServiceContext>) {
+    use chrono::{Duration as ChronoDuration, Utc};
+    use log::{debug, info};
+    use mizan_core::quotes::MarketSyncMode;
+
+    // Brief delay so we don't pile up on the broker sync that fires
+    // simultaneously. The user's first dashboard render can complete
+    // first; this kicks in a few seconds later.
+    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+
+    let rates = match context.fx_service().get_latest_exchange_rates() {
+        Ok(rates) => rates,
+        Err(e) => {
+            debug!(
+                "Startup FX refresh: skipped (could not load latest rates: {})",
+                e
+            );
+            return;
+        }
+    };
+
+    if rates.is_empty() {
+        debug!("Startup FX refresh: no FX rates registered yet, nothing to refresh");
+        return;
+    }
+
+    let stale_threshold = Utc::now() - ChronoDuration::hours(FX_AUTO_REFRESH_STALE_HOURS);
+    let stale_pairs: Vec<String> = rates
+        .iter()
+        .filter(|r| r.timestamp < stale_threshold)
+        .map(|r| format!("{}:{}", r.from_currency, r.to_currency))
+        .collect();
+
+    if stale_pairs.is_empty() {
+        debug!(
+            "Startup FX refresh: all {} rates are fresh (< {}h)",
+            rates.len(),
+            FX_AUTO_REFRESH_STALE_HOURS
+        );
+        return;
+    }
+
+    info!(
+        "Startup FX refresh: {} stale pair(s) detected ({:?}) — emitting portfolio recalculate to refresh rates",
+        stale_pairs.len(),
+        stale_pairs
+    );
+
+    crate::events::emit_portfolio_trigger_recalculate(
+        handle,
+        crate::events::PortfolioRequestPayload::builder()
+            .account_ids(None)
+            .market_sync_mode(MarketSyncMode::BackfillHistory {
+                asset_ids: None,
+                days: 365 * 5,
+            })
+            .build(),
+    );
+}

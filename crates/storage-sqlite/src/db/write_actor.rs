@@ -266,9 +266,11 @@ fn spawn_writer_inner(
     let mut conn = acquire_writer_connection(&pool)?;
 
     // Create an MPSC channel for sending jobs to the actor.
-    // The channel is bounded; 1024 is an arbitrary size.
+    // 4096 absorbs the burst of writes a portfolio recalc + broker sync can
+    // queue concurrently (snapshot rows + activity upserts) without senders
+    // ever having to await capacity.
     let (tx, mut rx) =
-        mpsc::channel::<(Job, oneshot::Sender<Result<Box<dyn Any + Send + 'static>>>)>(1024);
+        mpsc::channel::<(Job, oneshot::Sender<Result<Box<dyn Any + Send + 'static>>>)>(4096);
 
     tokio::spawn(async move {
         // Loop to receive and process jobs.

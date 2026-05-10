@@ -95,12 +95,23 @@ export function AccountSelect<TFieldValues extends FieldValues = FieldValues>({
                 <SelectValue placeholder={placeholder} />
               </SelectTrigger>
               <SelectContent className="max-h-[500px] overflow-y-auto">
-                {accounts.map((account) => (
-                  <SelectItem value={account.value} key={account.value}>
-                    {account.label}
-                    <span className="text-muted-foreground font-light">({account.currency})</span>
-                  </SelectItem>
-                ))}
+                {accounts.length === 0 ? (
+                  <div className="text-muted-foreground px-3 py-4 text-center text-sm leading-snug">
+                    <p className="text-foreground mb-1 font-medium">No accounts available</p>
+                    <p className="text-xs">
+                      Broker-synced HOLDINGS accounts can&apos;t accept manual activities. Create a
+                      TRANSACTIONS-mode account or change an existing account&apos;s tracking mode
+                      in settings.
+                    </p>
+                  </div>
+                ) : (
+                  accounts.map((account) => (
+                    <SelectItem value={account.value} key={account.value}>
+                      {account.label}
+                      <span className="text-muted-foreground font-light">({account.currency})</span>
+                    </SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </FormControl>

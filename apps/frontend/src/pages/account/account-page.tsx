@@ -1,4 +1,9 @@
-import { getHoldings, getSnapshots, searchActivities } from "@/adapters";
+import {
+  getEstimatedHistoricalValuation,
+  getHoldings,
+  getSnapshots,
+  searchActivities,
+} from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
 import type { ActivityDetails } from "@/lib/types";
 import {
@@ -275,10 +280,28 @@ const AccountPage = () => {
 
   const accountPerformance = performanceResponse?.[0] || null;
 
-  const { valuationHistory, isLoading: isValuationHistoryLoading } = useValuationHistory(
-    dateRange,
-    id,
-  );
+  // Toggle: when ON, the chart shows an *estimated* curve computed by
+  // pricing current holdings against historical quotes. Useful when the
+  // broker integration only delivered a current snapshot (e.g. Zerodha
+  // via SnapTrade — no lot acquisition dates) so the activity-driven
+  // snapshot calculator can't reach back further than the day the user
+  // first synced.
+  const [useEstimatedHistory, setUseEstimatedHistory] = useState(false);
+
+  const { valuationHistory: realValuationHistory, isLoading: isRealHistoryLoading } =
+    useValuationHistory(useEstimatedHistory ? undefined : dateRange, id);
+
+  const { data: estimatedValuationHistory, isLoading: isEstimatedLoading } = useQuery<
+    AccountValuation[]
+  >({
+    queryKey: ["estimated-historical-valuation", id],
+    queryFn: () => getEstimatedHistoricalValuation(id),
+    enabled: useEstimatedHistory && !!id,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const valuationHistory = useEstimatedHistory ? estimatedValuationHistory : realValuationHistory;
+  const isValuationHistoryLoading = useEstimatedHistory ? isEstimatedLoading : isRealHistoryLoading;
 
   const currentValuation = valuationHistory?.[valuationHistory.length - 1];
 
@@ -356,6 +379,25 @@ const AccountPage = () => {
                           icon: Icons.Import,
                           label: "Import CSV",
                           onClick: () => navigate(`/import?account=${id}`),
+                        },
+                      ],
+                    },
+                    {
+                      title: "Scheduled (transactions mode)",
+                      items: [
+                        {
+                          icon: Icons.BadgeDollarSign,
+                          label: "Schedule Fixed Deposit",
+                          disabled: true,
+                          disabledReason:
+                            "Available on TRANSACTIONS-mode accounts. Switch tracking mode in settings.",
+                        },
+                        {
+                          icon: Icons.TrendingUp,
+                          label: "Schedule Recurring Buy",
+                          disabled: true,
+                          disabledReason:
+                            "Available on TRANSACTIONS-mode accounts. Switch tracking mode in settings.",
                         },
                       ],
                     },
@@ -639,12 +681,29 @@ const AccountPage = () => {
                             }
                           }}
                         />
-                        <IntervalSelector
-                          className="relative bottom-10 left-0 right-0 z-10"
-                          onIntervalSelect={handleIntervalSelect}
-                          isLoading={isValuationHistoryLoading}
-                          defaultValue={INITIAL_INTERVAL_CODE}
-                        />
+                        {!useEstimatedHistory && (
+                          <IntervalSelector
+                            className="relative bottom-10 left-0 right-0 z-10"
+                            onIntervalSelect={handleIntervalSelect}
+                            isLoading={isValuationHistoryLoading}
+                            defaultValue={INITIAL_INTERVAL_CODE}
+                          />
+                        )}
+                      </div>
+                      <div className="flex w-full flex-col items-center gap-2 px-4 pb-4">
+                        {useEstimatedHistory && (
+                          <p className="max-w-md text-balance text-center text-[11px] leading-snug tracking-wide text-amber-500/85 sm:text-xs">
+                            Estimated. Current holdings priced against historical quotes &mdash;
+                            past trades, splits, and contributions are not reflected.
+                          </p>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setUseEstimatedHistory((v) => !v)}
+                          className="border-border/60 bg-background/60 text-muted-foreground hover:text-foreground hover:border-border cursor-pointer rounded-full border px-3 py-1 text-[11px] font-medium tracking-wide transition-colors sm:text-xs"
+                        >
+                          {useEstimatedHistory ? "Back to actual history" : "Estimate full history"}
+                        </button>
                       </div>
                     </div>
                   </div>

@@ -115,10 +115,15 @@ pub async fn execute_health_fix(
 ) -> Result<(), String> {
     debug!("Executing health fix: {} ({})", action.label, action.id);
 
-    // Handle migrate_legacy_classifications action specially since it needs taxonomy service
-    if action.id == "migrate_legacy_classifications" {
-        // Use the shared migration function from taxonomy module
+    // Handle classification migration actions specially since they need
+    // the taxonomy service. The data-consistency check emits action.id =
+    // "migrate_classifications"; the legacy-migration check emits
+    // "migrate_legacy_classifications". Both route to the same shared
+    // migration function — the previous TODO no-op in the core service
+    // would silently log a warning and do nothing.
+    if action.id == "migrate_legacy_classifications" || action.id == "migrate_classifications" {
         crate::commands::taxonomy::run_legacy_migration(&state).await?;
+        state.health_service().clear_cache().await;
         return Ok(());
     }
 

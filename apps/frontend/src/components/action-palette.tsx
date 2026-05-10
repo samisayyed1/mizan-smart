@@ -8,8 +8,25 @@ import * as React from "react";
 export interface ActionPaletteItem {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
-  onClick: () => void;
+  /**
+   * Click handler. Optional only when `disabled` is true (a disabled
+   * item never fires its handler — the click is suppressed in
+   * `handleItemClick` — so passing one would be misleading).
+   */
+  onClick?: () => void;
   variant?: "default" | "destructive";
+  /**
+   * When set, the item is rendered greyed-out and non-clickable. Use
+   * this for features that aren't applicable to the current account
+   * tracking mode (e.g. RSP/FD on HOLDINGS-mode broker-synced accounts)
+   * so users can SEE the feature exists and understand why it's off,
+   * rather than the menu item disappearing without explanation.
+   */
+  disabled?: boolean;
+  /**
+   * Short hint shown below the label when `disabled` is true.
+   */
+  disabledReason?: string;
 }
 
 export interface ActionPaletteGroup {
@@ -40,6 +57,7 @@ export function ActionPalette({
 
   const handleItemClick = React.useCallback(
     (item: ActionPaletteItem) => {
+      if (item.disabled || !item.onClick) return;
       triggerHaptic();
       item.onClick();
       onOpenChange(false);
@@ -105,27 +123,44 @@ export function ActionPalette({
                 {group.items.map((item, itemIndex) => {
                   const IconComponent = item.icon;
                   const isDestructive = item.variant === "destructive";
+                  const isDisabled = item.disabled === true;
                   return (
                     <React.Fragment key={itemIndex}>
                       {itemIndex > 0 && <div className="bg-border/70 mx-3 h-px" />}
                       <button
                         onClick={() => handleItemClick(item)}
+                        disabled={isDisabled}
+                        aria-disabled={isDisabled}
+                        title={isDisabled ? item.disabledReason : undefined}
                         className={cn(
-                          "flex w-full items-center gap-4 rounded-xl px-3 py-3",
+                          "flex w-full items-center gap-4 rounded-xl px-3 py-3 text-left",
                           "transition-colors duration-150",
-                          isDestructive
-                            ? "text-destructive hover:bg-destructive/10 active:bg-destructive/15"
-                            : "text-foreground hover:bg-accent active:bg-accent/80",
+                          isDisabled
+                            ? "text-muted-foreground/60 cursor-not-allowed"
+                            : isDestructive
+                              ? "text-destructive hover:bg-destructive/10 active:bg-destructive/15"
+                              : "text-foreground hover:bg-accent active:bg-accent/80",
                           "focus-visible:ring-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-inset",
                         )}
                       >
                         <IconComponent
                           className={cn(
                             "h-5 w-5 shrink-0",
-                            isDestructive ? "text-destructive" : "text-muted-foreground",
+                            isDisabled
+                              ? "text-muted-foreground/50"
+                              : isDestructive
+                                ? "text-destructive"
+                                : "text-muted-foreground",
                           )}
                         />
-                        <span className="text-[15px] font-medium">{item.label}</span>
+                        <div className="flex min-w-0 flex-col">
+                          <span className="text-[15px] font-medium">{item.label}</span>
+                          {isDisabled && item.disabledReason && (
+                            <span className="text-muted-foreground/70 mt-0.5 text-xs leading-snug">
+                              {item.disabledReason}
+                            </span>
+                          )}
+                        </div>
                       </button>
                     </React.Fragment>
                   );

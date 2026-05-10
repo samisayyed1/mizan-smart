@@ -140,9 +140,13 @@ export function RecurringBuyDialog({
         currency: values.currency.toUpperCase(),
         notes: values.notes && values.notes.length > 0 ? values.notes : null,
       });
-      return { activities: result, symbol: values.symbol.trim().toUpperCase() };
+      return {
+        activities: result,
+        symbol: values.symbol.trim().toUpperCase(),
+        currency: values.currency.toUpperCase(),
+      };
     },
-    onSuccess: ({ activities, symbol }) => {
+    onSuccess: ({ activities, symbol, currency }) => {
       const totalCash = activities.reduce(
         (sum, a) =>
           sum +
@@ -154,7 +158,7 @@ export function RecurringBuyDialog({
           activities.length === 1 ? "" : "s"
         } of ${symbol} generated · total ${totalCash.toLocaleString(undefined, {
           maximumFractionDigits: 2,
-        })} committed`,
+        })} ${currency} committed`,
       });
       void queryClient.invalidateQueries({ queryKey: [QueryKeys.ACTIVITIES] });
       void queryClient.invalidateQueries({ queryKey: [QueryKeys.ACCOUNTS] });

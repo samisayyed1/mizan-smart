@@ -1,9 +1,13 @@
 use std::sync::Arc;
 
 use crate::context::ServiceContext;
-use crate::events::{MarketSyncResult, MARKET_SYNC_COMPLETE, MARKET_SYNC_ERROR, MARKET_SYNC_START};
+use crate::events::{
+    emit_portfolio_trigger_recalculate, MarketSyncResult, PortfolioRequestPayload,
+    MARKET_SYNC_COMPLETE, MARKET_SYNC_ERROR, MARKET_SYNC_START,
+};
 use log::{debug, error, info, warn};
 use mizan_core::health::{FixAction, HealthConfig, HealthServiceTrait, HealthStatus};
+use mizan_core::quotes::MarketSyncMode;
 use mizan_core::quotes::SyncMode;
 use tauri::{AppHandle, Emitter, State};
 
@@ -127,50 +131,45 @@ pub async fn execute_health_fix(
         return Ok(());
     }
 
-    // Handle fetch_fx action - refresh all FX rates by syncing all quotes.
-    // The pair_ids in the payload are currency pairs like "EUR:USD"; we
-    // can't trivially map those to asset_ids without resolving FX symbols,
-    // so we just trigger a full incremental quote sync, which refreshes
-    // FX rates alongside everything else. Same UX as Recalculate History
-    // but lighter (Incremental, not BackfillHistory).
+    // Handle fetch_fx action — refresh stale/missing FX rates.
+    //
+    // Earlier attempt: call quote_service.sync(SyncMode::Incremental, None)
+    // directly. That doesn't work for FX rates that have NEVER been
+    // fetched — Incremental needs a last_quote_date to increment from,
+    // and a fresh FX asset has none, so the sync silently skips it. The
+    // same path also doesn't trigger the asset-resolution code that
+    // creates FX-asset rows for new currency pairs in the first place.
+    //
+    // The proven path that actually refreshes FX rates end-to-end is the
+    // one wired up to the user-facing "Recalculate History" button:
+    // emit PORTFOLIO_TRIGGER_RECALCULATE with MarketSyncMode::BackfillHistory.
+    // The portfolio orchestrator picks that up, resolves required currency
+    // pairs, creates any missing FX assets, runs the quote-sync provider
+    // chain (Yahoo for FX), and rebuilds valuations on top. Slightly
+    // heavier than Incremental but it actually works.
     if action.id == "fetch_fx" {
         let pair_ids: Vec<String> = serde_json::from_value(action.payload.clone())
             .map_err(|e| format!("Failed to parse FX pair IDs: {}", e))?;
 
         info!(
-            "Refreshing FX rates for {} pair(s): {:?} (via full incremental quote sync)",
+            "Refreshing FX rates for {} pair(s): {:?} (via portfolio recalc trigger)",
             pair_ids.len(),
             pair_ids
         );
 
-        if let Err(e) = app_handle.emit(MARKET_SYNC_START, &()) {
-            error!("Failed to emit market:sync-start event: {}", e);
-        }
+        let payload = PortfolioRequestPayload::builder()
+            .account_ids(None)
+            .market_sync_mode(MarketSyncMode::BackfillHistory {
+                asset_ids: None,
+                days: 365 * 5,
+            })
+            .build();
+        emit_portfolio_trigger_recalculate(&app_handle, payload);
 
-        let quote_service = state.quote_service();
-        match quote_service.sync(SyncMode::Incremental, None).await {
-            Ok(result) => {
-                if !result.failures.is_empty() {
-                    let failed_symbols: Vec<_> =
-                        result.failures.iter().map(|(s, _)| s.as_str()).collect();
-                    warn!("Some assets failed to sync: {:?}", failed_symbols);
-                }
-                let result_payload = MarketSyncResult {
-                    failed_syncs: result.failures,
-                };
-                if let Err(e) = app_handle.emit(MARKET_SYNC_COMPLETE, &result_payload) {
-                    error!("Failed to emit market:sync-complete event: {}", e);
-                }
-            }
-            Err(e) => {
-                if let Err(e_emit) = app_handle.emit(MARKET_SYNC_ERROR, &e.to_string()) {
-                    error!("Failed to emit market:sync-error event: {}", e_emit);
-                }
-                return Err(format!("Failed to refresh FX rates: {}", e));
-            }
-        }
-
-        // Clear health cache so next check reflects the refreshed rates
+        // Clear health cache so the next health check picks up the
+        // refreshed rates (the recalc itself is async — the user will
+        // see progress via the existing PORTFOLIO_TRIGGER_RECALCULATE
+        // event listeners + the Recalculate History toast pipeline).
         state.health_service().clear_cache().await;
         return Ok(());
     }

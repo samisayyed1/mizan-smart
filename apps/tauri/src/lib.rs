@@ -366,6 +366,7 @@ pub fn run() {
             commands::activity::delete_import_template,
             commands::activity::check_existing_duplicates,
             commands::activity::parse_csv,
+            commands::activity::analyze_csv_import,
             // Settings commands
             commands::settings::get_settings,
             commands::settings::is_auto_update_check_enabled,

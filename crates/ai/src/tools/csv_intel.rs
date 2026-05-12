@@ -1121,6 +1121,312 @@ fn parse_loose_number(s: &str) -> Option<f64> {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Row-level filtering, deduplication, and aggregate summary
+// ─────────────────────────────────────────────────────────────────────
+//
+// What this section adds:
+//
+// Yahoo Portfolio CSVs (and similar broker exports) mix three kinds
+// of rows together: actual trade activities, watchlist entries (no
+// purchase history), and occasionally duplicate / placeholder rows.
+// Importing all of them as activities silently injects nonsense rows
+// into the user's books. This section provides:
+//
+//   * `filter_and_dedupe_rows` — drops watchlist rows, drops exact
+//     dupes, and reports HOW many of each were dropped so the
+//     preview UI can show "imported N, dropped M watchlist, K dupes"
+//     instead of silently changing the row count.
+//
+//   * `compute_import_summary` — totals the cost basis for kept
+//     BUY/SELL rows, counts unique symbols, and breaks down by
+//     activity type. The preview UI uses this to render the
+//     "Total: $X across N activities" confidence indicator the user
+//     verifies before committing.
+//
+// Both functions are pure; they read mapping + headers + rows and
+// return a struct. Callable from the Tauri command without touching
+// the database.
+
+/// Bookkeeping for what `filter_and_dedupe_rows` did.
+///
+/// Every count is a row tally — no monetary values. Stored separately
+/// from the financial summary because the UI shows it next to the
+/// preview header ("Importing 358 activities · dropped 43 watchlist
+/// · dropped 1 duplicate") while the money totals live below.
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize)]
+pub struct FilterStats {
+    /// Rows handed in (i.e. parsed data rows from the CSV, excluding header).
+    pub total_input_rows: usize,
+    /// Rows that had no Trade Date, no Purchase Price, AND no Quantity
+    /// populated — these are watchlist entries Yahoo exports
+    /// alongside real positions. Not importable as activities.
+    pub watchlist_dropped: usize,
+    /// Rows where the Symbol was empty/missing. Surfaced separately
+    /// from generic missing-field so the user can fix Excel formula
+    /// errors etc. that wipe a symbol cell.
+    pub missing_symbol_dropped: usize,
+    /// Rows where Quantity OR Purchase Price was unparseable as a
+    /// number, or parsed to zero / negative. A "BUY 50 @ $0.00"
+    /// line would import as $0 cost basis junk; better to drop and
+    /// tell the user how many we dropped than silently swallow.
+    pub zero_or_invalid_value_dropped: usize,
+    /// Rows that exactly duplicated an earlier row on
+    /// (symbol, trade_date, quantity, purchase_price, transaction_type).
+    /// Keep the first occurrence, drop subsequent ones.
+    pub duplicates_dropped: usize,
+    /// Rows surviving every filter — these are what would be
+    /// imported as activities.
+    pub kept: usize,
+}
+
+/// Per-currency / per-activity-type aggregate of every kept row.
+///
+/// Monetary fields are in the activity's `Purchase Price` currency
+/// (which Yahoo Portfolio CSVs don't ship — the user supplies the
+/// account-level currency when committing the import). Summaries
+/// are intentionally currency-agnostic at this layer; the frontend
+/// labels the total with the account currency before showing it.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
+pub struct ImportSummary {
+    pub stats: FilterStats,
+    /// Σ (qty × purchase_price) over rows where activity_type is BUY.
+    pub total_buy_cost_basis: f64,
+    /// Σ (qty × purchase_price) over rows where activity_type is SELL.
+    pub total_sell_proceeds: f64,
+    /// Σ fee/commission over kept rows that have a non-zero fee.
+    pub total_fees: f64,
+    /// Distinct symbols across all kept rows.
+    pub unique_symbols: usize,
+    /// Distinct symbols whose net (BUY qty − SELL qty) is non-zero —
+    /// i.e. positions still open after applying all imported activities.
+    pub symbols_with_net_position: usize,
+    /// How many BUY rows were kept.
+    pub buy_count: usize,
+    /// How many SELL rows were kept.
+    pub sell_count: usize,
+    /// Rows with an activity_type that's neither BUY nor SELL (e.g.
+    /// DIVIDEND, FEE, INTEREST, or blank). Surfaced so the user can
+    /// see at a glance whether the file has things beyond trades.
+    pub other_count: usize,
+}
+
+/// One row, ready for import — every required field already parsed
+/// and validated.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CleanRow {
+    pub symbol: String,
+    /// Raw trade-date string from the CSV. May be empty when the
+    /// row's date column was blank (a few Yahoo rows have qty + price
+    /// but no recorded date — still importable, frontend prompts).
+    pub trade_date: String,
+    pub quantity: f64,
+    pub unit_price: f64,
+    pub activity_type: String,
+    pub fee: Option<f64>,
+    pub comment: Option<String>,
+    /// Source row index (1-based, header = row 1) so the preview can
+    /// link a CleanRow back to a position in the original CSV.
+    pub source_row_index: usize,
+}
+
+/// Filter raw CSV rows down to a clean set of importable activities.
+///
+/// Returns (`Vec<CleanRow>` of importable rows, `FilterStats` of how
+/// many were dropped and why). Mapping is the field → header map
+/// produced by `detect_field_mappings_smart`.
+///
+/// Drops, in order of priority:
+///   1. **Pure watchlist rows**: trade_date, purchase_price, AND
+///      quantity all empty. These are Yahoo watchlist entries; the
+///      user shouldn't see them in their import preview.
+///   2. **Missing-required rows**: symbol empty, OR
+///      (quantity unparseable OR ≤ 0 with no offsetting price), OR
+///      purchase_price unparseable OR ≤ 0. The Yahoo "Sold all"
+///      placeholder with quantity 0.001 IS kept because 0.001 > 0;
+///      it's a real row the user wrote, just with a tiny quantity.
+///   3. **Exact duplicates**: same
+///      (symbol, trade_date, quantity, unit_price, activity_type).
+///      Keeps the first occurrence.
+///
+/// The function does **not** parse trade_date — Yahoo's compact
+/// `YYYYMMDD` format is preserved as-is, and the downstream
+/// activity-import pipeline handles date parsing. We just check
+/// presence here.
+pub fn filter_and_dedupe_rows(
+    headers: &[String],
+    mapping: &HashMap<String, String>,
+    rows: &[Vec<String>],
+) -> (Vec<CleanRow>, FilterStats) {
+    let mut stats = FilterStats {
+        total_input_rows: rows.len(),
+        ..Default::default()
+    };
+
+    let col = |field: &str| -> Option<usize> {
+        let header = mapping.get(field)?;
+        headers.iter().position(|h| h == header)
+    };
+
+    let symbol_idx = col(FIELD_SYMBOL);
+    let date_idx = col(FIELD_DATE);
+    let qty_idx = col(FIELD_QUANTITY);
+    let price_idx = col(FIELD_UNIT_PRICE);
+    let tx_idx = col(FIELD_ACTIVITY_TYPE);
+    let fee_idx = col(FIELD_FEE);
+    let comment_idx = col(FIELD_COMMENT);
+
+    let cell = |row: &[String], idx: Option<usize>| -> String {
+        idx.and_then(|i| row.get(i).cloned())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+
+    let mut seen: std::collections::HashSet<(String, String, String, String, String)> =
+        std::collections::HashSet::new();
+    let mut kept: Vec<CleanRow> = Vec::new();
+
+    for (idx, row) in rows.iter().enumerate() {
+        let date_raw = cell(row, date_idx);
+        let qty_raw = cell(row, qty_idx);
+        let price_raw = cell(row, price_idx);
+        let symbol = cell(row, symbol_idx);
+
+        // 1. Pure-watchlist test — every trade column empty.
+        if date_raw.is_empty() && qty_raw.is_empty() && price_raw.is_empty() {
+            stats.watchlist_dropped += 1;
+            continue;
+        }
+
+        // 2. Required-field tests.
+        if symbol.is_empty() {
+            stats.missing_symbol_dropped += 1;
+            continue;
+        }
+        let qty_parsed = parse_loose_number(&qty_raw);
+        let price_parsed = parse_loose_number(&price_raw);
+        let qty = match qty_parsed {
+            Some(v) if v > 0.0 => v,
+            _ => {
+                stats.zero_or_invalid_value_dropped += 1;
+                continue;
+            }
+        };
+        let unit_price = match price_parsed {
+            Some(v) if v > 0.0 => v,
+            _ => {
+                stats.zero_or_invalid_value_dropped += 1;
+                continue;
+            }
+        };
+
+        let activity_type = cell(row, tx_idx).to_uppercase();
+        // 3. Dedupe.
+        let key = (
+            symbol.clone(),
+            date_raw.clone(),
+            qty_raw.clone(),
+            price_raw.clone(),
+            activity_type.clone(),
+        );
+        if !seen.insert(key) {
+            stats.duplicates_dropped += 1;
+            continue;
+        }
+
+        let fee = fee_idx
+            .and_then(|i| row.get(i))
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .and_then(|s| parse_loose_number(s));
+
+        let comment = comment_idx
+            .and_then(|i| row.get(i))
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty());
+
+        kept.push(CleanRow {
+            symbol,
+            trade_date: date_raw,
+            quantity: qty,
+            unit_price,
+            activity_type,
+            fee,
+            comment,
+            source_row_index: idx + 2, // +1 for header, +1 for 1-based
+        });
+    }
+
+    stats.kept = kept.len();
+    (kept, stats)
+}
+
+/// Compute the monetary + structural summary for an already-filtered
+/// list of clean rows. Pairs with `filter_and_dedupe_rows`.
+///
+/// `total_buy_cost_basis` = Σ qty × unit_price for every BUY row.
+/// `total_sell_proceeds`   = Σ qty × unit_price for every SELL row.
+/// (Both are positive numbers — the BUY/SELL direction lives in the
+/// activity type, not the sign of the amount.)
+pub fn compute_import_summary(rows: &[CleanRow], stats: FilterStats) -> ImportSummary {
+    let mut summary = ImportSummary {
+        stats,
+        ..Default::default()
+    };
+
+    let mut symbols: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut net_qty: HashMap<String, f64> = HashMap::new();
+
+    for row in rows {
+        symbols.insert(row.symbol.clone());
+        let amount = row.quantity * row.unit_price;
+        if let Some(fee) = row.fee {
+            // Negative commissions are rebates; sum the absolute fees
+            // for the headline number but treat negatives as 0 so
+            // rebates don't inflate the total.
+            if fee > 0.0 {
+                summary.total_fees += fee;
+            }
+        }
+        match row.activity_type.as_str() {
+            "BUY" => {
+                summary.total_buy_cost_basis += amount;
+                summary.buy_count += 1;
+                *net_qty.entry(row.symbol.clone()).or_insert(0.0) += row.quantity;
+            }
+            "SELL" => {
+                summary.total_sell_proceeds += amount;
+                summary.sell_count += 1;
+                *net_qty.entry(row.symbol.clone()).or_insert(0.0) -= row.quantity;
+            }
+            _ => {
+                summary.other_count += 1;
+            }
+        }
+    }
+
+    summary.unique_symbols = symbols.len();
+    summary.symbols_with_net_position = net_qty.values().filter(|v| v.abs() > 1e-9).count();
+
+    summary
+}
+
+/// Convenience: filter + dedupe + summarise in one call.
+///
+/// Returns the ImportSummary; the per-row CleanRow list is discarded
+/// because callers wanting it should use `filter_and_dedupe_rows`
+/// directly. The Tauri preview command uses this short form because
+/// it ships only the headline numbers to the frontend.
+pub fn filter_dedupe_and_summarise(
+    headers: &[String],
+    mapping: &HashMap<String, String>,
+    rows: &[Vec<String>],
+) -> ImportSummary {
+    let (clean, stats) = filter_and_dedupe_rows(headers, mapping, rows);
+    compute_import_summary(&clean, stats)
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Tests
 // ─────────────────────────────────────────────────────────────────────
 

@@ -19,7 +19,8 @@
 //! the fixtures were derived from — the structure is identical.
 
 use mizan_ai::tools::csv_intel::{
-    build_profiles, detect_field_mappings_smart, reconcile, ColumnDataType,
+    build_profiles, detect_field_mappings_smart, filter_and_dedupe_rows,
+    filter_dedupe_and_summarise, reconcile, ColumnDataType,
 };
 use mizan_core::activities::{parse_csv, ParseConfig};
 use std::collections::HashMap;
@@ -351,4 +352,221 @@ fn parse_loose(s: &str) -> Option<f64> {
     s2.parse::<f64>()
         .ok()
         .map(|v| if neg { -v.abs() } else { v })
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Filter + summary against REAL Uncle CSV files on disk.
+//
+// These tests run against the *actual* user-uploaded CSVs (not the
+// anonymised fixtures committed to the repo) when those files are
+// present on this machine. Ground-truth expected numbers below were
+// computed independently from the source files via Python (csv +
+// arithmetic) and frozen as constants. The tests check that the
+// Rust filter + summary functions produce IDENTICAL totals.
+//
+// If the real files aren't present at the expected path, the tests
+// are silently skipped so CI doesn't go red on machines that don't
+// have uncle's data.
+// ─────────────────────────────────────────────────────────────────
+
+/// Absolute path to uncle's actual SGX file on the dev machine.
+/// Tests using it auto-skip on machines without the file.
+const REAL_SGX_PATH: &str =
+    "/Users/samisayyed/Desktop/Feroz Uncle Portfolio /portfolio SGX (1).csv";
+const REAL_US_PATH: &str =
+    "/Users/samisayyed/Desktop/Feroz Uncle Portfolio /portfolio US Stocks (1).csv";
+
+/// Ground-truth expected totals from the SGX file. Computed
+/// independently via Python `csv + arithmetic`. If the Rust
+/// pipeline produces different numbers, one of them is wrong —
+/// loop until they match.
+const SGX_EXPECTED_TOTAL_ROWS: usize = 33;
+const SGX_EXPECTED_WATCHLIST: usize = 1;
+const SGX_EXPECTED_DUPES: usize = 0;
+// One row in the real SGX file has Purchase Price = 0.0 (AWX.SI,
+// 50 shares @ $0). A "BUY @ $0" line would pollute the import as
+// $0 cost-basis junk, so it's dropped as zero-value and reported
+// in stats.zero_or_invalid_value_dropped.
+const SGX_EXPECTED_ZERO_VALUE: usize = 1;
+const SGX_EXPECTED_KEPT: usize = 31;
+const SGX_EXPECTED_BUY_COST_BASIS: f64 = 113_742.54;
+const SGX_EXPECTED_SELL_PROCEEDS: f64 = 34_797.50;
+const SGX_EXPECTED_UNIQUE_SYMBOLS: usize = 11;
+
+const US_EXPECTED_TOTAL_ROWS: usize = 402;
+const US_EXPECTED_WATCHLIST: usize = 43;
+const US_EXPECTED_DUPES: usize = 1;
+const US_EXPECTED_KEPT: usize = 358;
+const US_EXPECTED_BUY_COST_BASIS: f64 = 387_785.45;
+const US_EXPECTED_SELL_PROCEEDS: f64 = 207_602.03;
+const US_EXPECTED_UNIQUE_SYMBOLS: usize = 112;
+
+fn load_real(path: &str) -> Option<(Vec<String>, Vec<Vec<String>>)> {
+    let p = std::path::Path::new(path);
+    if !p.exists() {
+        eprintln!("SKIP: {} not present on this machine", path);
+        return None;
+    }
+    let bytes = std::fs::read(p).expect("read real file");
+    let parsed = parse_csv(&bytes, &ParseConfig::default()).expect("parse real file");
+    Some((parsed.headers, parsed.rows))
+}
+
+#[test]
+fn real_sgx_filter_and_summary_match_ground_truth() {
+    let Some((headers, rows)) = load_real(REAL_SGX_PATH) else {
+        return;
+    };
+
+    assert_eq!(rows.len(), SGX_EXPECTED_TOTAL_ROWS, "SGX total rows");
+
+    let mapping = detect_field_mappings_smart(&headers, &rows);
+    assert_eq!(mapping.get(FIELD_SYMBOL), Some(&"Symbol".to_string()));
+    assert_eq!(mapping.get(FIELD_DATE), Some(&"Trade Date".to_string()));
+    assert_eq!(
+        mapping.get(FIELD_UNIT_PRICE),
+        Some(&"Purchase Price".to_string())
+    );
+    assert_eq!(mapping.get(FIELD_QUANTITY), Some(&"Quantity".to_string()));
+    assert_eq!(
+        mapping.get(FIELD_ACTIVITY_TYPE),
+        Some(&"Transaction Type".to_string())
+    );
+
+    let summary = filter_dedupe_and_summarise(&headers, &mapping, &rows);
+
+    assert_eq!(
+        summary.stats.total_input_rows, SGX_EXPECTED_TOTAL_ROWS,
+        "total input rows"
+    );
+    assert_eq!(
+        summary.stats.watchlist_dropped, SGX_EXPECTED_WATCHLIST,
+        "watchlist drops"
+    );
+    assert_eq!(
+        summary.stats.duplicates_dropped, SGX_EXPECTED_DUPES,
+        "duplicate drops"
+    );
+    assert_eq!(
+        summary.stats.zero_or_invalid_value_dropped, SGX_EXPECTED_ZERO_VALUE,
+        "zero-value drops (e.g. AWX.SI 50 shares @ $0.00)"
+    );
+    assert_eq!(summary.stats.kept, SGX_EXPECTED_KEPT, "kept count");
+    assert_eq!(
+        summary.unique_symbols, SGX_EXPECTED_UNIQUE_SYMBOLS,
+        "unique symbols"
+    );
+
+    assert!(
+        (summary.total_buy_cost_basis - SGX_EXPECTED_BUY_COST_BASIS).abs() < 0.01,
+        "SGX BUY cost basis: expected {} got {}",
+        SGX_EXPECTED_BUY_COST_BASIS,
+        summary.total_buy_cost_basis
+    );
+    assert!(
+        (summary.total_sell_proceeds - SGX_EXPECTED_SELL_PROCEEDS).abs() < 0.01,
+        "SGX SELL proceeds: expected {} got {}",
+        SGX_EXPECTED_SELL_PROCEEDS,
+        summary.total_sell_proceeds
+    );
+
+    eprintln!(
+        "SGX OK: kept={} buy=${:.2} sell=${:.2} symbols={}",
+        summary.stats.kept,
+        summary.total_buy_cost_basis,
+        summary.total_sell_proceeds,
+        summary.unique_symbols
+    );
+}
+
+#[test]
+fn real_us_filter_and_summary_match_ground_truth() {
+    let Some((headers, rows)) = load_real(REAL_US_PATH) else {
+        return;
+    };
+
+    assert_eq!(rows.len(), US_EXPECTED_TOTAL_ROWS, "US total rows");
+
+    let mapping = detect_field_mappings_smart(&headers, &rows);
+    let summary = filter_dedupe_and_summarise(&headers, &mapping, &rows);
+
+    assert_eq!(
+        summary.stats.total_input_rows, US_EXPECTED_TOTAL_ROWS,
+        "total input rows"
+    );
+    assert_eq!(
+        summary.stats.watchlist_dropped, US_EXPECTED_WATCHLIST,
+        "watchlist drops"
+    );
+    assert_eq!(
+        summary.stats.duplicates_dropped, US_EXPECTED_DUPES,
+        "duplicate drops"
+    );
+    assert_eq!(summary.stats.kept, US_EXPECTED_KEPT, "kept count");
+    assert_eq!(
+        summary.unique_symbols, US_EXPECTED_UNIQUE_SYMBOLS,
+        "unique symbols"
+    );
+
+    assert!(
+        (summary.total_buy_cost_basis - US_EXPECTED_BUY_COST_BASIS).abs() < 0.01,
+        "US BUY cost basis: expected {} got {}",
+        US_EXPECTED_BUY_COST_BASIS,
+        summary.total_buy_cost_basis
+    );
+    assert!(
+        (summary.total_sell_proceeds - US_EXPECTED_SELL_PROCEEDS).abs() < 0.01,
+        "US SELL proceeds: expected {} got {}",
+        US_EXPECTED_SELL_PROCEEDS,
+        summary.total_sell_proceeds
+    );
+
+    eprintln!(
+        "US OK: kept={} buy=${:.2} sell=${:.2} symbols={}",
+        summary.stats.kept,
+        summary.total_buy_cost_basis,
+        summary.total_sell_proceeds,
+        summary.unique_symbols
+    );
+}
+
+#[test]
+fn real_sgx_no_kept_row_has_zero_or_missing_required_fields() {
+    let Some((headers, rows)) = load_real(REAL_SGX_PATH) else {
+        return;
+    };
+    let mapping = detect_field_mappings_smart(&headers, &rows);
+    let (clean, _stats) = filter_and_dedupe_rows(&headers, &mapping, &rows);
+    for row in &clean {
+        assert!(
+            !row.symbol.is_empty(),
+            "kept row has empty symbol: {:?}",
+            row
+        );
+        assert!(row.quantity > 0.0, "kept row has zero qty: {:?}", row);
+        assert!(row.unit_price > 0.0, "kept row has zero price: {:?}", row);
+    }
+}
+
+#[test]
+fn real_us_per_row_amount_sums_to_expected_total() {
+    let Some((headers, rows)) = load_real(REAL_US_PATH) else {
+        return;
+    };
+    let mapping = detect_field_mappings_smart(&headers, &rows);
+    let (clean, _stats) = filter_and_dedupe_rows(&headers, &mapping, &rows);
+
+    // Recompute the BUY cost basis manually from the kept rows and
+    // ensure it matches what compute_import_summary reported.
+    let buy: f64 = clean
+        .iter()
+        .filter(|r| r.activity_type == "BUY")
+        .map(|r| r.quantity * r.unit_price)
+        .sum();
+    assert!(
+        (buy - US_EXPECTED_BUY_COST_BASIS).abs() < 0.01,
+        "per-row sum doesn't match: {} vs expected {}",
+        buy,
+        US_EXPECTED_BUY_COST_BASIS
+    );
 }

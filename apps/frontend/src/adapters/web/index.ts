@@ -96,7 +96,7 @@ export {
   searchActivities,
   updateActivity,
 } from "../shared/activities";
-export { parseCsv } from "./activities";
+export { analyzeCsvImport, parseCsv } from "./activities";
 
 // Goal Commands
 export {

@@ -399,6 +399,67 @@ export interface ParsedCsvResult {
   rowCount: number;
 }
 
+/**
+ * Per-filter row tally from `analyze_csv_import`. Counts only — no
+ * monetary values. The frontend renders this as the "kept / dropped"
+ * breakdown above the preview table.
+ */
+export interface CsvFilterStats {
+  /** Data rows the parser found (excluding the header). */
+  total_input_rows: number;
+  /** Rows with no trade date AND no price AND no quantity — Yahoo
+   * watchlist entries shipped alongside real positions. */
+  watchlist_dropped: number;
+  /** Rows missing the Symbol column. */
+  missing_symbol_dropped: number;
+  /** Rows where qty or price was unparseable, zero, or negative. */
+  zero_or_invalid_value_dropped: number;
+  /** Rows that exactly duplicated an earlier one. */
+  duplicates_dropped: number;
+  /** Rows surviving every filter — these become activities. */
+  kept: number;
+}
+
+/**
+ * Aggregate financial summary for a CSV import. All money values
+ * are positive (sign lives in the activity type). Returned from
+ * `analyze_csv_import` so the user can sanity-check the totals
+ * before committing the import.
+ */
+export interface CsvImportSummary {
+  stats: CsvFilterStats;
+  /** Σ qty × unit_price across kept BUY rows. */
+  total_buy_cost_basis: number;
+  /** Σ qty × unit_price across kept SELL rows. */
+  total_sell_proceeds: number;
+  /** Σ commission/fee across kept rows where fee > 0. */
+  total_fees: number;
+  /** Distinct symbols across kept rows. */
+  unique_symbols: number;
+  /** Distinct symbols with non-zero net (BUY qty − SELL qty). */
+  symbols_with_net_position: number;
+  /** How many kept rows are BUY. */
+  buy_count: number;
+  /** How many kept rows are SELL. */
+  sell_count: number;
+  /** How many kept rows have an activity type other than BUY/SELL. */
+  other_count: number;
+}
+
+/**
+ * One-shot parse + analyse result, as returned by `analyze_csv_import`.
+ * Contains everything the import-preview UI needs in a single
+ * round-trip.
+ */
+export interface CsvImportAnalysis {
+  headers: string[];
+  /** Preview rows only (default 50). Full row count is in summary.stats. */
+  sample_rows: string[][];
+  /** Auto-detected field → header column mapping. */
+  field_mappings: Record<string, string>;
+  summary: CsvImportSummary;
+}
+
 export interface SymbolSearchResult {
   exchange: string;
   /** Canonical exchange MIC code (e.g., "XNAS", "XTSE") */

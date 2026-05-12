@@ -563,6 +563,32 @@ export interface ImportActivitiesSummary {
   success: boolean;
   /** Human-readable reason for failure, if success is false */
   errorMessage?: string;
+  /**
+   * Post-import quote-sync report. Present when the importer ran a
+   * synchronous quote sync against the asset IDs it just inserted.
+   * Lets the UI render "12 symbols got live prices, 3 using cost
+   * basis" with surgical accuracy on the first paint after import.
+   */
+  quoteSync?: ImportQuoteSyncReport;
+}
+
+/**
+ * Per-symbol outcome of the synchronous quote sync run immediately
+ * after an activity import. Each asset ID lands in exactly one of
+ * the four buckets; together they cover every asset that was
+ * inserted, so the dashboard's first paint is complete.
+ */
+export interface ImportQuoteSyncReport {
+  /** Asset IDs whose live quote sync returned a fresh quote. */
+  livePriced: string[];
+  /** Asset IDs whose quote sync errored — fall back to cost basis. */
+  failed: string[];
+  /** Asset IDs the provider doesn't recognise (delisted, OTC, etc). */
+  notFound: string[];
+  /** Asset IDs legitimately skipped (cash, manual pricing, expired). */
+  skipped: string[];
+  /** Total quotes fetched + persisted across the whole import. */
+  quotesAdded: number;
 }
 
 export type ValidationResult = { status: "success" } | { status: "error"; errors: string[] };

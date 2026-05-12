@@ -1447,6 +1447,49 @@ pub struct ImportActivitiesSummary {
     pub success: bool,
     /// Human-readable reason for failure, if success is false
     pub error_message: Option<String>,
+    /// Post-import quote-sync report. `None` when the importer didn't
+    /// run a quote sync (e.g. dry-run imports, or imports with no
+    /// market-priced assets). When present, the dashboard's first
+    /// paint after the import is no longer "show $0 until background
+    /// sync catches up" — every asset listed in `live_priced` already
+    /// has a fresh live quote, and `fallback_priced` are the ones
+    /// using the cost-basis safety net.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quote_sync: Option<ImportQuoteSyncReport>,
+}
+
+/// Per-symbol outcome of the synchronous quote sync run after import.
+///
+/// The dashboard total = `Σ live_priced` + `Σ fallback_priced`. We
+/// surface this to the frontend so the import preview can render
+/// "12 symbols got live prices, 3 are using cost basis" instead of
+/// silently mixing them and leaving the user wondering why the total
+/// looks off.
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportQuoteSyncReport {
+    /// Asset IDs whose Yahoo (or other configured provider) quote
+    /// sync returned at least one fresh quote during this import.
+    /// These positions show their LIVE market value on the next
+    /// dashboard paint.
+    pub live_priced: Vec<String>,
+    /// Asset IDs whose quote sync failed outright (network error,
+    /// provider error, etc.). These positions fall back to the
+    /// cost-basis valuation path and the dashboard surfaces a
+    /// stale-quote warning via the existing PriceStalenessCheck.
+    pub failed: Vec<String>,
+    /// Asset IDs the provider doesn't recognise (delisted, OTC,
+    /// foreign exchange ticker the provider doesn't carry). Same
+    /// cost-basis fallback as `failed`, but a different signal for
+    /// the user — these aren't transient and won't be fixed by a
+    /// retry.
+    pub not_found: Vec<String>,
+    /// Asset IDs explicitly skipped by the sync engine for legitimate
+    /// reasons (cash, manual pricing, expired option, etc.). Not an
+    /// error — informational.
+    pub skipped: Vec<String>,
+    /// Total quotes fetched + persisted across the whole import.
+    pub quotes_added: u32,
 }
 
 /// Input model for upserting activities (insert or update on conflict).

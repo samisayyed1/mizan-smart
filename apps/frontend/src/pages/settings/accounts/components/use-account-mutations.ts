@@ -16,10 +16,33 @@ export function useAccountMutations({ onSuccess = () => undefined }: UseAccountM
     }
   };
 
-  const handleError = (action: string) => {
+  // Backend errors here travel as plain strings from the Tauri command
+  // (`Result<_, String>`). We surface the message verbatim in the toast
+  // description — the previous "Please try again" fallback hid the real
+  // failure ("FOREIGN KEY constraint failed", "database is locked", etc.)
+  // and turned every delete error into a guessing game for both the user
+  // and us. Truncate at 240 chars so a runaway error doesn't blow up the
+  // toast layout.
+  const describeError = (e: unknown): string | undefined => {
+    const raw =
+      typeof e === "string"
+        ? e
+        : e instanceof Error
+          ? e.message
+          : e && typeof e === "object" && "message" in e && typeof e.message === "string"
+            ? e.message
+            : undefined;
+    if (!raw) return undefined;
+    const trimmed = raw.trim();
+    if (!trimmed) return undefined;
+    return trimmed.length > 240 ? `${trimmed.slice(0, 237)}…` : trimmed;
+  };
+
+  const handleError = (action: string, e: unknown) => {
+    const detail = describeError(e);
     toast({
-      title: `Uh oh! Something went wrong ${action} this account.`,
-      description: "Please try again or report an issue if the problem persists.",
+      title: `Couldn't ${action} this account`,
+      description: detail ?? "An unexpected error occurred. Please try again or report an issue.",
       variant: "destructive",
     });
   };
@@ -32,7 +55,7 @@ export function useAccountMutations({ onSuccess = () => undefined }: UseAccountM
     },
     onError: (e) => {
       logger.error(`Error creating account: ${e}`);
-      handleError("creating");
+      handleError("create", e);
     },
   });
 
@@ -44,7 +67,7 @@ export function useAccountMutations({ onSuccess = () => undefined }: UseAccountM
     },
     onError: (e) => {
       logger.error(`Error updating account: ${e}`);
-      handleError("updating");
+      handleError("update", e);
     },
   });
 
@@ -56,7 +79,7 @@ export function useAccountMutations({ onSuccess = () => undefined }: UseAccountM
     },
     onError: (e) => {
       logger.error(`Error deleting account: ${e}`);
-      handleError("deleting");
+      handleError("delete", e);
     },
   });
 

@@ -180,18 +180,20 @@ pub struct ImportCsvMappingOutput {
 // Field Constants (matching ImportMappingData keys)
 // ============================================================================
 
-const FIELD_DATE: &str = "date";
-const FIELD_ACTIVITY_TYPE: &str = "activityType";
-const FIELD_SYMBOL: &str = "symbol";
-const FIELD_QUANTITY: &str = "quantity";
-const FIELD_UNIT_PRICE: &str = "unitPrice";
-const FIELD_AMOUNT: &str = "amount";
-const FIELD_FEE: &str = "fee";
-const FIELD_CURRENCY: &str = "currency";
-const FIELD_ACCOUNT: &str = "account";
-const FIELD_COMMENT: &str = "comment";
-const FIELD_FX_RATE: &str = "fxRate";
-const FIELD_SUBTYPE: &str = "subtype";
+// `pub(crate)` so the sibling `csv_intel` module can re-use the same
+// canonical field names without re-declaring them and risking drift.
+pub(crate) const FIELD_DATE: &str = "date";
+pub(crate) const FIELD_ACTIVITY_TYPE: &str = "activityType";
+pub(crate) const FIELD_SYMBOL: &str = "symbol";
+pub(crate) const FIELD_QUANTITY: &str = "quantity";
+pub(crate) const FIELD_UNIT_PRICE: &str = "unitPrice";
+pub(crate) const FIELD_AMOUNT: &str = "amount";
+pub(crate) const FIELD_FEE: &str = "fee";
+pub(crate) const FIELD_CURRENCY: &str = "currency";
+pub(crate) const FIELD_ACCOUNT: &str = "account";
+pub(crate) const FIELD_COMMENT: &str = "comment";
+pub(crate) const FIELD_FX_RATE: &str = "fxRate";
+pub(crate) const FIELD_SUBTYPE: &str = "subtype";
 
 // ============================================================================
 // Header Detection Patterns (fallback when LLM omits field_mappings)
@@ -812,7 +814,22 @@ impl<E: AiEnvironment + 'static> Tool for ImportCsvTool<E> {
         } else {
             let llm_field_mappings = clean_string_map(args.field_mappings.clone());
             let field_mappings = if llm_field_mappings.is_empty() {
-                auto_detect_field_mappings(&headers)
+                // Multi-signal detection: broker fingerprint → data-aware
+                // scoring → legacy header-only fallback. The csv_intel
+                // path uses the parsed sample rows to classify each
+                // column by its actual contents, which catches Yahoo-
+                // style "Current Price" vs "Purchase Price" ambiguity
+                // that the legacy header-only matcher used to silently
+                // get wrong. Falls back to the legacy detector when
+                // smart detection returns an empty mapping (extremely
+                // unusual: only happens when every column scores below
+                // the confidence threshold for every field).
+                let smart = super::csv_intel::detect_field_mappings_smart(&headers, &sample_rows);
+                if smart.is_empty() {
+                    auto_detect_field_mappings(&headers)
+                } else {
+                    smart
+                }
             } else {
                 llm_field_mappings
             };

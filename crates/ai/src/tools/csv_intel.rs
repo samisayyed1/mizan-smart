@@ -368,11 +368,34 @@ fn is_activity_type_token(s: &str) -> bool {
 /// True if `s` parses as a date in any of the formats brokers use
 /// in real exports. Permissive — we're just trying to figure out
 /// the column's semantic type, not parse the date for storage.
+///
+/// Accepted shapes:
+/// * Separated: `YYYY-MM-DD`, `DD/MM/YYYY`, `MM-DD-YY`, etc.
+///   (any of `-`, `/`, `.` between three numeric parts).
+/// * **Compact 8-digit `YYYYMMDD`** — Yahoo Finance's portfolio
+///   export uses this for its Trade Date column. Distinguished
+///   from random 8-digit integers by range-checking each field:
+///   year ∈ [1900, 2200], month ∈ [1, 12], day ∈ [1, 31]. This is
+///   tight enough that arbitrary integers like `12345678` get
+///   correctly rejected.
+/// * ISO-8601 with optional time suffix (`2024-01-15T09:30:00Z`,
+///   `2024-01-15 09:30:00 EDT`).
 fn is_date(s: &str) -> bool {
     // Strip any time portion before testing — brokers love to glue
     // "2024-01-15 09:30:00" together.
     let head = s.split_whitespace().next().unwrap_or(s);
     let head = head.split('T').next().unwrap_or(head);
+
+    // Compact 8-digit YYYYMMDD path — Yahoo Trade Date format.
+    if head.len() == 8 && head.chars().all(|c| c.is_ascii_digit()) {
+        let year: u32 = head[0..4].parse().unwrap_or(0);
+        let month: u32 = head[4..6].parse().unwrap_or(0);
+        let day: u32 = head[6..8].parse().unwrap_or(0);
+        return (1900..=2200).contains(&year)
+            && (1..=12).contains(&month)
+            && (1..=31).contains(&day);
+    }
+
     let parts: Vec<&str> = head
         .split(|c: char| c == '-' || c == '/' || c == '.')
         .collect();
@@ -528,15 +551,29 @@ const BROKER_TEMPLATES: &[BrokerTemplate] = &[
         ],
     },
     // Yahoo Finance Portfolio (downloaded CSV). Includes both live
-    // quote columns and the user's actual trade data — the trade
-    // columns are what we want.
+    // quote columns AND the user's actual trade data. The trade
+    // columns are what we want — every other Yahoo "Price" column
+    // (Current Price, Open, High, Low) reflects live quotes that
+    // would corrupt the cost-basis if mapped as unit_price.
+    //
+    // Real-world Yahoo Portfolio export columns (verified against
+    // actual user uploads):
+    //   Symbol, Current Price, Date, Time, Change, Open, High, Low,
+    //   Volume, Trade Date, Purchase Price, Quantity, Commission,
+    //   High Limit, Low Limit, Comment, Transaction Type
+    //
+    // Earlier iterations of this template used "shares" — that was
+    // wrong; the actual column is "Quantity". Also missed
+    // "Transaction Type" which carries BUY/SELL and is the
+    // canonical source for FIELD_ACTIVITY_TYPE.
     BrokerTemplate {
         name: "Yahoo Finance Portfolio",
         required_headers: &["symbol", "current price", "trade date", "purchase price"],
         field_to_header: &[
             (FIELD_DATE, "trade date"),
             (FIELD_SYMBOL, "symbol"),
-            (FIELD_QUANTITY, "shares"),
+            (FIELD_ACTIVITY_TYPE, "transaction type"),
+            (FIELD_QUANTITY, "quantity"),
             (FIELD_UNIT_PRICE, "purchase price"),
             (FIELD_FEE, "commission"),
             (FIELD_COMMENT, "comment"),
@@ -1252,9 +1289,10 @@ mod tests {
             "Volume",
             "Trade Date",
             "Purchase Price",
-            "Shares",
+            "Quantity",
             "Commission",
             "Comment",
+            "Transaction Type",
         ]);
         let m = recognise_broker(&headers).expect("Yahoo should match");
         assert_eq!(m.0, "Yahoo Finance Portfolio");
@@ -1263,8 +1301,12 @@ mod tests {
             m.1.get(FIELD_UNIT_PRICE),
             Some(&"Purchase Price".to_string())
         );
-        assert_eq!(m.1.get(FIELD_QUANTITY), Some(&"Shares".to_string()));
+        assert_eq!(m.1.get(FIELD_QUANTITY), Some(&"Quantity".to_string()));
         assert_eq!(m.1.get(FIELD_SYMBOL), Some(&"Symbol".to_string()));
+        assert_eq!(
+            m.1.get(FIELD_ACTIVITY_TYPE),
+            Some(&"Transaction Type".to_string())
+        );
     }
 
     #[test]
@@ -1317,7 +1359,7 @@ mod tests {
             "Date",
             "Trade Date",
             "Purchase Price",
-            "Shares",
+            "Quantity",
             "Commission",
         ]);
         let m = detect_field_mappings_smart(&headers, &[]);
@@ -1326,7 +1368,7 @@ mod tests {
         // header-signature only.
         assert_eq!(m.get(FIELD_UNIT_PRICE), Some(&"Purchase Price".to_string()));
         assert_eq!(m.get(FIELD_DATE), Some(&"Trade Date".to_string()));
-        assert_eq!(m.get(FIELD_QUANTITY), Some(&"Shares".to_string()));
+        assert_eq!(m.get(FIELD_QUANTITY), Some(&"Quantity".to_string()));
     }
 
     #[test]
@@ -1376,6 +1418,318 @@ mod tests {
         assert_eq!(m.get(FIELD_QUANTITY), Some(&"Shares".to_string()));
         assert_eq!(m.get(FIELD_UNIT_PRICE), Some(&"Price".to_string()));
         assert_eq!(m.get(FIELD_AMOUNT), Some(&"Total".to_string()));
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // REAL-WORLD: validated against actual Yahoo Portfolio CSV
+    // exports from Mizan demo user. Headers and adversarial row
+    // shapes copied verbatim — these are the cases that drove the
+    // demo-day data-corruption bug uncle hit.
+    // ─────────────────────────────────────────────────────────────
+
+    /// Uncle's actual Yahoo Portfolio CSV header set, 17 columns.
+    /// Notable adversarial features:
+    ///   * "Quantity" not "Shares" (the column name from the live
+    ///     Yahoo download — earlier internal assumption of "Shares"
+    ///     was wrong).
+    ///   * Trade Date is in YYYYMMDD COMPACT format (no separators
+    ///     between Y/M/D), distinct from the "Date" column which
+    ///     uses YYYY/MM/DD.
+    ///   * Trailing "Transaction Type" column with BUY/SELL values
+    ///     — should map to FIELD_ACTIVITY_TYPE.
+    ///   * Some rows have empty Trade Date / Purchase Price /
+    ///     Quantity (positions with no recorded purchase history,
+    ///     e.g. watchlist entries downloaded with the portfolio).
+    ///   * Some rows have all-empty trade columns (J91U.SI line).
+    ///   * Fractional / nearly-zero quantities (0.001) on "sold all"
+    ///     placeholder rows.
+    ///   * Negative commission (rebate) on at least one row.
+    const REAL_YAHOO_HEADERS: &[&str] = &[
+        "Symbol",
+        "Current Price",
+        "Date",
+        "Time",
+        "Change",
+        "Open",
+        "High",
+        "Low",
+        "Volume",
+        "Trade Date",
+        "Purchase Price",
+        "Quantity",
+        "Commission",
+        "High Limit",
+        "Low Limit",
+        "Comment",
+        "Transaction Type",
+    ];
+
+    fn real_yahoo_sample() -> Vec<Vec<String>> {
+        // Selection of the most adversarial real rows from uncle's
+        // SGX + US Stocks files. Keep this small enough to read at
+        // a glance but representative of every shape in the data.
+        rows(&[
+            // SGX standard buy with all fields populated.
+            &[
+                "A31.SI",
+                "0.118",
+                "2026/04/24",
+                "17:04 SGT",
+                "0.0",
+                "0.118",
+                "0.118",
+                "0.112",
+                "65826400",
+                "20260225",
+                "0.093",
+                "10000.0",
+                "",
+                "",
+                "",
+                "",
+                "BUY",
+            ],
+            // SELL row with commission.
+            &[
+                "OU8.SI",
+                "1.65",
+                "2026/04/24",
+                "17:04 SGT",
+                "0.0",
+                "1.65",
+                "1.65",
+                "1.63",
+                "518600",
+                "20240923",
+                "0.785",
+                "2500.0",
+                "6.0",
+                "",
+                "",
+                "",
+                "SELL",
+            ],
+            // Position with no purchase history (current quote
+            // only — no Trade Date, no Purchase Price, no Quantity).
+            &[
+                "GRID",
+                "187.2",
+                "2026/04/24",
+                "16:00 EDT",
+                "2.3300018",
+                "186.88",
+                "187.49",
+                "185.24",
+                "2123294",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+            ],
+            // US BUY with comment text in "Comment" column.
+            &[
+                "CRWV",
+                "110.14",
+                "2026/04/24",
+                "16:00 EDT",
+                "-7.279999",
+                "120.97",
+                "121.0",
+                "106.51",
+                "33898207",
+                "20251220",
+                "82.67",
+                "25.0",
+                "",
+                "",
+                "",
+                "5.16",
+                "BUY",
+            ],
+            // Negative commission (rebate) row.
+            &[
+                "S63.SI",
+                "11.02",
+                "2026/04/24",
+                "17:06 SGT",
+                "-0.009999275",
+                "10.98",
+                "11.13",
+                "10.97",
+                "2736900",
+                "20210815",
+                "4.0145",
+                "2500.0",
+                "-0.03",
+                "",
+                "",
+                "",
+                "BUY",
+            ],
+            // Fractional / placeholder quantity (0.001).
+            &[
+                "ROKU",
+                "115.22",
+                "2026/04/24",
+                "16:00 EDT",
+                "0.26000214",
+                "116.5",
+                "116.5",
+                "113.21",
+                "2236586",
+                "20241212",
+                "64.08",
+                "0.001",
+                "",
+                "",
+                "",
+                "",
+                "BUY",
+            ],
+        ])
+    }
+
+    #[test]
+    fn realworld_yahoo_picks_correct_columns() {
+        let headers = hdrs(REAL_YAHOO_HEADERS);
+        let sample = real_yahoo_sample();
+        let m = detect_field_mappings_smart(&headers, &sample);
+
+        // Symbol — the actual ticker column.
+        assert_eq!(
+            m.get(FIELD_SYMBOL),
+            Some(&"Symbol".to_string()),
+            "symbol must map to the Symbol column"
+        );
+
+        // Date — Trade Date, NOT the live-quote Date column.
+        assert_eq!(
+            m.get(FIELD_DATE),
+            Some(&"Trade Date".to_string()),
+            "date must map to Trade Date (purchase date), not the quote-date 'Date' column"
+        );
+
+        // Unit Price — Purchase Price, NOT the live Current Price.
+        assert_eq!(
+            m.get(FIELD_UNIT_PRICE),
+            Some(&"Purchase Price".to_string()),
+            "unit_price must map to Purchase Price (what user paid), not Current Price (live quote)"
+        );
+
+        // Quantity — the real Yahoo column is "Quantity", not
+        // "Shares". Earlier assumption was wrong.
+        assert_eq!(
+            m.get(FIELD_QUANTITY),
+            Some(&"Quantity".to_string()),
+            "quantity must map to the Quantity column (real Yahoo uses 'Quantity', not 'Shares')"
+        );
+
+        // Activity Type — Transaction Type column has BUY/SELL.
+        assert_eq!(
+            m.get(FIELD_ACTIVITY_TYPE),
+            Some(&"Transaction Type".to_string()),
+            "activity_type must map to Transaction Type"
+        );
+
+        // Fee — Commission column.
+        assert_eq!(
+            m.get(FIELD_FEE),
+            Some(&"Commission".to_string()),
+            "fee must map to Commission"
+        );
+
+        // Comment — the Comment column.
+        assert_eq!(
+            m.get(FIELD_COMMENT),
+            Some(&"Comment".to_string()),
+            "comment must map to Comment"
+        );
+
+        // No column is double-claimed.
+        let claimed: std::collections::HashSet<_> = m.values().cloned().collect();
+        assert_eq!(claimed.len(), m.len(), "no header should be claimed twice");
+    }
+
+    /// `Trade Date` in uncle's CSV is `20260225` — 8 contiguous
+    /// digits, no separators. The legacy `is_date` only accepts
+    /// dates with `-`, `/`, or `.` separators, so the Trade Date
+    /// column was being classified as Numeric. The fingerprint
+    /// path still works (header-only), but the data-aware fallback
+    /// did the wrong thing.
+    #[test]
+    fn date_detector_accepts_compact_yyyymmdd() {
+        for s in &["20260225", "20240923", "20210815", "20090528"] {
+            assert_eq!(
+                classify_cell(s),
+                ColumnDataType::Date,
+                "{} should classify as Date",
+                s
+            );
+        }
+        // Negative cases: keep these as Numeric — they're not
+        // dates, just 8-digit integers.
+        for s in &["12345678", "99999999"] {
+            assert_ne!(
+                classify_cell(s),
+                ColumnDataType::Date,
+                "{} should NOT classify as Date",
+                s
+            );
+        }
+    }
+
+    /// When uncle's actual data is profiled, the Trade Date column
+    /// should be recognised as a Date column despite using YYYYMMDD
+    /// compact format. This is what feeds the data-aware scoring.
+    #[test]
+    fn realworld_trade_date_column_profiles_as_date() {
+        let sample = real_yahoo_sample();
+        let trade_date_idx = REAL_YAHOO_HEADERS
+            .iter()
+            .position(|h| *h == "Trade Date")
+            .unwrap();
+        let column_vals: Vec<String> = sample
+            .iter()
+            .filter_map(|row| row.get(trade_date_idx).cloned())
+            .collect();
+        let profile = ColumnProfile::infer("Trade Date", &column_vals);
+        assert_eq!(
+            profile.kind,
+            ColumnDataType::Date,
+            "Trade Date column should profile as Date (YYYYMMDD compact format), got {:?}",
+            profile.kind
+        );
+    }
+
+    /// Cross-column reconciliation against real rows: every row that
+    /// has Quantity + Purchase Price populated should reconcile when
+    /// we treat (qty × purchase_price) as the implicit amount. We
+    /// supply a synthesized "amount" column to drive reconcile().
+    #[test]
+    fn realworld_reconciler_validates_qty_times_purchase_price() {
+        let headers = hdrs(&["Quantity", "Purchase Price", "Amount"]);
+        // Build (qty, purchase_price, qty * purchase_price) triples
+        // from uncle's actual rows where both qty and price are present.
+        let sample = rows(&[
+            &["10000.0", "0.093", "930.00"],   // A31.SI buy
+            &["2500.0", "0.785", "1962.50"],   // OU8.SI sell
+            &["25.0", "82.67", "2066.75"],     // CRWV buy
+            &["2500.0", "4.0145", "10036.25"], // S63.SI buy
+        ]);
+        let mut m = HashMap::new();
+        m.insert(FIELD_QUANTITY.to_string(), "Quantity".to_string());
+        m.insert(FIELD_UNIT_PRICE.to_string(), "Purchase Price".to_string());
+        m.insert(FIELD_AMOUNT.to_string(), "Amount".to_string());
+        let r = reconcile(&m, &headers, &sample).expect("should reconcile");
+        assert!(
+            r > 0.99,
+            "qty × purchase_price should match the implicit amount in every row, got {}",
+            r
+        );
     }
 
     // ─────────────────────────────────────────────────────────────

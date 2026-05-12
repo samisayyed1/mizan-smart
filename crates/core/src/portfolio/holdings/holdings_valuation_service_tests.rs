@@ -17,7 +17,7 @@ mod tests {
     };
     use crate::utils::time_utils::valuation_date_today;
     use async_trait::async_trait;
-    use chrono::{NaiveDate, Utc};
+    use chrono::{Datelike, NaiveDate, Utc};
     use rust_decimal::Decimal;
     use rust_decimal_macros::dec;
     use std::collections::HashMap;
@@ -423,7 +423,32 @@ mod tests {
         close: Decimal,
         currency: &str,
     ) -> Quote {
-        let date = NaiveDate::from_str(date_str).unwrap();
+        // Tests historically used hardcoded calendar dates like
+        // "2024-01-10". Now that the valuation service enforces a
+        // staleness gate (MAX_QUOTE_AGE_DAYS), those hardcoded dates
+        // would always trip the gate and route every test into the
+        // cost-basis fallback path. To keep test logic about relative
+        // freshness intact without rewriting every call site, we
+        // rebase any hardcoded date so the *latest* test date
+        // (defined as the one with day-of-month == 10 by convention)
+        // becomes "today" and earlier dates slide back accordingly.
+        //
+        // Concretely: anything dated "...-...-10" → today; "...-...-09"
+        // → yesterday; "...-...-08" → day-before; etc. Special strings
+        // "today" and "yesterday" are also accepted for new tests.
+        let date = match date_str {
+            "today" => Utc::now().date_naive(),
+            "yesterday" => Utc::now().date_naive() - chrono::Duration::days(1),
+            _ => {
+                let original = NaiveDate::from_str(date_str).unwrap();
+                let day = original.day() as i64;
+                // Treat day 10 as the "latest" anchor and shift by
+                // the difference. Negative diff (earlier day) shifts
+                // backwards from today.
+                let today = Utc::now().date_naive();
+                today - chrono::Duration::days(10 - day)
+            }
+        };
         let naive_timestamp = date.and_hms_opt(0, 0, 0).unwrap();
         let utc_timestamp = chrono::TimeZone::from_utc_datetime(&Utc, &naive_timestamp);
         Quote {
@@ -614,10 +639,7 @@ mod tests {
         let expected_day_change_base = dec!(50.0);
         let expected_day_change_pct = dec!(0.0345); // 50 / 1450
 
-        assert_eq!(
-            holding.as_of_date,
-            NaiveDate::from_str("2024-01-10").unwrap()
-        );
+        assert_eq!(holding.as_of_date, Utc::now().date_naive());
         assert_decimal_approx(holding.price, expected_price, TOLERANCE, "Price");
         assert_decimal_approx(holding.fx_rate, dec!(1.0), TOLERANCE, "FX Rate");
         assert_monetary_value_approx(
@@ -726,10 +748,7 @@ mod tests {
         let expected_day_change_base = expected_day_change_local * usd_cad_rate; // 100 * 1.3 = 130 CAD
         let expected_day_change_pct = expected_day_change_base / expected_prev_value_base; // 130 / 2470 = 0.0526
 
-        assert_eq!(
-            holding.as_of_date,
-            NaiveDate::from_str("2024-01-10").unwrap()
-        );
+        assert_eq!(holding.as_of_date, Utc::now().date_naive());
         assert_decimal_approx(holding.price, expected_price, TOLERANCE, "Price");
         assert_decimal_approx(holding.fx_rate, usd_cad_rate, TOLERANCE, "FX Rate");
         assert_monetary_value_approx(
@@ -880,10 +899,7 @@ mod tests {
             "USD"
         ); // Quote currency is USD
 
-        assert_eq!(
-            holding.as_of_date,
-            NaiveDate::from_str("2024-01-10").unwrap()
-        );
+        assert_eq!(holding.as_of_date, Utc::now().date_naive());
         assert_decimal_approx(
             holding.price,
             expected_price,
@@ -1537,48 +1553,66 @@ mod tests {
             .await;
         assert!(result.is_ok());
 
-        // Security - FX rate fallback to 1.0
+        // Security — FX rate Quote→Base lookup fails. Historical
+        // behaviour silently substituted 1.0, producing a fake
+        // "market_value = 2000 in CAD" line for a USD position (the
+        // bug that shipped the dashboard at $184K instead of $236K
+        // when SGD positions hit this exact code path).
+        //
+        // New behaviour: refuse the live quote, route to cost-basis
+        // fallback. The dashboard now shows the cost-basis value with
+        // unrealized_gain = 0 and no day_change. Honest about what we
+        // don't know.
         let h_sec = holdings.iter().find(|h| h.id == "h_usd").unwrap();
+        // FX rate Local→Base is the LENIENT fallback (still 1.0) —
+        // that's used only for `prev_close_value` and similar
+        // non-critical fields, not for market_value.
         assert_decimal_approx(
             h_sec.fx_rate,
             dec!(1.0),
             TOLERANCE,
-            "Security FX Rate Fallback",
+            "Local→Base FX falls back to 1.0 (non-critical path)",
         );
+        // Market value falls back to cost basis (1800 local + 1800 base
+        // since FX is unavailable so base = local at the cost-basis
+        // path's own fallback).
         assert_monetary_value_approx(
             Some(&h_sec.market_value),
-            dec!(2000.0),
-            dec!(2000.0),
+            dec!(1800.0),
+            dec!(1800.0),
             TOLERANCE,
-            "Security Market Value Fallback",
-        ); // Base uses fallback rate
+            "Market value falls back to cost basis when FX is missing",
+        );
+        // Cost basis itself uses the lenient 1.0 fallback for the
+        // local→base conversion of the user-supplied cost-basis-local,
+        // which is fine for displaying SOMETHING; the headline number
+        // matches market_value (because we set market_value=cost_basis
+        // in the fallback path) so the user sees zero unrealized gain
+        // rather than a hallucinated value.
         assert_monetary_value_approx(
             h_sec.cost_basis.as_ref(),
             dec!(1800.0),
             dec!(1800.0),
             TOLERANCE,
-            "Security Cost Basis Fallback",
-        ); // Base uses fallback rate
+            "Cost basis still computed (uses lenient FX for base side)",
+        );
+        // Unrealized gain is exactly zero — honest about no live quote.
         assert_monetary_value_approx(
             h_sec.unrealized_gain.as_ref(),
-            dec!(200.0),
-            dec!(200.0),
+            dec!(0.0),
+            dec!(0.0),
             TOLERANCE,
-            "Security Unrealized Gain Fallback",
+            "Unrealized gain == 0 when no live quote (cost-basis fallback)",
         );
-        assert_monetary_value_approx(
-            h_sec.prev_close_value.as_ref(),
-            dec!(1900.0),
-            dec!(1900.0),
-            TOLERANCE,
-            "Security Prev Close Fallback",
+        // Day change / prev-close are None — no previous-day quote
+        // semantics make sense without a live current quote.
+        assert!(
+            h_sec.day_change.is_none(),
+            "Day change is None on cost-basis fallback (no live quote to diff)"
         );
-        assert_monetary_value_approx(
-            h_sec.day_change.as_ref(),
-            dec!(100.0),
-            dec!(100.0),
-            TOLERANCE,
-            "Security Day Change Fallback",
+        assert!(
+            h_sec.prev_close_value.is_none(),
+            "Prev close is None on cost-basis fallback"
         );
 
         // Cash - FX rate fallback to 1.0
@@ -1822,5 +1856,164 @@ mod tests {
             .await;
         assert!(result.is_ok());
         assert!(holdings.is_empty()); // Should remain empty
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // Stale-quote gate + missing-FX explicit-failure tests
+    //
+    // Two production failure modes that historically silently
+    // produced wrong dashboard totals — both now route to the same
+    // cost-basis fallback path that #19 shipped.
+    // ─────────────────────────────────────────────────────────────
+
+    /// Quote older than MAX_QUOTE_AGE_DAYS (7 days) → treat as
+    /// missing → cost-basis fallback. Verifies the dashboard
+    /// doesn't keep showing a price that was correct two months
+    /// ago.
+    #[tokio::test]
+    async fn test_stale_quote_routes_to_cost_basis_fallback() {
+        let (_fx, market_data, valuation_service) = setup_test_env();
+
+        // Build a quote dated 30 days ago — well past the 7-day
+        // staleness threshold.
+        let stale_date = Utc::now().date_naive() - chrono::Duration::days(30);
+        let stale_ts =
+            chrono::TimeZone::from_utc_datetime(&Utc, &stale_date.and_hms_opt(0, 0, 0).unwrap());
+
+        let mut stale_quote = create_quote("today", dec!(150.0), "USD");
+        stale_quote.timestamp = stale_ts;
+        market_data.add_quote_pair("AAPL", stale_quote, None);
+
+        let mut holdings = vec![create_holding(
+            "h_stale",
+            HoldingType::Security,
+            "AAPL",
+            dec!(10),
+            "USD",
+            "USD",
+            Some(dec!(1000.0)), // user paid $1000 total
+            None,
+        )];
+
+        valuation_service
+            .calculate_holdings_live_valuation(&mut holdings)
+            .await
+            .unwrap();
+
+        let h = &holdings[0];
+        // Market value falls back to cost basis (not 10 × $150 = $1500
+        // from the stale quote).
+        assert_monetary_value_approx(
+            Some(&h.market_value),
+            dec!(1000.0),
+            dec!(1000.0),
+            TOLERANCE,
+            "Stale-quote fallback: market_value == cost_basis ($1000)",
+        );
+        assert_eq!(
+            h.price,
+            Some(dec!(100.0)),
+            "Price reported is cost-basis per unit (1000/10), not the stale $150"
+        );
+        assert_eq!(
+            h.unrealized_gain,
+            Some(MonetaryValue::zero()),
+            "Unrealized gain == 0 when on cost-basis fallback"
+        );
+    }
+
+    /// Quote IS fresh, but the FX rate from quote_currency → base
+    /// is unregistered. Historically this silently used 1.0
+    /// (valuing SGD positions at 1 SGD == 1 USD — a ~30% understatement
+    /// on every SGX line of uncle's portfolio). Now the position
+    /// routes to cost-basis fallback because no usable conversion
+    /// to base currency is possible.
+    #[tokio::test]
+    async fn test_missing_fx_pair_routes_to_cost_basis_fallback() {
+        let (fx, market_data, valuation_service) = setup_test_env();
+
+        // FX from SGD→USD is NOT registered in the test FX service —
+        // this mirrors the production state we observed in uncle's
+        // DB ("only EUR/USD exists, all other pairs missing").
+        // setup_test_env() seeds USD↔CAD only.
+        // Force the SGD→USD lookup to fail explicitly to be sure.
+        fx.set_fail("SGD", "USD", true);
+
+        // Quote IS fresh (today).
+        market_data.add_quote_pair("AJBU.SI", create_quote("today", dec!(2.40), "SGD"), None);
+
+        let mut holdings = vec![create_holding(
+            "h_sgx",
+            HoldingType::Security,
+            "AJBU.SI",
+            dec!(1000),
+            "SGD",              // local currency
+            "USD",              // base currency
+            Some(dec!(2000.0)), // cost basis local (SGD)
+            None,
+        )];
+
+        valuation_service
+            .calculate_holdings_live_valuation(&mut holdings)
+            .await
+            .unwrap();
+
+        let h = &holdings[0];
+        // Without FX, market value falls back to cost basis instead
+        // of silently computing 1000 × 2.40 × 1.0 = $2400 (wrong USD
+        // value derived from SGD price + fake 1:1 FX).
+        assert_monetary_value_approx(
+            Some(&h.market_value),
+            dec!(2000.0),
+            dec!(2000.0),
+            TOLERANCE,
+            "Missing FX fallback: market_value == cost_basis (no fake 1:1 conversion)",
+        );
+        assert_eq!(
+            h.unrealized_gain,
+            Some(MonetaryValue::zero()),
+            "Unrealized gain == 0 on missing-FX fallback"
+        );
+    }
+
+    /// Same-currency quote and base (USD/USD) doesn't need an FX
+    /// rate at all — the strict path should NOT route to fallback
+    /// just because the FX service doesn't have a USD→USD rate
+    /// registered. Same-currency short-circuits to 1.0 by definition.
+    #[tokio::test]
+    async fn test_same_currency_does_not_require_fx_pair() {
+        let (_fx, market_data, valuation_service) = setup_test_env();
+        market_data.add_quote_pair(
+            "AAPL",
+            create_quote("today", dec!(200.0), "USD"),
+            Some(create_quote("yesterday", dec!(195.0), "USD")),
+        );
+
+        let mut holdings = vec![create_holding(
+            "h_usd",
+            HoldingType::Security,
+            "AAPL",
+            dec!(10),
+            "USD",
+            "USD",
+            Some(dec!(1500.0)),
+            None,
+        )];
+
+        valuation_service
+            .calculate_holdings_live_valuation(&mut holdings)
+            .await
+            .unwrap();
+
+        let h = &holdings[0];
+        // Live quote used, not cost basis: 10 × 200 = 2000.
+        assert_monetary_value_approx(
+            Some(&h.market_value),
+            dec!(2000.0),
+            dec!(2000.0),
+            TOLERANCE,
+            "Same-currency quote uses live price, not fallback",
+        );
+        assert_eq!(h.price, Some(dec!(200.0)));
     }
 }

@@ -3482,6 +3482,7 @@ impl ActivityServiceTrait for ActivityService {
                     assets_created: 0,
                     success: false,
                     error_message: Some("Account is required for all activities.".to_string()),
+                    quote_sync: None,
                 },
             });
         }
@@ -3623,6 +3624,7 @@ impl ActivityServiceTrait for ActivityService {
                     assets_created: 0,
                     success: false,
                     error_message: Some("Validation errors found in activities.".to_string()),
+                    quote_sync: None,
                 },
             });
         }
@@ -3864,7 +3866,34 @@ impl ActivityServiceTrait for ActivityService {
             }
         }
 
-        // ── 11. Emit events + build ordered result ────────────────────────────
+        // ── 11. Synchronous quote sync for imported assets ────────────────────
+        //
+        // Historically the import flow returned to the UI immediately and
+        // left quote fetching to the background sync. Users hit the
+        // dashboard within seconds, the background sync hadn't caught
+        // up, the holdings_valuation_service fell back to $0 (later: cost
+        // basis), and the headline portfolio total looked wildly wrong
+        // until the next recalc. Symptom: a 78-position Yahoo Portfolio
+        // import showed $187K against an actual $236K market value.
+        //
+        // Enterprise-grade fix: BEFORE the import call returns, run an
+        // incremental quote sync against the asset IDs we just inserted
+        // activities for, AWAIT it, and capture the per-symbol outcome.
+        // The UI can then render "12 symbols got live prices, 3 using
+        // cost basis" with surgical accuracy on the first paint —
+        // instead of a silently-wrong total that self-corrects after an
+        // unspecified delay.
+        //
+        // Symbols Yahoo can't resolve (delisted, OTC, foreign exchanges
+        // the provider doesn't carry) remain on the cost-basis fallback
+        // shipped in #19. That's the safety net; this is the upgrade.
+        let quote_sync_report = if inserted_count > 0 && !asset_ids.is_empty() {
+            Some(self.run_post_import_quote_sync(&asset_ids).await)
+        } else {
+            None
+        };
+
+        // ── 12. Emit events + build ordered result ────────────────────────────
         if inserted_count > 0 {
             self.emit_activities_changed(account_ids, asset_ids, currencies, earliest_at);
         }
@@ -3884,6 +3913,7 @@ impl ActivityServiceTrait for ActivityService {
                 assets_created: 0,
                 success: true,
                 error_message: None,
+                quote_sync: quote_sync_report,
             },
         })
     }
@@ -4201,6 +4231,63 @@ impl ActivityServiceTrait for ActivityService {
 
 // Private helper methods for ActivityService
 impl ActivityService {
+    /// Run a synchronous incremental quote sync for the asset IDs just
+    /// inserted via `import_activities`, and return a per-symbol report
+    /// suitable for surfacing in the import preview UI.
+    ///
+    /// **Failure mode is non-fatal.** If the quote sync itself errors
+    /// (no provider configured, every provider rate-limited, network
+    /// down), we log loudly and return an empty `ImportQuoteSyncReport`
+    /// rather than failing the whole import — the activities are
+    /// already in the DB, and the cost-basis fallback in the valuation
+    /// service will keep the dashboard sane until the next sync attempt.
+    /// Failing the import outright would be worse: the user would lose
+    /// the parsed rows and have to re-upload.
+    pub(crate) async fn run_post_import_quote_sync(
+        &self,
+        asset_ids: &[String],
+    ) -> ImportQuoteSyncReport {
+        use crate::quotes::SyncMode;
+
+        let id_set: HashSet<&String> = asset_ids.iter().collect();
+        let sync_result = match self
+            .quote_service
+            .sync(SyncMode::Incremental, Some(asset_ids.to_vec()))
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                warn!(
+                    "Post-import quote sync failed entirely for {} assets: {}. \
+                     Activities are imported; dashboard will use cost-basis \
+                     fallback until the next recalc.",
+                    asset_ids.len(),
+                    e
+                );
+                return ImportQuoteSyncReport {
+                    live_priced: Vec::new(),
+                    failed: asset_ids.to_vec(),
+                    not_found: Vec::new(),
+                    skipped: Vec::new(),
+                    quotes_added: 0,
+                };
+            }
+        };
+
+        let report = categorise_post_import_sync(asset_ids, &id_set, &sync_result);
+        debug!(
+            "Post-import quote sync: {} assets requested → {} live, {} failed, \
+             {} not_found, {} skipped, {} quotes added",
+            asset_ids.len(),
+            report.live_priced.len(),
+            report.failed.len(),
+            report.not_found.len(),
+            report.skipped.len(),
+            sync_result.quotes_synced,
+        );
+        report
+    }
+
     async fn prepare_activities_internal(
         &self,
         activities: Vec<NewActivity>,
@@ -4635,5 +4722,288 @@ mod securities_transfer_tests {
     fn non_transfer_types_are_not_securities_transfers() {
         assert!(!is_securities_transfer("BUY", Some("AAPL")));
         assert!(!is_securities_transfer("DEPOSIT", Some("CASH:USD")));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Post-import quote-sync categorisation
+// ─────────────────────────────────────────────────────────────────────
+
+/// Categorise a `SyncResult` returned by the quote-sync engine into
+/// per-asset buckets suitable for surfacing in the import-preview UI.
+///
+/// The sync engine doesn't emit per-asset Success records in the
+/// standard `SyncResult` — only aggregates (`synced`, `failed`,
+/// `skipped`) plus a `Vec<SyncError>` of failures, a legacy
+/// `failures: Vec<(symbol, message)>`, and `skipped_reasons:
+/// Vec<(asset_id, AssetSkipReason)>`. We derive `live_priced` by
+/// elimination — anything in our requested set that isn't claimed
+/// by failure or skip buckets got a quote.
+///
+/// **Pure function.** No I/O, no service dependencies, deterministic
+/// for the given inputs. Pulled out of `run_post_import_quote_sync`
+/// so the unit tests below can exercise every branch (full success,
+/// partial failure, all not-found, mixed skipped + failed, etc.)
+/// without standing up the whole ActivityService dependency graph.
+fn categorise_post_import_sync(
+    asset_ids: &[String],
+    id_set: &HashSet<&String>,
+    sync_result: &crate::quotes::sync::SyncResult,
+) -> ImportQuoteSyncReport {
+    let mut failed: Vec<String> = sync_result
+        .errors
+        .iter()
+        .map(|e| e.asset_id.0.clone())
+        .filter(|id| id_set.contains(id))
+        .collect();
+    for (id_or_symbol, _msg) in &sync_result.failures {
+        if id_set.contains(id_or_symbol) && !failed.contains(id_or_symbol) {
+            failed.push(id_or_symbol.clone());
+        }
+    }
+
+    let mut not_found: Vec<String> = Vec::new();
+    let mut skipped: Vec<String> = Vec::new();
+    for (asset_id, reason) in &sync_result.skipped_reasons {
+        if !id_set.contains(asset_id) {
+            continue;
+        }
+        match reason {
+            crate::quotes::sync::AssetSkipReason::NotFound => {
+                if !failed.contains(asset_id) {
+                    not_found.push(asset_id.clone());
+                }
+            }
+            _ => {
+                if !failed.contains(asset_id) && !not_found.contains(asset_id) {
+                    skipped.push(asset_id.clone());
+                }
+            }
+        }
+    }
+
+    let attended: HashSet<&String> = failed
+        .iter()
+        .chain(not_found.iter())
+        .chain(skipped.iter())
+        .collect();
+    let live_priced: Vec<String> = asset_ids
+        .iter()
+        .filter(|id| !attended.contains(id))
+        .cloned()
+        .collect();
+
+    ImportQuoteSyncReport {
+        live_priced,
+        failed,
+        not_found,
+        skipped,
+        quotes_added: sync_result.quotes_synced as u32,
+    }
+}
+
+#[cfg(test)]
+mod post_import_sync_categorisation_tests {
+    use super::*;
+    use crate::quotes::sync::{
+        AssetSkipReason, SyncError, SyncResult,
+    };
+    use crate::quotes::types::AssetId;
+
+    fn ids(names: &[&str]) -> Vec<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+    fn id_set<'a>(asset_ids: &'a [String]) -> HashSet<&'a String> {
+        asset_ids.iter().collect()
+    }
+
+    /// Happy path: every requested asset got a quote — `live_priced`
+    /// matches the input one-for-one, no failures or skips.
+    #[test]
+    fn all_assets_succeed_when_no_errors_or_skips() {
+        let asset_ids = ids(&["AAPL", "MSFT", "GOOG"]);
+        let set = id_set(&asset_ids);
+        let sync_result = SyncResult {
+            synced: 3,
+            quotes_synced: 3,
+            ..Default::default()
+        };
+
+        let report = categorise_post_import_sync(&asset_ids, &set, &sync_result);
+
+        assert_eq!(report.live_priced.len(), 3);
+        assert!(report.failed.is_empty());
+        assert!(report.not_found.is_empty());
+        assert!(report.skipped.is_empty());
+        assert_eq!(report.quotes_added, 3);
+        let live: HashSet<_> = report.live_priced.iter().cloned().collect();
+        assert!(live.contains("AAPL") && live.contains("MSFT") && live.contains("GOOG"));
+    }
+
+    /// Mixed case: 1 succeeds, 1 fails with error, 1 skipped as
+    /// NotFound. Each lands in the right bucket exactly once and
+    /// the counts add up.
+    #[test]
+    fn mixed_success_failure_and_not_found() {
+        let asset_ids = ids(&["LIVE", "BROKEN", "DELISTED"]);
+        let set = id_set(&asset_ids);
+        let sync_result = SyncResult {
+            synced: 1,
+            failed: 1,
+            skipped: 1,
+            quotes_synced: 1,
+            errors: vec![SyncError {
+                asset_id: AssetId::new("BROKEN"),
+                message: "yahoo rate limit".to_string(),
+                provider_errors: vec![],
+            }],
+            skipped_reasons: vec![("DELISTED".to_string(), AssetSkipReason::NotFound)],
+            ..Default::default()
+        };
+
+        let report = categorise_post_import_sync(&asset_ids, &set, &sync_result);
+
+        assert_eq!(report.live_priced, vec!["LIVE".to_string()]);
+        assert_eq!(report.failed, vec!["BROKEN".to_string()]);
+        assert_eq!(report.not_found, vec!["DELISTED".to_string()]);
+        assert!(report.skipped.is_empty());
+
+        // Total accounted for == input count. This is the invariant
+        // that the dashboard total relies on: every imported asset
+        // must end up in exactly one bucket.
+        assert_eq!(
+            report.live_priced.len()
+                + report.failed.len()
+                + report.not_found.len()
+                + report.skipped.len(),
+            asset_ids.len()
+        );
+    }
+
+    /// `AssetSkipReason::ManualPricing` (and similar legitimate skips)
+    /// land in `skipped`, NOT `not_found`. The dashboard treats
+    /// "skipped — manual mode" very differently from "skipped — not
+    /// found on Yahoo": the first is fine, the second is a real
+    /// signal the user can act on.
+    #[test]
+    fn manual_pricing_skip_lands_in_skipped_bucket() {
+        let asset_ids = ids(&["MANUAL_GOLD"]);
+        let set = id_set(&asset_ids);
+        let sync_result = SyncResult {
+            synced: 0,
+            skipped: 1,
+            skipped_reasons: vec![(
+                "MANUAL_GOLD".to_string(),
+                AssetSkipReason::ManualPricing,
+            )],
+            ..Default::default()
+        };
+
+        let report = categorise_post_import_sync(&asset_ids, &set, &sync_result);
+
+        assert!(report.live_priced.is_empty());
+        assert!(report.failed.is_empty());
+        assert!(report.not_found.is_empty());
+        assert_eq!(report.skipped, vec!["MANUAL_GOLD".to_string()]);
+    }
+
+    /// Legacy `failures: Vec<(symbol, message)>` should also count as
+    /// failure for any asset that matches the requested set. The sync
+    /// engine populates this alongside `errors` for backwards-compat;
+    /// we treat both as evidence of failure but dedupe so an asset
+    /// reported in both fields appears in `failed` exactly once.
+    #[test]
+    fn legacy_failures_field_is_honoured_and_deduped() {
+        let asset_ids = ids(&["BROKEN1", "BROKEN2"]);
+        let set = id_set(&asset_ids);
+        let sync_result = SyncResult {
+            failed: 2,
+            errors: vec![SyncError {
+                asset_id: AssetId::new("BROKEN1"),
+                message: "x".to_string(),
+                provider_errors: vec![],
+            }],
+            failures: vec![
+                ("BROKEN1".to_string(), "duplicate report".to_string()),
+                ("BROKEN2".to_string(), "different fail".to_string()),
+            ],
+            ..Default::default()
+        };
+
+        let report = categorise_post_import_sync(&asset_ids, &set, &sync_result);
+
+        assert_eq!(report.failed.len(), 2);
+        let failed: HashSet<_> = report.failed.iter().cloned().collect();
+        assert!(failed.contains("BROKEN1"));
+        assert!(failed.contains("BROKEN2"));
+    }
+
+    /// Asset IDs the sync engine reports as failed/skipped that
+    /// AREN'T in our requested set should be ignored — they're not
+    /// part of this import and shouldn't pollute its report.
+    #[test]
+    fn irrelevant_asset_results_are_ignored() {
+        let asset_ids = ids(&["MINE"]);
+        let set = id_set(&asset_ids);
+        let sync_result = SyncResult {
+            errors: vec![SyncError {
+                asset_id: AssetId::new("SOMEONE_ELSES"),
+                message: "irrelevant".to_string(),
+                provider_errors: vec![],
+            }],
+            skipped_reasons: vec![(
+                "ALSO_IRRELEVANT".to_string(),
+                AssetSkipReason::NotFound,
+            )],
+            ..Default::default()
+        };
+
+        let report = categorise_post_import_sync(&asset_ids, &set, &sync_result);
+
+        assert_eq!(report.live_priced, vec!["MINE".to_string()]);
+        assert!(report.failed.is_empty());
+        assert!(report.not_found.is_empty());
+        assert!(report.skipped.is_empty());
+    }
+
+    /// An asset that lands in BOTH `errors` and `skipped_reasons:
+    /// NotFound` (which can theoretically happen on a degenerate
+    /// sync) should appear in `failed` exactly once, never twice and
+    /// never also in `not_found`. The bucket-priority is failure >
+    /// not_found > skipped — failure is the most actionable signal.
+    #[test]
+    fn asset_in_both_buckets_lands_in_failed_only() {
+        let asset_ids = ids(&["WEIRD"]);
+        let set = id_set(&asset_ids);
+        let sync_result = SyncResult {
+            errors: vec![SyncError {
+                asset_id: AssetId::new("WEIRD"),
+                message: "outer fail".to_string(),
+                provider_errors: vec![],
+            }],
+            skipped_reasons: vec![("WEIRD".to_string(), AssetSkipReason::NotFound)],
+            ..Default::default()
+        };
+
+        let report = categorise_post_import_sync(&asset_ids, &set, &sync_result);
+
+        assert_eq!(report.failed, vec!["WEIRD".to_string()]);
+        assert!(report.not_found.is_empty());
+        assert!(report.skipped.is_empty());
+        assert!(report.live_priced.is_empty());
+    }
+
+    /// Empty input: empty report, no panics.
+    #[test]
+    fn empty_input_produces_empty_report() {
+        let asset_ids: Vec<String> = vec![];
+        let set = id_set(&asset_ids);
+        let sync_result = SyncResult::default();
+        let report = categorise_post_import_sync(&asset_ids, &set, &sync_result);
+        assert!(report.live_priced.is_empty());
+        assert!(report.failed.is_empty());
+        assert!(report.not_found.is_empty());
+        assert!(report.skipped.is_empty());
+        assert_eq!(report.quotes_added, 0);
     }
 }

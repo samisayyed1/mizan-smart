@@ -279,7 +279,17 @@ impl ConnectApiClient {
     ///
     /// Calls the Mizan Connect backend's `DELETE /api/v1/sync/brokerage/connections/{id}`.
     /// The backend revokes the upstream SnapTrade authorization and soft-deletes
-    /// the local broker_connections row. Idempotent — repeat deletes return 200.
+    /// the local broker_connections row.
+    ///
+    /// **Idempotent.** A 404 response means the connection is already gone
+    /// from the cloud — which is the goal of disconnect — so we treat it as
+    /// success rather than surfacing a confusing "connection not found"
+    /// toast to the user. This happens in real life when:
+    ///   * The user wipes their local DB but the cloud still has older
+    ///     connection IDs from previous sessions (stale local cache).
+    ///   * A previous disconnect attempt revoked the connection cloud-side
+    ///     but the local UI never refreshed its query.
+    ///   * Two devices race a disconnect and only one wins.
     ///
     /// # Arguments
     ///
@@ -302,6 +312,13 @@ impl ConnectApiClient {
             .map_err(|e| Error::Unexpected(format!("Failed to disconnect broker: {}", e)))?;
 
         let status = response.status();
+        if status == reqwest::StatusCode::NOT_FOUND {
+            debug!(
+                "[ConnectApi] Disconnect returned 404 for {} — connection already gone, treating as success",
+                connection_id
+            );
+            return Ok(());
+        }
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
             return Err(Error::Unexpected(format!(

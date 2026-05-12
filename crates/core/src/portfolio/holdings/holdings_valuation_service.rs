@@ -384,14 +384,59 @@ impl HoldingsValuationService {
                 holding.prev_close_value = None;
             }
         } else {
-            warn!(
-                "{}: Quote pair data missing. Market valuation incomplete.",
-                context_msg
-            );
-            holding.market_value = MonetaryValue::zero();
-            holding.price = None;
-            holding.unrealized_gain = None;
-            holding.unrealized_gain_pct = None;
+            // No live quote available for this asset. Historically this
+            // path silently set market_value = $0, which is wrong: every
+            // position the background Yahoo sync hadn't caught up to
+            // would show $0 on the dashboard, and the portfolio total
+            // would massively understate (real-world repro: a 78-position
+            // Yahoo Portfolio import showed $187K against an actual
+            // $236K market value — a 21% shortfall — because ~58 of
+            // 78 symbols hadn't been quote-synced yet).
+            //
+            // Production-grade fix: fall back to **cost basis** (what
+            // the user paid). The dashboard total now reflects every
+            // position's last-known value instead of dropping the
+            // missing ones to zero. The user still sees a warning in
+            // the logs that the live quote is missing, and Data Health
+            // surfaces the stale-quote count.
+            //
+            // This is conservative — it doesn't invent a market gain
+            // for un-quoted positions, it just stops pretending they
+            // don't exist. When the Yahoo sync eventually catches up,
+            // the real quote replaces this fallback automatically on
+            // the next portfolio recalc.
+            if let Some(cost_basis) = &holding.cost_basis {
+                let per_unit_local = if quantity != Decimal::ZERO {
+                    cost_basis.local / quantity
+                } else {
+                    Decimal::ZERO
+                };
+                warn!(
+                    "{}: Quote pair data missing. Falling back to cost-basis valuation \
+                     ({} {}/unit). Dashboard total includes this position at cost; \
+                     unrealized gain reported as 0 until live quote arrives.",
+                    context_msg, per_unit_local, pos_currency
+                );
+                holding.price = Some(per_unit_local);
+                holding.market_value = MonetaryValue {
+                    local: cost_basis.local,
+                    base: cost_basis.base,
+                };
+                holding.unrealized_gain = Some(MonetaryValue::zero());
+                holding.unrealized_gain_pct = Some(Decimal::ZERO);
+            } else {
+                // Last resort: no quote AND no cost basis. Truly zero —
+                // this only happens for ghost rows that snuck through
+                // without any pricing context, which is itself a bug.
+                warn!(
+                    "{}: Quote pair AND cost basis both missing. Market valuation = $0.",
+                    context_msg
+                );
+                holding.market_value = MonetaryValue::zero();
+                holding.price = None;
+                holding.unrealized_gain = None;
+                holding.unrealized_gain_pct = None;
+            }
             holding.day_change = None;
             holding.day_change_pct = None;
             holding.prev_close_value = None;

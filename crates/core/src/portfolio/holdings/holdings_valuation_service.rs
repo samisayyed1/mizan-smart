@@ -13,6 +13,22 @@ use rust_decimal_macros::dec;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+/// A quote older than this many days is treated as **missing** for the
+/// purpose of dashboard valuation — the cost-basis fallback fires
+/// instead.
+///
+/// Rationale: an actively-traded security should produce a fresh
+/// quote on every trading day. Weekends + a typical national holiday
+/// week buys us five calendar days; seven gives a single comfortable
+/// retry window before we surface a "this hasn't synced lately"
+/// signal. Manual/illiquid assets that genuinely only quote once a
+/// week or less are MANUAL-mode and route through a different code
+/// path that doesn't hit this gate.
+///
+/// Pulled out as a `const` so a future user setting can override it
+/// per-asset if needed; for now everyone gets the same threshold.
+const MAX_QUOTE_AGE_DAYS: i64 = 7;
+
 #[async_trait]
 pub trait HoldingsValuationServiceTrait: Send + Sync {
     async fn calculate_holdings_live_valuation(&self, holdings: &mut [Holding]) -> Result<()>;
@@ -54,23 +70,68 @@ impl HoldingsValuationService {
         user_today(tz)
     }
 
-    // Private helper to get FX rate with logging and fallback
+    // Private helper to get FX rate with logging and fallback.
+    //
+    // **Lenient.** Returns 1.0 when no rate is registered. Use this
+    // ONLY for non-critical conversions (e.g. computing `prev_close_value`
+    // for the day-change display, where a 1.0 fallback at worst breaks
+    // one widget). NEVER use this for `market_value_base` — silently
+    // valuing SGD-denominated holdings at SGD == USD is the bug that
+    // shipped the dashboard at $184K instead of the actual ~$236K. For
+    // the headline portfolio value, use `try_get_fx_rate` instead and
+    // route to the cost-basis fallback when it returns None.
     fn get_fx_rate_or_fallback(
         &self,
         from_curr: &str,
         to_curr: &str,
         context_msg: &str,
     ) -> Decimal {
+        self.try_get_fx_rate(from_curr, to_curr, context_msg)
+            .unwrap_or(Decimal::ONE)
+    }
+
+    /// **Strict FX getter.** Returns `None` when no rate is registered
+    /// between the supplied currencies and they aren't equal. Same-
+    /// currency conversions always return `Some(1.0)` without a
+    /// service call — the FX service's same-currency short-circuit is
+    /// already implemented, but having it here too keeps the hot path
+    /// fast and obvious.
+    ///
+    /// Caller is responsible for handling the None case correctly —
+    /// for the headline market-value calculation, that means falling
+    /// back to cost basis (the same path as a fully-missing quote).
+    fn try_get_fx_rate(
+        &self,
+        from_curr: &str,
+        to_curr: &str,
+        context_msg: &str,
+    ) -> Option<Decimal> {
+        if from_curr.eq_ignore_ascii_case(to_curr) {
+            return Some(Decimal::ONE);
+        }
         match self.fx_service.get_latest_exchange_rate(from_curr, to_curr) {
-            Ok(rate) => rate,
+            Ok(rate) => Some(rate),
             Err(e) => {
                 warn!(
-                    "{}: Error getting FX rate {}->{}: {}. Using 1.0.",
+                    "{}: FX rate {}->{} unavailable: {}. Will route position to cost-basis fallback.",
                     context_msg, from_curr, to_curr, e
                 );
-                Decimal::ONE // Fallback
+                None
             }
         }
+    }
+
+    /// True iff `quote_timestamp` is within the staleness window
+    /// (`MAX_QUOTE_AGE_DAYS`) of `today`. Quotes older than that are
+    /// treated as missing — see [`MAX_QUOTE_AGE_DAYS`] for rationale.
+    fn quote_is_fresh(
+        &self,
+        quote_timestamp: chrono::DateTime<chrono::Utc>,
+        today: chrono::NaiveDate,
+    ) -> bool {
+        let quote_date = quote_timestamp.date_naive();
+        let age_days = today.signed_duration_since(quote_date).num_days();
+        age_days <= MAX_QUOTE_AGE_DAYS
     }
 
     // Helper to fetch necessary market data in batches
@@ -260,7 +321,54 @@ impl HoldingsValuationService {
         }
 
         // --- Fetch and Process Quote Data (For Non-Zero Quantity) ---
-        if let Some(quote_pair) = latest_quote_pairs.get(asset_id) {
+        //
+        // Three reasons we'd refuse to use the live quote and route to
+        // the cost-basis fallback instead:
+        //   (a) no quote at all for this asset
+        //   (b) quote is older than `MAX_QUOTE_AGE_DAYS`
+        //   (c) FX rate quote_ccy → base_ccy is not registered
+        //
+        // (b) and (c) were both silent-failure paths historically:
+        // stale quotes were treated as live, and a missing FX pair
+        // returned 1.0 (valuing SGD-denominated positions at SGD == USD).
+        // Both produced wildly wrong dashboard totals. We gate them
+        // explicitly here so the same code path that handles "no
+        // quote" — the cost-basis fallback — handles "no usable
+        // quote" too.
+        let today = self.today_in_user_timezone();
+        let usable_quote = latest_quote_pairs.get(asset_id).and_then(|qp| {
+            // (b) staleness check
+            if !self.quote_is_fresh(qp.latest.timestamp, today) {
+                let age_days = today
+                    .signed_duration_since(qp.latest.timestamp.date_naive())
+                    .num_days();
+                warn!(
+                    "{}: Latest quote is {} days old (> {} threshold). \
+                     Falling back to cost-basis valuation.",
+                    context_msg, age_days, MAX_QUOTE_AGE_DAYS
+                );
+                return None;
+            }
+            // (c) FX availability check — only matters if the quote
+            // currency differs from the base currency. Same-currency
+            // is short-circuited inside `try_get_fx_rate`.
+            let normalized_quote_ccy_check = normalize_currency_code(&qp.latest.currency);
+            if self
+                .try_get_fx_rate(
+                    normalized_quote_ccy_check,
+                    base_currency,
+                    &format!("{}: FX Quote->Base", context_msg),
+                )
+                .is_none()
+            {
+                // The warning is already logged inside try_get_fx_rate.
+                // The cost-basis fallback path below will fire.
+                return None;
+            }
+            Some(qp)
+        });
+
+        if let Some(quote_pair) = usable_quote {
             let latest_quote = &quote_pair.latest;
             let prev_quote_opt = quote_pair.previous.as_ref();
 
@@ -276,6 +384,9 @@ impl HoldingsValuationService {
                 );
             }
 
+            // `try_get_fx_rate` already passed in the gate above, so
+            // unwrap_or(1.0) here is just belt-and-suspenders — we'd
+            // never get here with a missing pair.
             let fx_rate_quote_to_base = self.get_fx_rate_or_fallback(
                 normalized_quote_currency,
                 base_currency,

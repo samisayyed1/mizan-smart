@@ -195,80 +195,124 @@ const FIELD_SUBTYPE: &str = "subtype";
 
 // ============================================================================
 // Header Detection Patterns (fallback when LLM omits field_mappings)
+//
+// IMPORTANT: order patterns from MOST SPECIFIC to LEAST SPECIFIC. The
+// matcher first tries an exact (case-insensitive) match across all fields,
+// then falls back to substring scan in this declared order. A naive
+// substring scan that puts "price" before "purchase price" would match
+// Yahoo's *current* price column ("Current Price", "Day's Range") and
+// silently overwrite the user's actual cost basis with live quote data —
+// the classic "amounts are wildly off after CSV import" bug.
+//
+// Yahoo Finance Portfolio CSVs are the canonical adversarial input: they
+// ship every Yahoo column (Date, Symbol, Current Price, Day's High, Volume,
+// Trade Date, Purchase Price, Shares, Commission, ...) and the wrong column
+// looks plausibly "right" if you only substring-match generic words.
 // ============================================================================
 
 const DATE_PATTERNS: &[&str] = &[
-    "date",
+    // Specific trade/transaction dates first — Yahoo CSVs have a generic
+    // "Date" column (the quote date) ALONGSIDE "Trade Date".
     "trade date",
-    "activity date",
-    "transaction date",
-    "settlement date",
     "trade_date",
-    "activity_date",
+    "transaction date",
     "transaction_date",
-    "time",
+    "activity date",
+    "activity_date",
+    "settlement date",
+    "purchase date",
+    "execution date",
     "datetime",
+    "date",
+    "time",
 ];
 
 const ACTIVITY_TYPE_PATTERNS: &[&str] = &[
-    "type",
     "activity type",
-    "transaction type",
-    "action",
-    "activity",
     "activity_type",
+    "transaction type",
     "transaction_type",
     "trans type",
+    "action",
     "operation",
+    "activity",
+    "type",
 ];
 
 const SYMBOL_PATTERNS: &[&str] = &[
-    "symbol",
-    "ticker",
-    "stock",
-    "security",
-    "asset",
-    "instrument",
     "ticker symbol",
     "stock symbol",
+    "symbol",
+    "ticker",
     "isin",
     "cusip",
+    "instrument",
+    "security",
+    "stock",
+    "asset",
 ];
 
 const QUANTITY_PATTERNS: &[&str] = &[
+    // "shares" / specific share-count columns first — Yahoo's "Volume" is
+    // daily trade volume of the security, NOT the user's holding quantity.
+    // Mis-mapping Volume → Quantity is a recurring footgun.
+    "number of shares",
+    "no of shares",
+    "no. of shares",
+    "share count",
+    "shares",
     "quantity",
     "qty",
-    "shares",
     "units",
-    "no of shares",
-    "number of shares",
-    "volume",
+    // Intentionally NOT including "volume" — too risky on Yahoo CSVs.
+    // If a broker really uses "Volume" for position size, the LLM mapping
+    // path or manual override still handles it.
 ];
 
 const UNIT_PRICE_PATTERNS: &[&str] = &[
-    "price",
-    "unit price",
-    "share price",
-    "cost per share",
-    "avg price",
-    "unit_price",
-    "share_price",
-    "execution price",
+    // Specific purchase/trade prices first — Yahoo Portfolio CSVs include
+    // "Current Price" (live quote) AND "Purchase Price" (what the user
+    // paid). The user's amounts come from the latter; matching the former
+    // produces "off" amounts that look like real-time hallucinations.
+    "purchase price",
+    "purchase_price",
     "trade price",
+    "execution price",
+    "fill price",
+    "cost per share",
+    "cost basis per share",
+    "avg price",
+    "average price",
+    "unit price",
+    "unit_price",
+    "share price",
+    "share_price",
+    "price per share",
+    "price",
 ];
 
 const AMOUNT_PATTERNS: &[&str] = &[
-    "total",
-    "amount",
-    "value",
+    // Specific monetary totals first. "Market Value" / "Current Value"
+    // would inject Yahoo's live valuation into the historical amount field;
+    // we prefer trade-totals.
     "net amount",
     "gross amount",
-    "market value",
     "total amount",
     "total value",
+    "total cost",
+    "trade amount",
+    "transaction amount",
+    "settlement amount",
     "proceeds",
-    "cost",
     "net value",
+    "amount",
+    "total",
+    // Generic "value" / "cost" / "market value" are LAST so they only match
+    // when nothing more specific won earlier.
+    "market value",
+    "current value",
+    "value",
+    "cost",
 ];
 
 const CURRENCY_PATTERNS: &[&str] = &["currency", "ccy", "currency code", "curr", "trade currency"];
@@ -326,6 +370,17 @@ const SUBTYPE_PATTERNS: &[&str] = &[
 // ============================================================================
 
 /// Auto-detect field mappings from CSV headers.
+///
+/// Two-pass matching to handle broker CSVs (Yahoo Portfolio in particular)
+/// that ship many semantically similar columns side-by-side:
+///   Pass 1 — exact (case-insensitive) match against any pattern.
+///   Pass 2 — substring match, walking patterns in declared MOST-SPECIFIC-
+///            FIRST order so "purchase price" wins over the generic "price"
+///            that would otherwise grab Yahoo's *current* price column.
+///
+/// A header is consumed by at most one field. Headers already claimed by an
+/// earlier field cannot be reused — that prevents both Quantity and Amount
+/// from latching onto the same `Total` column.
 fn auto_detect_field_mappings(headers: &[String]) -> HashMap<String, String> {
     let mut mappings = HashMap::new();
     let mut used_headers = HashSet::new();
@@ -345,13 +400,31 @@ fn auto_detect_field_mappings(headers: &[String]) -> HashMap<String, String> {
         (FIELD_SUBTYPE, SUBTYPE_PATTERNS),
     ];
 
+    // Pass 1: exact match. Walks patterns in declared order (specific →
+    // generic) and picks the FIRST header that exactly equals any pattern.
     for (field, patterns) in field_patterns {
-        for header in headers {
-            if used_headers.contains(header) {
-                continue;
+        for pattern in *patterns {
+            if let Some(header) = headers
+                .iter()
+                .find(|h| !used_headers.contains(*h) && h.to_lowercase() == *pattern)
+            {
+                mappings.insert(field.to_string(), header.clone());
+                used_headers.insert(header.clone());
+                break;
             }
-            let lower = header.to_lowercase();
-            if patterns.iter().any(|p| lower == *p || lower.contains(p)) {
+        }
+    }
+
+    // Pass 2: substring fallback for fields that pass 1 didn't claim.
+    for (field, patterns) in field_patterns {
+        if mappings.contains_key(*field) {
+            continue;
+        }
+        for pattern in *patterns {
+            if let Some(header) = headers
+                .iter()
+                .find(|h| !used_headers.contains(*h) && h.to_lowercase().contains(pattern))
+            {
                 mappings.insert(field.to_string(), header.clone());
                 used_headers.insert(header.clone());
                 break;
@@ -812,6 +885,108 @@ mod tests {
         assert_eq!(mappings.get(FIELD_UNIT_PRICE), Some(&"Price".to_string()));
         assert_eq!(mappings.get(FIELD_AMOUNT), Some(&"Total".to_string()));
         assert_eq!(mappings.get(FIELD_ACTIVITY_TYPE), Some(&"Type".to_string()));
+    }
+
+    /// Yahoo Portfolio CSV — the canonical adversarial input. The CSV
+    /// includes both the user's actual trade columns ("Trade Date",
+    /// "Purchase Price", "Shares") AND Yahoo's live-quote columns
+    /// ("Date", "Current Price", "Volume", "Market Value"). The
+    /// auto-detector must pick the trade columns, not the live-quote
+    /// columns, or amounts get silently replaced by Yahoo's current market
+    /// data and look "off" / "hallucinated" to the user.
+    #[test]
+    fn test_auto_detect_yahoo_portfolio_csv() {
+        let headers = vec![
+            "Symbol".to_string(),
+            "Current Price".to_string(),
+            "Date".to_string(),
+            "Time".to_string(),
+            "Change".to_string(),
+            "Open".to_string(),
+            "High".to_string(),
+            "Low".to_string(),
+            "Volume".to_string(),
+            "Trade Date".to_string(),
+            "Purchase Price".to_string(),
+            "Shares".to_string(),
+            "Commission".to_string(),
+            "High Limit".to_string(),
+            "Low Limit".to_string(),
+            "Comment".to_string(),
+        ];
+        let mappings = auto_detect_field_mappings(&headers);
+
+        // Trade date wins over the generic Date (which is Yahoo's quote date).
+        assert_eq!(
+            mappings.get(FIELD_DATE),
+            Some(&"Trade Date".to_string()),
+            "trade date must beat the generic quote 'Date' column"
+        );
+        assert_eq!(mappings.get(FIELD_SYMBOL), Some(&"Symbol".to_string()));
+        // Shares wins over Volume — Volume is Yahoo's daily traded volume.
+        assert_eq!(
+            mappings.get(FIELD_QUANTITY),
+            Some(&"Shares".to_string()),
+            "shares must beat 'Volume' (daily traded volume, not user holding)"
+        );
+        // Purchase Price wins over Current Price (live quote).
+        assert_eq!(
+            mappings.get(FIELD_UNIT_PRICE),
+            Some(&"Purchase Price".to_string()),
+            "purchase price must beat the live-quote 'Current Price'"
+        );
+        assert_eq!(mappings.get(FIELD_FEE), Some(&"Commission".to_string()));
+        assert_eq!(mappings.get(FIELD_COMMENT), Some(&"Comment".to_string()));
+    }
+
+    /// Snake-case and underscore variants — common in broker CSVs.
+    #[test]
+    fn test_auto_detect_snake_case_variants() {
+        let headers = vec![
+            "trade_date".to_string(),
+            "ticker_symbol".to_string(),
+            "no of shares".to_string(),
+            "execution price".to_string(),
+            "trade amount".to_string(),
+        ];
+        let mappings = auto_detect_field_mappings(&headers);
+        assert_eq!(mappings.get(FIELD_DATE), Some(&"trade_date".to_string()));
+        assert_eq!(
+            mappings.get(FIELD_SYMBOL),
+            Some(&"ticker_symbol".to_string())
+        );
+        assert_eq!(
+            mappings.get(FIELD_QUANTITY),
+            Some(&"no of shares".to_string())
+        );
+        assert_eq!(
+            mappings.get(FIELD_UNIT_PRICE),
+            Some(&"execution price".to_string())
+        );
+        assert_eq!(
+            mappings.get(FIELD_AMOUNT),
+            Some(&"trade amount".to_string())
+        );
+    }
+
+    /// One header should not be claimed by two fields. If both Quantity
+    /// and Amount could match "Total", the first field in declared order
+    /// (Quantity) wins and Amount falls through to the next candidate.
+    #[test]
+    fn test_auto_detect_no_double_claim() {
+        let headers = vec![
+            "Date".to_string(),
+            "Symbol".to_string(),
+            "Shares".to_string(),
+            "Price".to_string(),
+            "Total".to_string(),
+        ];
+        let mappings = auto_detect_field_mappings(&headers);
+        assert_eq!(mappings.get(FIELD_QUANTITY), Some(&"Shares".to_string()));
+        assert_eq!(mappings.get(FIELD_AMOUNT), Some(&"Total".to_string()));
+        // Each header is claimed exactly once.
+        let claimed: HashSet<_> = mappings.values().cloned().collect();
+        assert_eq!(claimed.len(), mappings.len(), "no header claimed twice");
     }
 
     #[test]

@@ -8,6 +8,7 @@ use crate::db::{get_connection, WriteHandle};
 use crate::errors::StorageError;
 use crate::schema::accounts;
 use crate::schema::accounts::dsl::*;
+use crate::schema::{daily_account_valuation, holdings_snapshots};
 
 use super::model::AccountDB;
 use mizan_core::accounts::{Account, AccountRepositoryTrait, AccountUpdate, NewAccount};
@@ -152,13 +153,42 @@ impl AccountRepositoryTrait for AccountRepository {
         Ok(accounts_list)
     }
 
-    /// Deletes an account by its ID and returns the number of deleted records
+    /// Deletes an account by its ID and returns the number of deleted records.
+    ///
+    /// Atomically cleans up rows in `holdings_snapshots` and
+    /// `daily_account_valuation` that reference this account. Those tables
+    /// were created (2025-04-21 migration) without `FOREIGN KEY ... ON
+    /// DELETE CASCADE`, so the row-level delete here is the only thing
+    /// preventing orphaned snapshots/valuations from sticking around after
+    /// an account goes away — orphans that the dashboard then surfaces as
+    /// phantom historical value for a deleted account.
+    ///
+    /// Activities, goal allocations, broker sync state, and import runs
+    /// all have real CASCADE constraints (init_db + refactor_asset_model
+    /// migrations), so we don't touch them explicitly here.
     async fn delete(&self, account_id_param: &str) -> Result<usize> {
         let id_to_delete_owned = account_id_param.to_string();
         let event_entity_id = id_to_delete_owned.clone();
         self.writer
             .exec_tx(move |tx| {
-                let affected_rows = diesel::delete(accounts.find(id_to_delete_owned))
+                // Clean orphan-prone tables first. Order doesn't strictly
+                // matter (no FK between them) but doing it pre-account-delete
+                // keeps the cleanup atomic with the account row removal.
+                diesel::delete(
+                    holdings_snapshots::table
+                        .filter(holdings_snapshots::account_id.eq(&id_to_delete_owned)),
+                )
+                .execute(tx.conn())
+                .map_err(StorageError::from)?;
+
+                diesel::delete(
+                    daily_account_valuation::table
+                        .filter(daily_account_valuation::account_id.eq(&id_to_delete_owned)),
+                )
+                .execute(tx.conn())
+                .map_err(StorageError::from)?;
+
+                let affected_rows = diesel::delete(accounts.find(&id_to_delete_owned))
                     .execute(tx.conn())
                     .map_err(StorageError::from)?;
 

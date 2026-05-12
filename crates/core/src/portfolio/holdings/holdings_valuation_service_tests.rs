@@ -1371,25 +1371,43 @@ mod tests {
             "h1 Day Change (Missing Test)",
         );
 
-        // Check the holding with missing data has zero/None values
+        // Check the holding with missing market data falls back to
+        // cost basis instead of silently zeroing. This is the
+        // production-grade behaviour: a $0 dashboard line for a
+        // position the user knows they hold is worse than showing
+        // the cost-basis value with a stale-quote warning logged.
         let h_missing = holdings.iter().find(|h| h.id == "h_missing").unwrap();
+        let usd_cad_rate = _fx_service.get_latest_exchange_rate("USD", "CAD").unwrap();
+        assert_monetary_value_approx(
+            Some(&h_missing.market_value),
+            dec!(5000.0),
+            dec!(5000.0) * usd_cad_rate,
+            TOLERANCE,
+            "Missing holding market value should fall back to cost basis (local + base)",
+        );
+        // Price reported is cost basis per unit — informational, the
+        // log already says it's a stale fallback, and the UI can
+        // surface this via Data Health.
         assert_eq!(
-            h_missing.market_value,
-            MonetaryValue::zero(),
-            "Missing holding market value should be zero"
+            h_missing.price,
+            Some(dec!(50.0)),
+            "Missing holding price should fall back to cost-basis per unit (5000/100)"
         );
-        assert!(
-            h_missing.price.is_none(),
-            "Missing holding price should be None"
+        // No live quote ⇒ unrealized gain is exactly zero, not None.
+        // Telling the user "you're up $0" is honest (we have no
+        // basis to claim a gain); leaving it as None made the row
+        // render blank in some UI surfaces.
+        assert_eq!(
+            h_missing.unrealized_gain,
+            Some(MonetaryValue::zero()),
+            "Missing holding unrealized gain should be zero (no live quote to compute gain)"
         );
-        assert!(
-            h_missing.unrealized_gain.is_none(),
-            "Missing holding unrealized gain should be None"
+        assert_eq!(
+            h_missing.unrealized_gain_pct,
+            Some(dec!(0)),
+            "Missing holding unrealized gain pct should be zero"
         );
-        assert!(
-            h_missing.unrealized_gain_pct.is_none(),
-            "Missing holding unrealized gain pct should be None"
-        );
+        // Day change still None — no previous quote to diff against.
         assert!(
             h_missing.day_change.is_none(),
             "Missing holding day change should be None"

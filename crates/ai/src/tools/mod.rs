@@ -19,6 +19,7 @@ pub mod activities;
 pub mod allocation;
 pub mod cash_balances;
 pub mod constants;
+pub mod csv_intel;
 pub mod goals;
 pub mod health;
 pub mod holdings;

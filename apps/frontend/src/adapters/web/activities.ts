@@ -1,5 +1,5 @@
 // Web-specific activity commands
-import type { ParseConfig, ParsedCsvResult } from "@/lib/types";
+import type { CsvImportAnalysis, ParseConfig, ParsedCsvResult } from "@/lib/types";
 import { API_PREFIX, logger } from "./core";
 
 async function extractErrorMessage(response: Response): Promise<string | null> {
@@ -60,4 +60,20 @@ export const parseCsv = async (file: File, config: ParseConfig): Promise<ParsedC
     logger.error("Error parsing CSV file:", err);
     throw err;
   }
+};
+
+/**
+ * Web stub for the smart CSV analysis flow. The server-side
+ * endpoint that mirrors `analyze_csv_import` hasn't been wired up
+ * yet; until it is, web-mode callers fall back to the structural
+ * `parseCsv` and lose the detected-mappings + summary headline.
+ */
+export const analyzeCsvImport = async (
+  _file: File,
+  _config: ParseConfig,
+  _sampleSize?: number,
+): Promise<CsvImportAnalysis> => {
+  throw new Error(
+    "analyzeCsvImport is not yet implemented in web mode — use the desktop app for now",
+  );
 };

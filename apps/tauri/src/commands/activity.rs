@@ -421,3 +421,72 @@ pub async fn parse_csv(
             e.to_string()
         })
 }
+
+/// Result of `analyze_csv_import` — everything the import-preview UI
+/// needs to show in one round-trip.
+#[derive(Debug, serde::Serialize)]
+pub struct CsvImportAnalysis {
+    /// Headers detected by the parser.
+    pub headers: Vec<String>,
+    /// First N data rows (preview only — full row count is in
+    /// `summary.stats.total_input_rows`).
+    pub sample_rows: Vec<Vec<String>>,
+    /// Auto-detected field → header column mapping. Frontend
+    /// pre-fills the mapping editor with this; user can still override.
+    pub field_mappings: HashMap<String, String>,
+    /// Filter + dedupe stats and aggregate totals.
+    pub summary: mizan_ai::tools::csv_intel::ImportSummary,
+}
+
+/// Parse + analyse a CSV in one round-trip for the import-preview UI.
+///
+/// This is the "confidence indicator" the user sees before
+/// committing: total cost basis, sell proceeds, row counts kept vs
+/// dropped (watchlist / zero-value / duplicates). The user can
+/// eyeball the BUY total against what they expect their portfolio
+/// to be worth and bail out if the number looks wildly off — which
+/// usually means the column mapping is wrong.
+#[tauri::command]
+pub async fn analyze_csv_import(
+    content: Vec<u8>,
+    config: ParseConfig,
+    sample_size: Option<usize>,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<CsvImportAnalysis, String> {
+    debug!(
+        "Analysing CSV import: {} bytes, config: {:?}",
+        content.len(),
+        config
+    );
+
+    let parsed = state
+        .activity_service()
+        .parse_csv(&content, &config)
+        .map_err(|e| {
+            debug!("CSV parse error: {}", e);
+            e.to_string()
+        })?;
+
+    let field_mappings =
+        mizan_ai::tools::csv_intel::detect_field_mappings_smart(&parsed.headers, &parsed.rows);
+
+    let summary = mizan_ai::tools::csv_intel::filter_dedupe_and_summarise(
+        &parsed.headers,
+        &field_mappings,
+        &parsed.rows,
+    );
+
+    // Trim sample_rows to the requested size so the IPC payload
+    // doesn't ship a 400-row CSV body to the frontend. The summary
+    // already counted everything; the UI just needs a few rows for
+    // the preview table.
+    let limit = sample_size.unwrap_or(50).min(parsed.rows.len());
+    let sample_rows: Vec<Vec<String>> = parsed.rows.into_iter().take(limit).collect();
+
+    Ok(CsvImportAnalysis {
+        headers: parsed.headers,
+        sample_rows,
+        field_mappings,
+        summary,
+    })
+}

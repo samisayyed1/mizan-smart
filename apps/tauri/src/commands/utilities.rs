@@ -88,12 +88,17 @@ pub async fn install_app_update(app_handle: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 pub async fn backup_database(app_handle: AppHandle) -> Result<(String, Vec<u8>), String> {
+    // .expect() previously panicked the entire Tauri runtime if the
+    // OS refused the app-data-dir lookup or returned a non-UTF-8 path
+    // (rare on macOS, more common on locked-down Linux distros). Now
+    // returns a real error so the frontend can surface "couldn't read
+    // app data" instead of the user seeing the whole window crash.
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
-        .expect("failed to get app data dir")
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
         .to_str()
-        .expect("failed to convert path to string")
+        .ok_or_else(|| "App data dir path is not valid UTF-8".to_string())?
         .to_string();
 
     let backup_path = db::backup_database(&app_data_dir).map_err(|e| e.to_string())?;
@@ -120,12 +125,17 @@ pub async fn backup_database_to_path(
     app_handle: AppHandle,
     backup_dir: String,
 ) -> Result<String, String> {
+    // .expect() previously panicked the entire Tauri runtime if the
+    // OS refused the app-data-dir lookup or returned a non-UTF-8 path
+    // (rare on macOS, more common on locked-down Linux distros). Now
+    // returns a real error so the frontend can surface "couldn't read
+    // app data" instead of the user seeing the whole window crash.
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
-        .expect("failed to get app data dir")
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
         .to_str()
-        .expect("failed to convert path to string")
+        .ok_or_else(|| "App data dir path is not valid UTF-8".to_string())?
         .to_string();
 
     // Normalize the backup directory path (remove file:// prefix if present on iOS/Android)
@@ -149,12 +159,17 @@ pub async fn restore_database(
     app_handle: AppHandle,
     backup_file_path: String,
 ) -> Result<(), String> {
+    // .expect() previously panicked the entire Tauri runtime if the
+    // OS refused the app-data-dir lookup or returned a non-UTF-8 path
+    // (rare on macOS, more common on locked-down Linux distros). Now
+    // returns a real error so the frontend can surface "couldn't read
+    // app data" instead of the user seeing the whole window crash.
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
-        .expect("failed to get app data dir")
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
         .to_str()
-        .expect("failed to convert path to string")
+        .ok_or_else(|| "App data dir path is not valid UTF-8".to_string())?
         .to_string();
 
     // Normalize the backup file path (remove file:// prefix if present on iOS/Android)

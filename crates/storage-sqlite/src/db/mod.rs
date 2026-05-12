@@ -42,6 +42,42 @@ pub fn init(app_data_dir: &str) -> Result<String> {
         ).map_err(StorageError::from)?;
     }
 
+    // 2. Tighten file permissions on Unix-like systems so other users
+    //    on a shared machine (family computer, multi-user dev box)
+    //    can't read the SQLite file directly. The DB contains broker
+    //    OAuth tokens, AI provider API keys (transitionally), and the
+    //    full activity log — anything the app can read, an attacker
+    //    with file read access reads too.
+    //
+    //    On macOS the default `~/Library/Application Support` is
+    //    already user-private (700), so this is belt-and-suspenders;
+    //    on Linux $XDG_DATA_HOME often defaults to 755 which lets
+    //    other local users see the path. Windows ACLs are managed by
+    //    the OS at the user-profile level — no equivalent.
+    //
+    //    Failure to chmod is logged but doesn't abort startup; the DB
+    //    is still usable, just less restrictive than ideal.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        // Tighten both the SQLite file and its parent dir.
+        for path in [Path::new(&db_path), db_dir] {
+            if let Ok(meta) = fs::metadata(path) {
+                let mut perms = meta.permissions();
+                let mode = if path.is_dir() { 0o700 } else { 0o600 };
+                perms.set_mode(mode);
+                if let Err(e) = fs::set_permissions(path, perms) {
+                    log::warn!(
+                        "Could not tighten permissions on {} (mode {:#o}): {}",
+                        path.display(),
+                        mode,
+                        e
+                    );
+                }
+            }
+        }
+    }
+
     Ok(db_path)
 }
 

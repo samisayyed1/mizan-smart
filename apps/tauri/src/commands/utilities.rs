@@ -120,6 +120,79 @@ pub async fn backup_database(app_handle: AppHandle) -> Result<(String, Vec<u8>),
     Ok((filename, buffer))
 }
 
+/// Encrypted user-initiated backup. Writes a passphrase-protected
+/// envelope to disk via [`crate::backup_crypto::encrypt_backup`].
+///
+/// The plaintext SQLite contains broker OAuth tokens, AI API keys,
+/// and the entire activity log; users routinely re-upload backups to
+/// Drive / iCloud / Dropbox / personal NAS where breach-at-provider
+/// is a real risk. This command is what the Settings → Backup button
+/// should call going forward. The legacy `backup_database_to_path`
+/// remains for backwards compatibility but should be removed once
+/// frontend callers are migrated.
+#[tauri::command]
+pub async fn backup_database_to_path_encrypted(
+    app_handle: AppHandle,
+    backup_dir: String,
+    passphrase: String,
+) -> Result<String, String> {
+    let app_data_dir = app_handle
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Failed to get app data dir: {}", e))?
+        .to_str()
+        .ok_or_else(|| "App data dir path is not valid UTF-8".to_string())?
+        .to_string();
+
+    let normalized_backup_dir = normalize_file_path(&backup_dir);
+    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+    let backup_filename = format!("mizan_backup_{}.mzbkp", timestamp);
+    let backup_path = Path::new(&normalized_backup_dir).join(&backup_filename);
+    let backup_path_str = backup_path.to_string_lossy().to_string();
+
+    // Stage 1: write a plaintext SQLite snapshot to a temp file. We
+    // can't encrypt the live DB in-memory because the SQLite VACUUM
+    // INTO that `backup_database_to_file` invokes wants a real path.
+    let tmp_dir = std::env::temp_dir();
+    let tmp_path = tmp_dir.join(format!("mizan_backup_tmp_{}.db", timestamp));
+    let tmp_path_str = tmp_path.to_string_lossy().to_string();
+    db::backup_database_to_file(&app_data_dir, &tmp_path_str)
+        .map_err(|e| format!("Failed to snapshot database for encryption: {}", e))?;
+
+    // Stage 2: read the snapshot, encrypt, write envelope, scrub.
+    let plaintext = match std::fs::read(&tmp_path) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(format!("Failed to read snapshot for encryption: {}", e));
+        }
+    };
+
+    let envelope = match crate::backup_crypto::encrypt_backup(&plaintext, &passphrase) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Err(format!("Encryption failed: {}", e));
+        }
+    };
+
+    // Best-effort scrub of the temp file before writing the output.
+    let _ = std::fs::remove_file(&tmp_path);
+
+    std::fs::write(&backup_path, &envelope)
+        .map_err(|e| format!("Failed to write encrypted backup: {}", e))?;
+
+    // Tighten file permissions on the encrypted backup so it's not
+    // world-readable on multi-user systems even though it's encrypted.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&backup_path, std::fs::Permissions::from_mode(0o600));
+    }
+
+    Ok(backup_path_str)
+}
+
 #[tauri::command]
 pub async fn backup_database_to_path(
     app_handle: AppHandle,
@@ -154,10 +227,20 @@ pub async fn backup_database_to_path(
     Ok(backup_path_str)
 }
 
+/// Restore a backup file.
+///
+/// `passphrase` is optional for backwards compatibility — legacy
+/// unencrypted backups (raw SQLite bytes) restore without one. New
+/// `.mzbkp` envelopes (per `backup_crypto.rs`) auto-detect via magic
+/// header and require the passphrase to decrypt.
+///
+/// If the file is encrypted but no passphrase is supplied, we
+/// return a clear error string so the frontend can prompt the user.
 #[tauri::command]
 pub async fn restore_database(
     app_handle: AppHandle,
     backup_file_path: String,
+    passphrase: Option<String>,
 ) -> Result<(), String> {
     // .expect() previously panicked the entire Tauri runtime if the
     // OS refused the app-data-dir lookup or returned a non-UTF-8 path
@@ -184,8 +267,55 @@ pub async fn restore_database(
         tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
     }
 
+    // Sniff the file header: if it's a Mizan encrypted envelope, write
+    // the decrypted SQLite bytes to a tmp file and restore from THAT.
+    // Otherwise restore from the supplied path directly (legacy
+    // unencrypted backup path).
+    let header = {
+        use std::io::Read;
+        let mut f = std::fs::File::open(&normalized_backup_path)
+            .map_err(|e| format!("Failed to open backup file: {}", e))?;
+        let mut buf = vec![0u8; 16];
+        let n = f
+            .read(&mut buf)
+            .map_err(|e| format!("Failed to read backup header: {}", e))?;
+        buf.truncate(n);
+        buf
+    };
+
+    let restore_source_path: String = if crate::backup_crypto::is_encrypted_envelope(&header) {
+        let passphrase = passphrase.ok_or_else(|| {
+            "Encrypted backup detected — passphrase required to restore.".to_string()
+        })?;
+        let envelope_bytes = std::fs::read(&normalized_backup_path)
+            .map_err(|e| format!("Failed to read encrypted backup: {}", e))?;
+        let plaintext = crate::backup_crypto::decrypt_backup(&envelope_bytes, &passphrase)
+            .map_err(|e| e.to_string())?;
+
+        let tmp = std::env::temp_dir().join(format!(
+            "mizan_restore_tmp_{}.db",
+            chrono::Local::now().format("%Y%m%d_%H%M%S")
+        ));
+        std::fs::write(&tmp, &plaintext)
+            .map_err(|e| format!("Failed to stage decrypted backup: {}", e))?;
+        // Scrub plaintext from memory ASAP — the temp file persists
+        // only until restore_database_safe completes.
+        drop(plaintext);
+        tmp.to_string_lossy().to_string()
+    } else {
+        normalized_backup_path.clone()
+    };
+
     // Use the safe restore function that handles Windows file locking issues
-    db::restore_database_safe(&app_data_dir, &normalized_backup_path).map_err(|e| e.to_string())?;
+    let restore_result = db::restore_database_safe(&app_data_dir, &restore_source_path);
+
+    // Best-effort scrub of any staged decrypted bytes regardless of
+    // restore outcome.
+    if restore_source_path != normalized_backup_path {
+        let _ = std::fs::remove_file(&restore_source_path);
+    }
+
+    restore_result.map_err(|e| e.to_string())?;
 
     // After successful restore, emit event and show restart dialog
     app_handle

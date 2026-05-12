@@ -26,7 +26,16 @@ export function AccountContributionLimit({ accountId }: AccountContributionLimit
 
   const { data: deposits, isLoading: isDepositsLoading } = useQuery<DepositsCalculation, Error>({
     queryKey: [QueryKeys.CONTRIBUTION_LIMIT_PROGRESS, accountId, currentYear],
-    queryFn: () => calculateDepositsForLimit(limitForAccount!.id),
+    // `enabled: !!limitForAccount` keeps queryFn from firing when
+    // it's null — but the type checker still wants a guard here in
+    // case the assertion-vs-enabled invariant slips. Throw a clear
+    // error if it ever does instead of `!` crashing inside react-query.
+    queryFn: () => {
+      if (!limitForAccount) {
+        throw new Error("limitForAccount missing — query should have been disabled");
+      }
+      return calculateDepositsForLimit(limitForAccount.id);
+    },
     enabled: !isLimitsLoading && !!limitForAccount,
   });
 

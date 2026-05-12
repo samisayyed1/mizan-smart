@@ -353,6 +353,7 @@ export {
 export {
   backupDatabase,
   backupDatabaseToPath,
+  backupDatabaseToPathEncrypted,
   checkForUpdates,
   getAppInfo,
   getPlatform,

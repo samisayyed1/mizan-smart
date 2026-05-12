@@ -85,10 +85,16 @@ export function HoldingsGroupedTable({
         linkedLiabilities: linkedLiabilities.get(holding.instrument?.id ?? holding.id),
       };
 
-      if (!groupMap.has(groupName)) {
-        groupMap.set(groupName, []);
+      // Previously: `groupMap.get(groupName)!.push(...)`. The `!`
+      // asserted invariant-from-the-line-above; if React's strict-mode
+      // double-invocation ever interleaves with a future async edit,
+      // this would crash the holdings page. Idiomatic safe form:
+      let group = groupMap.get(groupName);
+      if (!group) {
+        group = [];
+        groupMap.set(groupName, group);
       }
-      groupMap.get(groupName)!.push(holdingWithMeta);
+      group.push(holdingWithMeta);
     });
 
     // Convert to array and sort by group order

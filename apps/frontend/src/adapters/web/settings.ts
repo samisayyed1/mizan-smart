@@ -54,9 +54,25 @@ export const backupDatabaseToPath = async (backupDir: string): Promise<string> =
   }
 };
 
-export const restoreDatabase = async (backupFilePath: string): Promise<void> => {
+/**
+ * Web mode goes through the HTTP server-side backup flow, not the
+ * local file-system path. Encrypted backups for web mode will follow
+ * once a server endpoint exists. For now, throw a clear error so the
+ * UI can hide / disable the encrypted-backup button in web builds.
+ */
+export const backupDatabaseToPathEncrypted = async (
+  _backupDir: string,
+  _passphrase: string,
+): Promise<string> => {
+  throw new Error("Encrypted backup is desktop-only in this build");
+};
+
+export const restoreDatabase = async (
+  backupFilePath: string,
+  passphrase?: string,
+): Promise<void> => {
   try {
-    await invoke<void>("restore_database", { backupFilePath });
+    await invoke<void>("restore_database", { backupFilePath, passphrase });
   } catch (error) {
     logger.error("Error restoring database.");
     throw error;

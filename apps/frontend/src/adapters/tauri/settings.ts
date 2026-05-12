@@ -52,11 +52,41 @@ export const backupDatabaseToPath = async (backupDir: string): Promise<string> =
   }
 };
 
-export const restoreDatabase = async (backupFilePath: string): Promise<void> => {
+export const restoreDatabase = async (
+  backupFilePath: string,
+  passphrase?: string,
+): Promise<void> => {
   try {
-    await invoke<void>("restore_database", { backupFilePath });
+    // Pass undefined for plain (unencrypted, legacy) backups; the
+    // backend sniffs the file header and only requires a passphrase
+    // when the file is a Mizan encrypted envelope.
+    await invoke<void>("restore_database", { backupFilePath, passphrase });
   } catch (error) {
     logger.error("Error restoring database.");
+    throw error;
+  }
+};
+
+/**
+ * Write a passphrase-encrypted backup to a user-chosen directory.
+ * Returns the absolute path the encrypted .mzbkp file was written to.
+ *
+ * The plaintext SQLite contains broker tokens, AI API keys, and the
+ * full activity log. This is the path the user-facing "Backup" UI
+ * should call from now on — the legacy `backupDatabaseToPath` stays
+ * for compatibility but produces an unencrypted file.
+ */
+export const backupDatabaseToPathEncrypted = async (
+  backupDir: string,
+  passphrase: string,
+): Promise<string> => {
+  try {
+    return await invoke<string>("backup_database_to_path_encrypted", {
+      backupDir,
+      passphrase,
+    });
+  } catch (error) {
+    logger.error("Error backing up database (encrypted).");
     throw error;
   }
 };

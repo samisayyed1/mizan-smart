@@ -123,6 +123,7 @@ export {
   isAutoUpdateCheckEnabled,
   backupDatabase,
   backupDatabaseToPath,
+  backupDatabaseToPathEncrypted,
   restoreDatabase,
   getAppInfo,
   checkForUpdates,

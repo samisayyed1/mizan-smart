@@ -1,4 +1,5 @@
 import { isWeb } from "@/adapters";
+import { RootErrorBoundary } from "@/components/root-error-boundary";
 import { AuthGate, AuthProvider } from "@/context/auth-context";
 import { MizanConnectProvider } from "@/features/mizan-connect";
 import { SettingsProvider } from "@/lib/settings-provider";
@@ -37,17 +38,22 @@ function App() {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <MizanConnectProvider>
-          <PrivacyProvider>
-            <SettingsProvider>
-              <TooltipProvider>{routedContent}</TooltipProvider>
-            </SettingsProvider>
-          </PrivacyProvider>
-        </MizanConnectProvider>
-      </AuthProvider>
-    </QueryClientProvider>
+    // Top-level error boundary OUTSIDE every provider so even a
+    // provider that throws during initialisation (auth, query client,
+    // settings) renders the recovery screen instead of a white page.
+    <RootErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <MizanConnectProvider>
+            <PrivacyProvider>
+              <SettingsProvider>
+                <TooltipProvider>{routedContent}</TooltipProvider>
+              </SettingsProvider>
+            </PrivacyProvider>
+          </MizanConnectProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </RootErrorBoundary>
   );
 }
 

@@ -3673,6 +3673,7 @@ name = "mizan-app"
 version = "3.4.1"
 dependencies = [
  "anyhow",
+ "argon2",
  "async-trait",
  "base64 0.22.1",
  "chacha20poly1305",

@@ -32,7 +32,17 @@ globalThis.debugAddons = debugAddonState;
 // Load addons after context is injected
 loadAllAddons();
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+// The previous `getElementById("root")!` crashed with an uninformative
+// "Cannot read properties of null (reading 'render')" if the index.html
+// shipped without the root element. Show a clear message instead so
+// the launch failure is debuggable.
+const rootEl = document.getElementById("root");
+if (!rootEl) {
+  document.body.innerHTML = `<pre style="padding:24px;font-family:monospace;color:#b00">Mizan failed to start: missing #root element in index.html. Please reinstall the app.</pre>`;
+  throw new Error("Mizan root element not found in DOM");
+}
+
+ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

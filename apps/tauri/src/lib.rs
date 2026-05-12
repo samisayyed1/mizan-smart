@@ -1,11 +1,13 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod backup_crypto;
 mod commands;
 mod context;
 mod domain_events;
 mod events;
 mod listeners;
+mod log_redaction;
 mod scheduler;
 mod secret_store;
 mod services;
@@ -289,6 +291,23 @@ pub fn run() {
                     !metadata.target().starts_with("tauri_plugin_updater")
                         || metadata.level() <= log::Level::Info
                 })
+                // Sensitive-data redaction. Catches accidental token /
+                // api_key / refresh_token leakage anywhere in the
+                // codebase before it reaches the log file. See
+                // `log_redaction.rs` for the patterns; passes innocent
+                // messages through unchanged with a single substring
+                // scan on the lowercased body.
+                .format(|out, message, record| {
+                    let body = format!("{}", message);
+                    let safe = log_redaction::redact_sensitive(&body);
+                    out.finish(format_args!(
+                        "{}[{}][{}] {}",
+                        chrono::Local::now().format("[%Y-%m-%d][%H:%M:%S]"),
+                        record.target(),
+                        record.level(),
+                        safe
+                    ))
+                })
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
@@ -424,6 +443,7 @@ pub fn run() {
             commands::utilities::install_app_update,
             commands::utilities::backup_database,
             commands::utilities::backup_database_to_path,
+            commands::utilities::backup_database_to_path_encrypted,
             commands::utilities::restore_database,
             // Asset commands
             commands::asset::get_asset_profile,

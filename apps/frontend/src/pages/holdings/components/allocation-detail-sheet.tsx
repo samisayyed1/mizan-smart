@@ -252,7 +252,7 @@ export function AllocationDetailSheet({
                           <div
                             className={`bg-muted/30 ${!(isLast && isExpanded) ? "border-t" : ""}`}
                           >
-                            {category.children!.map((child, childIdx) => {
+                            {(category.children ?? []).map((child, childIdx) => {
                               const isChildSelected = selectedCategoryId === child.categoryId;
 
                               return (

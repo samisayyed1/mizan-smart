@@ -62,6 +62,10 @@ x25519-dalek = { version = "2", features = ["static_secrets"] }
 hkdf = "0.12"
 sha2 = "0.10"
 rand = "0.8"
+# Argon2id for password-derived backup encryption keys. Defaults are
+# memory-hard and resistant to GPU attacks; calibrated parameters
+# live in the backup-crypto module itself.
+argon2 = "0.5"
 
 # Internal crates
 mizan-market-data = { path = "crates/market-data" }

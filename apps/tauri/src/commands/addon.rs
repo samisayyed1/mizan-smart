@@ -95,6 +95,30 @@ pub async fn list_installed_addons(app_handle: AppHandle) -> Result<Vec<Installe
             continue;
         }
 
+        // Hard cap on manifest size before parsing. Without this, an
+        // attacker-supplied addon with a deeply nested or billion-laughs-
+        // shaped manifest.json could exhaust memory inside serde_json or
+        // hang the addon loader. 1 MiB is well above legitimate addon
+        // manifests (real ones are <10 KiB).
+        const MAX_MANIFEST_BYTES: u64 = 1024 * 1024;
+        match fs::metadata(&manifest_path) {
+            Ok(meta) if meta.len() > MAX_MANIFEST_BYTES => {
+                log::error!(
+                    "Refusing to load addon at {:?}: manifest is {} bytes (max {}). \
+                     Treating as malformed; addon will not be available.",
+                    addon_dir,
+                    meta.len(),
+                    MAX_MANIFEST_BYTES
+                );
+                continue;
+            }
+            Err(e) => {
+                log::error!("Failed to stat manifest {:?}: {}", manifest_path, e);
+                continue;
+            }
+            _ => {}
+        }
+
         // Read manifest
         let manifest_content = match fs::read_to_string(&manifest_path) {
             Ok(content) => content,
@@ -104,11 +128,22 @@ pub async fn list_installed_addons(app_handle: AppHandle) -> Result<Vec<Installe
             }
         };
 
+        // Strict parse. Historically we logged the rejected content
+        // verbatim and continued — which (a) leaked potentially
+        // sensitive manifest body into log files and (b) silently
+        // hid the broken addon from the user. Now we log the path +
+        // error category only, and skip with a clear signal so the
+        // Settings → Addons screen can surface "addon X is
+        // malformed".
         let metadata: AddonManifest = match serde_json::from_str(&manifest_content) {
             Ok(metadata) => metadata,
             Err(e) => {
-                log::error!("Failed to parse manifest {:?}: {}", manifest_path, e);
-                log::error!("Manifest content: {}", manifest_content);
+                log::error!(
+                    "Refusing to load addon at {:?}: manifest.json is malformed ({}). \
+                     Addon will not be available until a valid manifest is provided.",
+                    addon_dir,
+                    e
+                );
                 continue;
             }
         };

@@ -326,6 +326,11 @@ export function formatAmount(
 
 export function formatPercent(value: number | null | undefined) {
   if (value == null) return "-";
+  // NaN / Infinity surface as "NaN%" / "Infinity%" if passed through to
+  // Intl.NumberFormat without a guard. Treat both as "no data" so the
+  // dashboard renders a clean dash instead of leaking the underlying
+  // math failure to the user.
+  if (!Number.isFinite(value)) return "-";
   try {
     // Use Intl.NumberFormat for correct percentage formatting (handles x100 and % sign)
     return new Intl.NumberFormat("en-US", {
@@ -335,8 +340,7 @@ export function formatPercent(value: number | null | undefined) {
     }).format(value);
   } catch (error) {
     logger.error(`Error formatting percent ${value}: ${error}`);
-    // Fallback to simple string conversion if formatting fails
-    return `${value}%`; // Keep original fallback but it might still be incorrect
+    return "-";
   }
 }
 

@@ -59,7 +59,7 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self' tauri: ipc: 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https: asset: tauri:; font-src 'self' data:; script-src 'self' 'wasm-unsafe-eval' tauri:; connect-src 'self' ipc: tauri: https: ws: wss:; frame-src 'self' tauri:; worker-src 'self' blob:"
     }
   }
 }

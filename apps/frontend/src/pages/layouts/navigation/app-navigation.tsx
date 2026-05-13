@@ -16,35 +16,73 @@ export interface NavigationProps {
   addons?: NavLink[];
 }
 
+// mizan-smart senior-friendly navigation.
+//
+// Primary navigation matches docs/mizan-smart-plan/PLAN.md Prompt 2:
+//   Home, Portfolio, Documents, Reports, Inbox, Settings.
+//
+// All existing routes (Activities, Insights, Performance, Goals, Assistant,
+// Connect) remain reachable through secondary navigation and direct URLs;
+// nothing has been deleted.
 const staticNavigation: NavigationProps = {
   primary: [
     {
-      icon: <Icons.Dashboard className="size-6" />,
-      title: "Dashboard",
+      icon: <Icons.Home className="size-6" />,
+      title: "Home",
       href: "/dashboard",
-      keywords: ["home", "overview", "summary"],
-      label: "View Dashboard",
-    },
-    {
-      icon: <Icons.Insight className="size-6" />,
-      title: "Insights",
-      href: "/insights",
-      keywords: ["insights", "Analytics"],
-      label: "View Insights",
+      keywords: ["home", "dashboard", "overview", "summary"],
+      label: "Home",
     },
     {
       icon: <Icons.Holdings className="size-6" />,
-      title: "Holdings",
+      title: "Portfolio",
       href: "/holdings",
-      keywords: ["Holdings", "portfolio", "assets", "positions", "stocks"],
-      label: "View Holdings",
+      keywords: ["portfolio", "holdings", "assets", "positions"],
+      label: "Portfolio",
     },
+    {
+      icon: <Icons.FileText className="size-6" />,
+      title: "Documents",
+      href: "/documents",
+      keywords: ["documents", "statements", "files", "vault"],
+      label: "Documents",
+    },
+    {
+      icon: <Icons.PieChart className="size-6" />,
+      title: "Reports",
+      href: "/reports",
+      keywords: ["reports", "performance", "income", "tax"],
+      label: "Reports",
+    },
+    {
+      icon: <Icons.Inbox className="size-6" />,
+      title: "Inbox",
+      href: "/inbox",
+      keywords: ["inbox", "alerts", "review", "attention"],
+      label: "Inbox",
+    },
+    {
+      icon: <Icons.Settings className="size-6" />,
+      title: "Settings",
+      href: "/settings",
+      keywords: ["settings", "preferences", "config", "configuration"],
+      label: "Settings",
+    },
+  ],
+  secondary: [
     {
       icon: <Icons.Activity className="size-6" />,
       title: "Activities",
       href: "/activities",
       keywords: ["transactions", "trades", "history"],
-      label: "View Activities",
+      label: "Activities",
+    },
+    {
+      icon: <Icons.Insight className="size-6" />,
+      title: "Insights",
+      href: "/insights",
+      keywords: ["insights", "analytics", "breakdown"],
+      label: "Insights",
     },
     {
       icon: <Icons.Goals className="size-6" />,
@@ -60,20 +98,12 @@ const staticNavigation: NavigationProps = {
       keywords: ["ai", "assistant", "chat", "help", "ask"],
       label: "AI Assistant",
     },
-  ],
-  secondary: [
     {
       icon: <Icons.Link className="size-6" />,
       title: "Connect",
       href: "/connect",
       keywords: ["sync", "broker", "device", "supabase", "cloud", "account"],
       label: "Mizan Connect",
-    },
-    {
-      icon: <Icons.Settings className="size-6" />,
-      title: "Settings",
-      href: "/settings",
-      keywords: ["preferences", "config", "configuration"],
     },
   ],
 };

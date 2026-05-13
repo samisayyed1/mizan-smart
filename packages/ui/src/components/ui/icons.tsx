@@ -71,6 +71,7 @@ import {
   HelpCircle,
   History,
   Home,
+  Inbox,
   Info,
   LayoutDashboard,
   Link,
@@ -292,6 +293,7 @@ const IconsInternal = {
   Fullscreen: Fullscreen,
   RectangleEllipsis: RectangleEllipsis,
   Mail: Mail,
+  Inbox: Inbox,
   OctagonX: OctagonX,
   Settings2: Settings2,
   // Additional icons for UI components
@@ -840,6 +842,7 @@ export type IconName =
   | "Fullscreen"
   | "RectangleEllipsis"
   | "Mail"
+  | "Inbox"
   | "OctagonX"
   | "Settings2"
   | "Dashboard"

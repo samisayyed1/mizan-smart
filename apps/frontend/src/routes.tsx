@@ -13,7 +13,10 @@ import ActivityPage from "@/pages/activity/activity-page";
 import ActivityImportPage from "@/pages/activity/import/activity-import-page";
 import AssetsPage from "@/pages/asset/assets-page";
 import PortfolioPage from "@/pages/dashboard/portfolio-page";
+import DocumentsPage from "@/pages/documents/documents-page";
 import HoldingsPage from "@/pages/holdings/holdings-page";
+import InboxPage from "@/pages/inbox/inbox-page";
+import ReportsPage from "@/pages/reports/reports-page";
 import IncomePage from "@/pages/income/income-page";
 import PortfolioInsightsPage from "@/pages/insights/portfolio-insights";
 import NotFoundPage from "@/pages/not-found";
@@ -92,6 +95,9 @@ export function AppRoutes() {
           <Route path="performance" element={<PerformancePage />} />
           <Route path="insights" element={<PortfolioInsightsPage />} />
           <Route path="health" element={<HealthPage />} />
+          <Route path="documents" element={<DocumentsPage />} />
+          <Route path="reports" element={<ReportsPage />} />
+          <Route path="inbox" element={<InboxPage />} />
           <Route path="assistant" element={<AiAssistantPage />} />
           <Route path="connect" element={<ConnectPage />} />
           <Route path="goals" element={<GoalsDashboardPage />} />

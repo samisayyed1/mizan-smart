@@ -31,7 +31,14 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   publicDir: "public",
   optimizeDeps: {
-    include: ["lucide-react", "recharts", "lodash"],
+    // `recharts` was previously eagerly bundled which forced the
+    // ~200 KiB-gzipped chart engine into the initial paint even
+    // though it's only used on the History / Performance / Detail
+    // pages. Moved into a dedicated lazy chunk via `manualChunks`
+    // (see `build.rollupOptions`) so the dashboard ships without it.
+    // `lucide-react` stays here for dev-mode pre-bundling speed —
+    // it's tree-shaken on production builds by esbuild.
+    include: ["lucide-react", "lodash"],
   },
   define: {
     __BUILD_TARGET__: JSON.stringify(buildTarget),
@@ -88,6 +95,27 @@ export default defineConfig({
     minify: !process.env.TAURI_DEBUG ? "esbuild" : false,
     // produce sourcemaps for debug builds
     sourcemap: !!process.env.TAURI_DEBUG,
+    rollupOptions: {
+      output: {
+        // Code-split heavyweight chart + animation libs into their own
+        // chunks so the dashboard's first paint doesn't drag ~250 KB
+        // of unused JS along with it. Vite/Rollup walks the import
+        // graph and emits a separate file the browser only fetches
+        // when one of these modules is touched — i.e. when the user
+        // navigates to a page that actually charts something.
+        //
+        // The pattern matches at MODULE-RESOLUTION time, so any
+        // `import "recharts"` deep in a feature triggers the lazy
+        // chunk automatically without per-file code changes.
+        manualChunks: (id) => {
+          if (id.includes("node_modules/recharts/")) return "vendor-charts";
+          if (id.includes("node_modules/d3-")) return "vendor-charts";
+          if (id.includes("node_modules/framer-motion/")) return "vendor-motion";
+          if (id.includes("node_modules/react-pdf/")) return "vendor-pdf";
+          return undefined;
+        },
+      },
+    },
   },
   test: {
     globals: true,

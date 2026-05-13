@@ -8,6 +8,7 @@ mod domain_events;
 mod events;
 mod listeners;
 mod log_redaction;
+mod rate_limit;
 mod scheduler;
 mod secret_store;
 mod services;
@@ -98,6 +99,34 @@ mod desktop {
 
         // Make context available to all commands
         handle.manage(Arc::clone(&context));
+
+        // Per-command IPC rate limiter, available via State to any
+        // command that wants to guard against runaway-frontend loops
+        // or malicious-addon DoS. The expensive commands
+        // (`recalculate_portfolio`, broker sync triggers, market data
+        // syncs) call `state.check()` at entry; cheap commands
+        // (`get_settings`, getters) are intentionally unguarded.
+        // Per-command overrides live alongside the defaults — see
+        // `rate_limit::RateLimiter::with_override`.
+        use std::time::Duration;
+        let rate_limiter = rate_limit::RateLimiter::new()
+            // Portfolio recalc is the single most expensive op in
+            // Mizan (touches every snapshot + valuation). Anything
+            // beyond 5 in a 30-second window is almost certainly a
+            // useEffect-dependency bug or an addon misbehaving.
+            .with_override("recalculate_portfolio", 5, Duration::from_secs(30))
+            .with_override("update_portfolio", 5, Duration::from_secs(30))
+            // Broker syncs hit external rate-limited APIs; users
+            // can't click this fast in normal use.
+            .with_override("trigger_broker_sync", 3, Duration::from_secs(30))
+            // Market data sync (Yahoo etc.) — same reasoning.
+            .with_override("trigger_market_sync", 3, Duration::from_secs(30))
+            // Device pairing approval. A real user pairs maybe one
+            // device a year; back-to-back approvals are the
+            // social-engineering pattern (attacker tricks user into
+            // approving multiple fake devices in rapid succession).
+            .with_override("approve_pairing", 3, Duration::from_secs(60));
+        handle.manage(Arc::new(rate_limiter));
 
         #[cfg(feature = "device-sync")]
         start_sync_outbox_wake_worker(sync_outbox_wake_receiver, Arc::clone(&context));

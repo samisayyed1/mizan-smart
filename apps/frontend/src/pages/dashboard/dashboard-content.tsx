@@ -29,6 +29,8 @@ import { useMemo, useState } from "react";
 import { AccountsSummary } from "./accounts-summary";
 import Balance from "./balance";
 import SavingGoals from "./goals";
+import InboxPreview from "./inbox-preview";
+import QuickActions from "./quick-actions";
 import TopHoldings from "./top-holdings";
 
 const DEFAULT_INTERVAL: UITimePeriod = "3M";
@@ -269,6 +271,8 @@ export function DashboardContent() {
               <AccountsSummary dateRange={dateRange} isAllTime={isAllTime} />
             </div>
             <div className="space-y-6 lg:col-span-1">
+              <InboxPreview />
+              <QuickActions />
               <TopHoldings
                 holdings={holdings}
                 isLoading={isHoldingsLoading}

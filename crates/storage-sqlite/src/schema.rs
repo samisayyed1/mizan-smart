@@ -500,6 +500,29 @@ diesel::joinable!(taxonomy_categories -> taxonomies (taxonomy_id));
 
 diesel::joinable!(import_account_templates -> import_templates (template_id));
 
+// Smart Alerts — mizan-smart Phase 1 P8.
+diesel::table! {
+    smart_alerts (id) {
+        id -> Text,
+        fingerprint -> Text,
+        rule_name -> Text,
+        category -> Text,
+        severity -> Text,
+        title -> Text,
+        message -> Text,
+        status -> Text,
+        source_entity_type -> Nullable<Text>,
+        source_entity_id -> Nullable<Text>,
+        action_route -> Nullable<Text>,
+        first_seen_at -> Text,
+        last_seen_at -> Text,
+        snoozed_until -> Nullable<Text>,
+        dismissed_at -> Nullable<Text>,
+        resolved_at -> Nullable<Text>,
+        metadata_json -> Nullable<Text>,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     import_account_templates,
     accounts,
@@ -530,6 +553,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     sync_device_config,
     sync_engine_state,
     sync_entity_metadata,
+    smart_alerts,
     sync_outbox,
     sync_table_state,
     taxonomies,

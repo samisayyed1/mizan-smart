@@ -63,8 +63,16 @@ pub enum DomainEvent {
     },
 
     /// Manual snapshot was saved (manual entry, CSV import, broker import).
-    /// Triggers portfolio recalculation for the affected account.
-    ManualSnapshotSaved { account_id: String },
+    /// Triggers portfolio recalculation for the affected account from the
+    /// snapshot's date onward — no need to rebuild the entire history.
+    ManualSnapshotSaved {
+        account_id: String,
+        /// ISO-8601 date of the snapshot. The recalc planner uses this
+        /// to emit `SnapshotRecalcMode::SinceDate` instead of `Full`,
+        /// turning a 5-year rebuild into a same-day-only one for the
+        /// common "edit yesterday's snapshot" path.
+        snapshot_date: chrono::NaiveDate,
+    },
 
     /// Device sync pulled changes from another device.
     /// Triggers full portfolio recalculation for all accounts.
@@ -149,8 +157,11 @@ impl DomainEvent {
     }
 
     /// Creates a ManualSnapshotSaved event.
-    pub fn manual_snapshot_saved(account_id: String) -> Self {
-        Self::ManualSnapshotSaved { account_id }
+    pub fn manual_snapshot_saved(account_id: String, snapshot_date: chrono::NaiveDate) -> Self {
+        Self::ManualSnapshotSaved {
+            account_id,
+            snapshot_date,
+        }
     }
 
     /// Creates a DeviceSyncPullComplete event.

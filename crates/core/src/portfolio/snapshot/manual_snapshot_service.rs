@@ -239,9 +239,14 @@ impl ManualSnapshotService {
             .save_manual_snapshot(&request.account_id, snapshot)
             .await?;
 
-        // Emit domain event to trigger portfolio recalculation
-        self.event_sink
-            .emit(DomainEvent::manual_snapshot_saved(request.account_id));
+        // Emit domain event with the snapshot date so the recalc
+        // planner can do `SinceDate` instead of a full from-zero
+        // rebuild. Critical for the common UX of editing yesterday's
+        // snapshot — was previously a multi-year rebuild.
+        self.event_sink.emit(DomainEvent::manual_snapshot_saved(
+            request.account_id,
+            request.snapshot_date,
+        ));
 
         asset_ids.sort();
         asset_ids.dedup();

@@ -34,7 +34,22 @@ pub async fn sync_market_data(
     refetch_all: bool,
     refetch_recent_days: Option<i64>,
     handle: AppHandle,
+    rate_limiter: tauri::State<'_, std::sync::Arc<crate::rate_limit::RateLimiter>>,
 ) -> Result<(), String> {
+    // Rate-limit guard. Market data sync hits Yahoo / Alpha Vantage /
+    // Finnhub / etc. — all external providers with rate limits of
+    // their own. Hammering this command burns through the user's
+    // per-day quota and the providers respond with 429 storms that
+    // make the next legitimate sync look broken. 3 calls / 30s is
+    // generous for any real user clicking "refresh prices".
+    if let crate::rate_limit::RateLimitDecision::Deny { retry_after } =
+        rate_limiter.check("trigger_market_sync")
+    {
+        return Err(format!(
+            "Too many market-data sync requests. Try again in {:.1}s.",
+            retry_after.as_secs_f32()
+        ));
+    }
     // Determine the appropriate market sync mode based on refetch_all flag
     let market_sync_mode = if let Some(days) = refetch_recent_days {
         MarketSyncMode::RefetchRecent { asset_ids, days }

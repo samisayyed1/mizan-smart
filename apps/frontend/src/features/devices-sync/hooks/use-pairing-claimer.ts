@@ -65,7 +65,12 @@ export function usePairingClaimer() {
   // Compute SAS from session key
   const sasQuery = useQuery({
     queryKey: ["sync", "pairing", "claimer-sas", session?.sessionKey],
-    queryFn: () => crypto.computeSAS(session!.sessionKey),
+    queryFn: () => {
+      if (!session?.sessionKey) {
+        throw new Error("Pairing session missing — query should have been disabled");
+      }
+      return crypto.computeSAS(session.sessionKey);
+    },
     enabled: !!session?.sessionKey,
     staleTime: Infinity,
   });
@@ -73,7 +78,12 @@ export function usePairingClaimer() {
   // Poll flow state when active
   const flowPoll = useQuery({
     queryKey: ["sync", "pairing", "flow-state", flowId],
-    queryFn: () => getPairingFlowState(flowId!),
+    queryFn: () => {
+      if (!flowId) {
+        throw new Error("Pairing flow id missing — query should have been disabled");
+      }
+      return getPairingFlowState(flowId);
+    },
     enabled: phase === "flow_active" && !!flowId,
     refetchInterval: (query) => {
       const p = query.state.data?.phase?.phase;

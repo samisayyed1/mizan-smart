@@ -238,7 +238,11 @@ export default function GoalNewPage() {
                       alt={tmpl.title}
                       className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                       onError={(e) => {
-                        e.currentTarget.parentElement!.classList.add("goal-cover-fallback");
+                        // `parentElement` is null for detached DOM nodes; the
+                        // image only renders inside a parent so this should
+                        // never fire, but the `!` assertion was a real crash
+                        // path under React 18's strict-mode double-invoke.
+                        e.currentTarget.parentElement?.classList.add("goal-cover-fallback");
                         e.currentTarget.style.display = "none";
                       }}
                     />

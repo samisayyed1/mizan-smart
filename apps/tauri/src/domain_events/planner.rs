@@ -65,9 +65,26 @@ pub fn plan_portfolio_job(
                 has_recalc_events = true;
                 account_ids.extend(acc_ids.iter().cloned());
             }
-            DomainEvent::ManualSnapshotSaved { account_id } => {
+            DomainEvent::ManualSnapshotSaved {
+                account_id,
+                snapshot_date,
+            } => {
                 has_recalc_events = true;
                 account_ids.insert(account_id.clone());
+                // Propagate the snapshot date so the queue worker
+                // routes to `SnapshotRecalcMode::SinceDate` instead
+                // of `Full`. Convert the NaiveDate to a UTC instant
+                // at midnight so it composes with the existing
+                // `min_activity_at_utc` reduction.
+                let as_utc = snapshot_date
+                    .and_hms_opt(0, 0, 0)
+                    .and_then(|naive| naive.and_local_timezone(Utc).single());
+                if let Some(ts) = as_utc {
+                    min_activity_at_utc = match min_activity_at_utc {
+                        Some(current) => Some(current.min(ts)),
+                        None => Some(ts),
+                    };
+                }
             }
             DomainEvent::DeviceSyncPullComplete => {
                 has_recalc_events = true;

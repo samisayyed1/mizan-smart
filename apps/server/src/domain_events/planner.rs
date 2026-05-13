@@ -81,7 +81,16 @@ pub fn plan_portfolio_job(events: &[DomainEvent], timezone: &str) -> Option<Port
                     }
                 }
             }
-            DomainEvent::ManualSnapshotSaved { account_id } => {
+            DomainEvent::ManualSnapshotSaved {
+                account_id,
+                snapshot_date: _,
+            } => {
+                // Server-side planner doesn't yet propagate the
+                // snapshot date to recalc-incremental mode — keep
+                // Full-rebuild behaviour for the HTTP / web surface
+                // until that path needs the same surgical incremental
+                // routing the Tauri queue worker has. Logged in the
+                // soft-launch roadmap as a parity follow-up.
                 has_recalc_event = true;
                 if !account_id.is_empty() {
                     account_ids.insert(account_id.clone());

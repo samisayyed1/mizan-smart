@@ -75,7 +75,23 @@ impl SyncProgressReporter for TauriProgressReporter {
 pub async fn sync_broker_data(
     app: AppHandle,
     state: State<'_, Arc<ServiceContext>>,
+    rate_limiter: State<'_, Arc<crate::rate_limit::RateLimiter>>,
 ) -> Result<(), String> {
+    // Rate-limit guard. SnapTrade has its own rate limit on the
+    // upstream API (and our Mizan Connect cloud passes that through
+    // unchanged). A frontend bug firing this 100×/sec would burn
+    // through the connection's per-minute quota in a heartbeat,
+    // surfacing as cryptic 429 errors on the next legitimate sync.
+    // Pre-registered override: 3 calls / 30s.
+    if let crate::rate_limit::RateLimitDecision::Deny { retry_after } =
+        rate_limiter.check("trigger_broker_sync")
+    {
+        return Err(format!(
+            "Too many broker sync requests. Try again in {:.1}s.",
+            retry_after.as_secs_f32()
+        ));
+    }
+
     // Check plan entitlement before starting sync
     match state.connect_service().has_broker_sync().await {
         Ok(true) => {}
@@ -116,8 +132,9 @@ pub async fn sync_broker_data(
 pub async fn broker_ingest_run(
     app: AppHandle,
     state: State<'_, Arc<ServiceContext>>,
+    rate_limiter: State<'_, Arc<crate::rate_limit::RateLimiter>>,
 ) -> Result<(), String> {
-    sync_broker_data(app, state).await
+    sync_broker_data(app, state, rate_limiter).await
 }
 
 /// Core broker sync logic that can be called from Tauri command or scheduler.

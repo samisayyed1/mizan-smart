@@ -288,7 +288,7 @@ fn classify_cell(raw: &str) -> ColumnDataType {
 /// currency symbol. Case-insensitive.
 fn is_currency_token(s: &str) -> bool {
     const SYMBOLS: &[&str] = &["$", "€", "£", "¥", "₹", "₩", "₿"];
-    if SYMBOLS.iter().any(|sym| s == *sym) {
+    if SYMBOLS.contains(&s) {
         return true;
     }
     if s.len() != 3 || !s.chars().all(|c| c.is_ascii_alphabetic()) {
@@ -396,9 +396,7 @@ fn is_date(s: &str) -> bool {
             && (1..=31).contains(&day);
     }
 
-    let parts: Vec<&str> = head
-        .split(|c: char| c == '-' || c == '/' || c == '.')
-        .collect();
+    let parts: Vec<&str> = head.split(['-', '/', '.']).collect();
     if parts.len() != 3 {
         return false;
     }
@@ -900,7 +898,7 @@ fn score_pair(field: &str, profile: &ColumnProfile) -> f32 {
 
     // Data type signal.
     let expected = expected_kind_for_field(field);
-    if !expected.is_empty() && expected.iter().any(|k| *k == profile.kind) {
+    if !expected.is_empty() && expected.contains(&profile.kind) {
         score += 0.4 * profile.kind_confidence;
     } else if !expected.is_empty() && profile.kind == ColumnDataType::Empty {
         // Empty column gives no positive evidence, no penalty.
@@ -1338,7 +1336,7 @@ pub fn filter_and_dedupe_rows(
             .and_then(|i| row.get(i))
             .map(|s| s.trim())
             .filter(|s| !s.is_empty())
-            .and_then(|s| parse_loose_number(s));
+            .and_then(parse_loose_number);
 
         let comment = comment_idx
             .and_then(|i| row.get(i))

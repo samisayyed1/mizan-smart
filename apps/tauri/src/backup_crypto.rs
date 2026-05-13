@@ -326,7 +326,7 @@ mod tests {
         // Synthesize a plausible SQLite file header + body so the test
         // exercises the same code paths as a real backup.
         let mut payload = Vec::from(b"SQLite format 3\0" as &[u8]);
-        payload.extend(std::iter::repeat(0x42u8).take(64 * 1024));
+        payload.extend(std::iter::repeat_n(0x42u8, 64 * 1024));
         let pw = "a-realistic-user-password!";
         let envelope = encrypt_backup(&payload, pw).expect("encrypt");
         let recovered = decrypt_backup(&envelope, pw).expect("decrypt");

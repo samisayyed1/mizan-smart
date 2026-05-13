@@ -145,7 +145,7 @@ pub async fn synthesize_account_history(
     // Coverage threshold: skip a date if fewer than half the priced
     // holdings have a quote on it. Below that, the synthesised total
     // would underestimate badly and look like a fake drawdown.
-    let coverage_threshold = (total_holdings + 1) / 2;
+    let coverage_threshold = total_holdings.div_ceil(2);
 
     let mut output: Vec<DailyAccountValuation> = Vec::new();
     let mut date = start_date;

@@ -4805,15 +4805,13 @@ fn categorise_post_import_sync(
 #[cfg(test)]
 mod post_import_sync_categorisation_tests {
     use super::*;
-    use crate::quotes::sync::{
-        AssetSkipReason, SyncError, SyncResult,
-    };
+    use crate::quotes::sync::{AssetSkipReason, SyncError, SyncResult};
     use crate::quotes::types::AssetId;
 
     fn ids(names: &[&str]) -> Vec<String> {
         names.iter().map(|s| s.to_string()).collect()
     }
-    fn id_set<'a>(asset_ids: &'a [String]) -> HashSet<&'a String> {
+    fn id_set(asset_ids: &[String]) -> HashSet<&String> {
         asset_ids.iter().collect()
     }
 
@@ -4892,10 +4890,7 @@ mod post_import_sync_categorisation_tests {
         let sync_result = SyncResult {
             synced: 0,
             skipped: 1,
-            skipped_reasons: vec![(
-                "MANUAL_GOLD".to_string(),
-                AssetSkipReason::ManualPricing,
-            )],
+            skipped_reasons: vec![("MANUAL_GOLD".to_string(), AssetSkipReason::ManualPricing)],
             ..Default::default()
         };
 
@@ -4951,10 +4946,7 @@ mod post_import_sync_categorisation_tests {
                 message: "irrelevant".to_string(),
                 provider_errors: vec![],
             }],
-            skipped_reasons: vec![(
-                "ALSO_IRRELEVANT".to_string(),
-                AssetSkipReason::NotFound,
-            )],
+            skipped_reasons: vec![("ALSO_IRRELEVANT".to_string(), AssetSkipReason::NotFound)],
             ..Default::default()
         };
 

@@ -1213,11 +1213,34 @@ pub async fn get_pairing(
         .map_err(|e| e.to_string())
 }
 
+/// Approve a pairing request from another device.
+///
+/// Rate-limited at 3 approvals / 60s. The threat: a user could be
+/// social-engineered into approving multiple fake pairing requests
+/// in rapid succession ("oh, click yes to all of them, they're all
+/// mine"). Forcing a cool-down between approvals gives the user a
+/// chance to notice something's off. Real users pair maybe one new
+/// device a year — three back-to-back is already suspicious.
+///
+/// Brute-force protection on the pairing CODE itself lives at the
+/// Mizan Connect server (the codes are 6 chars from a 32-char
+/// alphabet ≈ 10^9 combinations; without server rate limiting an
+/// attacker could try them all in seconds). That's not this repo's
+/// concern, but is noted in the soft-launch roadmap.
 #[tauri::command(rename_all = "camelCase")]
 pub async fn approve_pairing(
     pairing_id: String,
     state: State<'_, Arc<ServiceContext>>,
+    rate_limiter: State<'_, Arc<crate::rate_limit::RateLimiter>>,
 ) -> Result<SuccessResponse, String> {
+    use crate::rate_limit::RateLimitDecision;
+    if let RateLimitDecision::Deny { retry_after } = rate_limiter.check("approve_pairing") {
+        return Err(format!(
+            "Too many pairing approvals in a short time. Wait {:.0}s and try again. \
+             If you didn't intend to approve multiple devices, cancel any pending requests.",
+            retry_after.as_secs_f32()
+        ));
+    }
     debug!("[DeviceSync] Approving pairing session: {}", pairing_id);
 
     let token = get_access_token(state.inner()).await?;

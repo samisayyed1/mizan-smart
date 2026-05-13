@@ -575,34 +575,49 @@ impl HealthServiceTrait for HealthService {
     async fn execute_fix(&self, action: &FixAction) -> Result<()> {
         info!("Executing fix action: {} ({})", action.label, action.id);
 
+        // **Architectural note for future maintainers.**
+        //
+        // The four "fix actions" the health service emits — `sync_prices`,
+        // `retry_sync`, `fetch_fx`, `migrate_classifications` — are NOT
+        // executed in the core layer. They're intercepted upstream in
+        // the Tauri command (`apps/tauri/src/commands/health.rs::
+        // execute_health_fix`) which has access to the broader service
+        // context (Tauri AppHandle for event emission, the portfolio
+        // recalc trigger, the quote service, the taxonomy migration
+        // helpers, etc.). Keeping them at the Tauri layer is deliberate:
+        //
+        //   * `fetch_fx` needs to emit `PORTFOLIO_TRIGGER_RECALCULATE` —
+        //     a Tauri event, not a core concept.
+        //   * `sync_prices` / `retry_sync` need to emit `MARKET_SYNC_*`
+        //     events and reset sync error counters before calling
+        //     `quote_service.sync`.
+        //   * `migrate_classifications` needs the taxonomy service +
+        //     the runtime to dispatch a long-running migration with UI
+        //     progress reporting.
+        //
+        // If `execute_fix` is reached for any of these IDs, it's a bug
+        // at the Tauri command layer — the interceptor didn't fire.
+        // We respond with an explicit error rather than a silent
+        // success, and the surrounding cache invalidation still runs
+        // so the next health check picks up whatever DID happen.
         let result = match action.id.as_str() {
-            "sync_prices" | "retry_sync" => {
-                // Parse asset IDs from payload
-                let _asset_ids: Vec<String> = serde_json::from_value(action.payload.clone())
-                    .map_err(|e| HealthError::invalid_payload(&action.id, e.to_string()))?;
-
-                // TODO: Call quote sync service to refresh prices
-                // This will be wired up when integrating with the service context
-                warn!("{} fix action not yet implemented", action.id);
-                Ok(())
-            }
-            "fetch_fx" => {
-                // Parse currency pairs from payload
-                let _pairs: Vec<String> = serde_json::from_value(action.payload.clone())
-                    .map_err(|e| HealthError::invalid_payload(&action.id, e.to_string()))?;
-
-                // TODO: Call FX service to refresh rates
-                warn!("fetch_fx fix action not yet implemented");
-                Ok(())
-            }
-            "migrate_classifications" => {
-                // Parse asset IDs from payload
-                let _asset_ids: Vec<String> = serde_json::from_value(action.payload.clone())
-                    .map_err(|e| HealthError::invalid_payload(&action.id, e.to_string()))?;
-
-                // TODO: Call taxonomy service to migrate legacy data
-                warn!("migrate_classifications fix action not yet implemented");
-                Ok(())
+            "sync_prices"
+            | "retry_sync"
+            | "fetch_fx"
+            | "migrate_classifications"
+            | "migrate_legacy_classifications" => {
+                let msg = format!(
+                    "Fix action '{}' must be handled at the Tauri command layer \
+                     (apps/tauri/src/commands/health.rs::execute_health_fix), not in core. \
+                     If you see this error, the Tauri interceptor is missing or broken.",
+                    action.id
+                );
+                warn!("{}", msg);
+                Err(HealthError::FixActionFailed {
+                    action_id: action.id.clone(),
+                    message: msg,
+                }
+                .into())
             }
             _ => Err(HealthError::UnknownFixAction(action.id.clone()).into()),
         };

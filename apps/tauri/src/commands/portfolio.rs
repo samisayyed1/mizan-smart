@@ -42,8 +42,24 @@ pub struct SnapshotInfo {
     pub cash_currency_count: usize,
 }
 
+/// Trigger a full portfolio recalc (BackfillHistory + revaluation).
+///
+/// Guarded by the IPC rate limiter at 5 calls / 30s — anything beyond
+/// that for a single user is almost certainly a `useEffect`-dep bug
+/// or an addon misbehaving. Real users tap "Recalculate" maybe a few
+/// times an hour at most.
 #[tauri::command]
-pub async fn recalculate_portfolio(handle: AppHandle) -> Result<(), String> {
+pub async fn recalculate_portfolio(
+    handle: AppHandle,
+    rate_limiter: tauri::State<'_, std::sync::Arc<crate::rate_limit::RateLimiter>>,
+) -> Result<(), String> {
+    use crate::rate_limit::RateLimitDecision;
+    if let RateLimitDecision::Deny { retry_after } = rate_limiter.check("recalculate_portfolio") {
+        return Err(format!(
+            "Too many recalculate requests. Try again in {:.1}s.",
+            retry_after.as_secs_f32()
+        ));
+    }
     debug!("Emitting PORTFOLIO_TRIGGER_RECALCULATE event...");
     // Full recalculation uses BackfillHistory to rebuild quote history from activity start.
     // This ensures all historical valuations have proper quote coverage.
@@ -60,8 +76,20 @@ pub async fn recalculate_portfolio(handle: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Trigger an incremental portfolio update — same shape as recalc but
+/// cheaper. Same rate-limit reasoning.
 #[tauri::command]
-pub async fn update_portfolio(handle: AppHandle) -> Result<(), String> {
+pub async fn update_portfolio(
+    handle: AppHandle,
+    rate_limiter: tauri::State<'_, std::sync::Arc<crate::rate_limit::RateLimiter>>,
+) -> Result<(), String> {
+    use crate::rate_limit::RateLimitDecision;
+    if let RateLimitDecision::Deny { retry_after } = rate_limiter.check("update_portfolio") {
+        return Err(format!(
+            "Too many update requests. Try again in {:.1}s.",
+            retry_after.as_secs_f32()
+        ));
+    }
     debug!("Emitting PORTFOLIO_TRIGGER_UPDATE event...");
     // Manual update uses Incremental sync for all assets
     let payload = PortfolioRequestPayload::builder()

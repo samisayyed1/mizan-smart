@@ -16,6 +16,7 @@ import PortfolioPage from "@/pages/dashboard/portfolio-page";
 import DocumentsPage from "@/pages/documents/documents-page";
 import HoldingsPage from "@/pages/holdings/holdings-page";
 import UniversalAddAssetPage from "@/pages/holdings/new/universal-add-asset-page";
+import ManualValuationsPage from "@/pages/holdings/update-values/manual-valuations-page";
 import InboxPage from "@/pages/inbox/inbox-page";
 import ReportsPage from "@/pages/reports/reports-page";
 import IncomePage from "@/pages/income/income-page";
@@ -90,6 +91,7 @@ export function AppRoutes() {
           <Route path="holdings" element={<HoldingsPage />} />
           <Route path="holdings-insights" element={<HoldingsInsightsPage />} />
           <Route path="holdings/new" element={<UniversalAddAssetPage />} />
+          <Route path="holdings/update-values" element={<ManualValuationsPage />} />
           <Route path="holdings/:assetId" element={<AssetProfilePage />} />
           <Route path="import" element={<ActivityImportPage />} />
           <Route path="accounts/:id" element={<AccountPage />} />

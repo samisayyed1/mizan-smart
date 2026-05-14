@@ -94,6 +94,9 @@ export * from "../shared/alternative-assets";
 // Universal Add Asset (mizan-smart Phase 1 P5)
 export * from "../shared/universal-assets";
 
+// Manual valuation grid (mizan-smart Phase 1 P6)
+export * from "../shared/manual-valuations";
+
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";
 

@@ -17,6 +17,7 @@ pub mod fire;
 pub mod goal;
 pub mod health;
 pub mod limits;
+pub mod manual_valuations;
 pub mod market_data;
 #[cfg(any(feature = "connect-sync", feature = "device-sync"))]
 pub mod mizan_connect;

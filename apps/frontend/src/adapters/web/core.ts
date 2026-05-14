@@ -328,6 +328,10 @@ export const COMMANDS: CommandMap = {
   get_alternative_holdings: { method: "GET", path: "/alternative-holdings" },
   // Universal Add Asset (mizan-smart Phase 1 P5)
   create_universal_asset: { method: "POST", path: "/universal-assets" },
+  // Manual valuation grid (mizan-smart Phase 1 P6)
+  list_manual_valuation_assets: { method: "GET", path: "/manual-valuations" },
+  bulk_update_valuations: { method: "POST", path: "/manual-valuations/bulk-update" },
+  get_manual_valuation_history: { method: "GET", path: "/manual-valuations" },
 };
 
 /**
@@ -1322,6 +1326,16 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
       // handler in apps/server/src/api/universal_assets.rs).
       const { request } = payload as { request: Record<string, unknown> };
       body = JSON.stringify(request);
+      break;
+    }
+    case "bulk_update_valuations": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "get_manual_valuation_history": {
+      const { assetId } = payload as { assetId: string };
+      url += `/${encodeURIComponent(assetId)}/history`;
       break;
     }
     case "update_alternative_asset_valuation": {

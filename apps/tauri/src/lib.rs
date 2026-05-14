@@ -493,6 +493,10 @@ pub fn run() {
             commands::alternative_assets::get_alternative_holdings,
             // Universal Add Asset (mizan-smart Phase 1 P5)
             commands::universal_asset::create_universal_asset,
+            // Manual valuation grid (mizan-smart Phase 1 P6)
+            commands::manual_valuations::list_manual_valuation_assets,
+            commands::manual_valuations::bulk_update_valuations,
+            commands::manual_valuations::get_manual_valuation_history,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

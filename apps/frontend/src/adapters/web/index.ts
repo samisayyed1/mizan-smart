@@ -240,6 +240,22 @@ export type {
   LiabilityRequestType,
 } from "../shared/universal-assets";
 
+// Manual valuation grid (mizan-smart Phase 1 P6)
+export {
+  bulkUpdateValuations,
+  getManualValuationHistory,
+  listManualValuationAssets,
+} from "../shared/manual-valuations";
+export type {
+  BulkUpdateValuationsRequest,
+  BulkUpdateValuationsResult,
+  ManualValuationAsset,
+  ManualValuationHistoryRow,
+  ManualValuationStaleness,
+  ManualValuationUpdateRow,
+  RowValidationError,
+} from "../shared/manual-valuations";
+
 // Connect Commands (Broker + Device Sync + Auth)
 export {
   approvePairing,

@@ -28,7 +28,7 @@ const ACTIONS: QuickAction[] = [
   {
     title: "Update values",
     description: "Refresh manual valuations for property and private assets.",
-    href: "/holdings",
+    href: "/holdings/update-values",
     icon: "RefreshCw",
   },
   {

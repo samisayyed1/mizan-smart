@@ -14,9 +14,11 @@
 
 pub mod create_repository;
 pub mod details_models;
+pub mod manual_valuation_repository;
 pub mod valuation_model;
 pub mod valuation_repository;
 
 pub use create_repository::{UniversalAssetCreateRepository, UniversalAssetCreated};
+pub use manual_valuation_repository::ManualValuationRepository;
 pub use valuation_model::ValuationDB;
 pub use valuation_repository::ValuationRepository;

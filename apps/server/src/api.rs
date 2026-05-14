@@ -37,6 +37,7 @@ mod goals;
 mod health;
 mod holdings;
 mod limits;
+mod manual_valuations;
 mod market_data;
 mod net_worth;
 mod performance;
@@ -100,6 +101,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(assets::router())
         .merge(secrets::router())
         .merge(limits::router())
+        .merge(manual_valuations::router())
         .merge(addons::router())
         .merge(taxonomies::router())
         .merge(net_worth::router())

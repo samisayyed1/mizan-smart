@@ -44,6 +44,7 @@ use mizan_storage_sqlite::{
     settings::SettingsRepository,
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
     taxonomies::TaxonomyRepository,
+    universal_assets::ManualValuationRepository,
 };
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
@@ -89,6 +90,8 @@ pub async fn initialize_context(
     let snapshot_repository = Arc::new(SnapshotRepository::new(pool.clone(), writer.clone()));
     let app_sync_repository = Arc::new(AppSyncRepository::new(pool.clone(), writer.clone()));
     let valuation_repository = Arc::new(ValuationRepository::new(pool.clone(), writer.clone()));
+    let manual_valuation_repository =
+        Arc::new(ManualValuationRepository::new(pool.clone(), writer.clone()));
     let platform_repository = Arc::new(PlatformRepository::new(pool.clone(), writer.clone()));
     let broker_sync_state_repository =
         Arc::new(BrokerSyncStateRepository::new(pool.clone(), writer.clone()));
@@ -385,6 +388,7 @@ pub async fn initialize_context(
             sync_service,
             alternative_asset_service,
             universal_asset_create_repository,
+            manual_valuation_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

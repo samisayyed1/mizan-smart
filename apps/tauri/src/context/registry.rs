@@ -8,8 +8,9 @@ use mizan_core::{
 };
 use mizan_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
 use mizan_storage_sqlite::{
-    portfolio::snapshot::SnapshotRepository, sync::AppSyncRepository,
-    universal_assets::UniversalAssetCreateRepository,
+    portfolio::snapshot::SnapshotRepository,
+    sync::AppSyncRepository,
+    universal_assets::{ManualValuationRepository, UniversalAssetCreateRepository},
 };
 use std::sync::{Arc, RwLock};
 
@@ -51,6 +52,8 @@ pub struct ServiceContext {
     pub alternative_asset_service: Arc<dyn AlternativeAssetServiceTrait>,
     /// mizan-smart Phase 1 P5 — transactional universal Add Asset path.
     pub universal_asset_create_repository: Arc<UniversalAssetCreateRepository>,
+    /// mizan-smart Phase 1 P6 — manual valuation bulk-update grid.
+    pub manual_valuation_repository: Arc<ManualValuationRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -156,6 +159,10 @@ impl ServiceContext {
 
     pub fn universal_asset_create_repository(&self) -> Arc<UniversalAssetCreateRepository> {
         Arc::clone(&self.universal_asset_create_repository)
+    }
+
+    pub fn manual_valuation_repository(&self) -> Arc<ManualValuationRepository> {
+        Arc::clone(&self.manual_valuation_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

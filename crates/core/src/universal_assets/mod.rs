@@ -22,6 +22,7 @@
 pub mod classification;
 pub mod create_request;
 pub mod details;
+pub mod manual_valuations;
 pub mod valuation;
 
 pub use classification::AssetClassification;
@@ -32,4 +33,9 @@ pub use details::{
     LiabilityDetails, LiabilityType, PrivateInvestmentDetails, PrivateInvestmentSubtype,
     PublicMarketDetails, PublicMarketSubClass, RealEstateDetails, RealEstateSizeUnit,
 };
-pub use valuation::{NewValuation, Valuation, ValuationSource};
+pub use manual_valuations::{
+    manual_valuation_classifications, row_to_new_valuation, stale_status,
+    validate_bulk_update_rows, BulkUpdateValuationsRequest, BulkUpdateValuationsResult,
+    ManualValuationAsset, ManualValuationStaleness, ManualValuationUpdateRow, RowValidationError,
+};
+pub use valuation::{parse_value_native, NewValuation, Valuation, ValuationSource};

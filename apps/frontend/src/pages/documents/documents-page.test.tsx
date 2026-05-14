@@ -1,17 +1,21 @@
-import type { DocumentMetadata, DocumentRecord } from "@/adapters";
+import type { DocumentMetadata, DocumentProcessingJob, DocumentRecord } from "@/adapters";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const listDocumentsMock = vi.fn<() => Promise<DocumentMetadata[]>>();
+const listDocumentJobsMock = vi.fn<() => Promise<DocumentProcessingJob[]>>();
 const uploadDocumentMock = vi.fn<(file: File) => Promise<DocumentRecord>>();
 const deleteDocumentMock = vi.fn<(documentId: string) => Promise<void>>();
+const retryDocumentJobMock = vi.fn<(jobId: string) => Promise<DocumentProcessingJob>>();
 
 vi.mock("@/adapters", () => ({
+  listDocumentJobs: () => listDocumentJobsMock(),
   listDocuments: () => listDocumentsMock(),
   uploadDocument: (file: File) => uploadDocumentMock(file),
   deleteDocument: (documentId: string) => deleteDocumentMock(documentId),
+  retryDocumentJob: (jobId: string) => retryDocumentJobMock(jobId),
 }));
 
 vi.mock("@mizan/ui", () => ({
@@ -26,6 +30,7 @@ vi.mock("@mizan/ui", () => ({
   Icons: {
     FileText: () => <span>FileText</span>,
     Loader: () => <span>Loader</span>,
+    Refresh: () => <span>Refresh</span>,
     Trash2: () => <span>Trash2</span>,
     Upload: () => <span>Upload</span>,
   },
@@ -68,13 +73,32 @@ function record(document: DocumentMetadata): DocumentRecord {
   };
 }
 
+function job(overrides: Partial<DocumentProcessingJob> = {}): DocumentProcessingJob {
+  return {
+    id: "job-1",
+    documentId: "doc-1",
+    jobType: "parse_text",
+    status: "queued",
+    priority: 0,
+    attempts: 0,
+    maxAttempts: 3,
+    errorMessage: null,
+    startedAt: null,
+    completedAt: null,
+    createdAt: "2026-05-14T09:01:00Z",
+    ...overrides,
+  };
+}
+
 describe("DocumentsPage", () => {
   beforeEach(() => {
     listDocumentsMock.mockReset().mockResolvedValue([]);
+    listDocumentJobsMock.mockReset().mockResolvedValue([]);
     uploadDocumentMock
       .mockReset()
       .mockImplementation((file) => Promise.resolve(record(metadata({ originalName: file.name }))));
     deleteDocumentMock.mockReset().mockResolvedValue();
+    retryDocumentJobMock.mockReset().mockResolvedValue(job());
   });
 
   it("renders an honest empty state when no documents exist", async () => {
@@ -92,6 +116,7 @@ describe("DocumentsPage", () => {
     expect(screen.getByText("application/pdf")).toBeInTheDocument();
     expect(screen.getByText("2.0 KB")).toBeInTheDocument();
     expect(screen.getByText("ingested")).toBeInTheDocument();
+    expect(screen.getByText("No job")).toBeInTheDocument();
   });
 
   it("uploads a selected file and refreshes the list", async () => {
@@ -141,5 +166,31 @@ describe("DocumentsPage", () => {
 
     expect(deleteDocumentMock).toHaveBeenCalledWith("doc-1");
     await waitFor(() => expect(screen.queryByText("statement.pdf")).not.toBeInTheDocument());
+  });
+
+  it("shows failed processing jobs and retries them", async () => {
+    const failedJob = job({
+      id: "job-1",
+      documentId: "doc-1",
+      status: "failed",
+      attempts: 1,
+      maxAttempts: 3,
+      errorMessage: "Document text parser is not available on this machine",
+    });
+    listDocumentsMock.mockResolvedValue([metadata({ id: "doc-1", originalName: "statement.pdf" })]);
+    listDocumentJobsMock
+      .mockResolvedValueOnce([failedJob])
+      .mockResolvedValueOnce([job({ ...failedJob, status: "queued", errorMessage: null })]);
+    retryDocumentJobMock.mockResolvedValueOnce(job({ ...failedJob, status: "queued", errorMessage: null }));
+    const user = userEvent.setup();
+
+    render(<DocumentsPage />);
+    expect(await screen.findByText("failed")).toBeInTheDocument();
+    expect(screen.getByText("Document text parser is not available on this machine")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Retry" }));
+
+    expect(retryDocumentJobMock).toHaveBeenCalledWith("job-1");
+    expect(await screen.findByText("queued")).toBeInTheDocument();
   });
 });

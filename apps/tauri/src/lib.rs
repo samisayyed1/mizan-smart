@@ -503,6 +503,11 @@ pub fn run() {
             commands::documents::delete_document,
             commands::documents::get_document_metadata,
             commands::documents::read_document_bytes,
+            commands::document_jobs::enqueue_document_job,
+            commands::document_jobs::list_document_jobs,
+            commands::document_jobs::run_next_document_job,
+            commands::document_jobs::cancel_document_job,
+            commands::document_jobs::retry_document_job,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

@@ -130,6 +130,12 @@ pub async fn initialize_context(
             document_vault_key,
         )?,
     );
+    let document_job_repository = Arc::new(
+        mizan_storage_sqlite::documents::jobs::DocumentJobRepository::new(
+            pool.clone(),
+            writer.clone(),
+        ),
+    );
 
     // Custom provider repository
     let custom_provider_repository = Arc::new(
@@ -403,6 +409,7 @@ pub async fn initialize_context(
             manual_valuation_repository,
             smart_alert_repository,
             document_vault_repository,
+            document_job_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

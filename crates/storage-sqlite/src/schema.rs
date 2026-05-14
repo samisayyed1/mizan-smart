@@ -636,6 +636,24 @@ diesel::table! {
 }
 
 diesel::table! {
+    document_processing_jobs (id) {
+        id -> Text,
+        document_id -> Text,
+        job_type -> Text,
+        status -> Text,
+        priority -> Integer,
+        attempts -> Integer,
+        max_attempts -> Integer,
+        error_message -> Nullable<Text>,
+        started_at -> Nullable<Text>,
+        completed_at -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::joinable!(document_processing_jobs -> documents (document_id));
+
+diesel::table! {
     documents (id) {
         id -> Text,
         file_hash -> Text,
@@ -774,6 +792,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     sync_device_config,
     sync_engine_state,
     sync_entity_metadata,
+    document_processing_jobs,
     documents,
     document_files,
     document_links,

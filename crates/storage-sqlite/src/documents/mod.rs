@@ -1,5 +1,7 @@
 //! SQLite-backed encrypted Document Vault storage.
 
+pub mod jobs;
+
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -238,6 +240,7 @@ impl DocumentVaultRepository {
             storage_path: storage_path.clone(),
             created_at: now_rfc,
         };
+        let job_row = jobs::new_parse_text_job_row(document_id.clone(), now);
 
         let insert_result = self
             .writer
@@ -251,6 +254,7 @@ impl DocumentVaultRepository {
                     .values(&file_row)
                     .execute(conn)
                     .map_err(StorageError::from)?;
+                jobs::insert_job_row(conn, &job_row)?;
                 Ok(())
             })
             .await;
@@ -409,6 +413,8 @@ mod tests {
     use super::*;
     use crate::db::write_actor;
     use crate::db::{create_pool, init, run_migrations};
+    use crate::documents::jobs::DocumentJobRepository;
+    use mizan_core::documents::{DocumentJobStatus, DocumentJobType};
     use tempfile::tempdir;
 
     struct TestVault {
@@ -523,5 +529,23 @@ mod tests {
         assert_eq!(listed[0].mime_type, "application/pdf");
         assert_eq!(listed[0].status, DocumentStatus::Ingested);
         assert_eq!(listed[0].file_size_bytes, 8);
+    }
+
+    #[tokio::test]
+    async fn upload_enqueues_parse_text_job() {
+        let vault = setup();
+        let record = vault
+            .repo
+            .upload(request("statement.pdf", b"job"))
+            .await
+            .expect("upload");
+        let job_repo =
+            DocumentJobRepository::new(vault.repo.pool.clone(), vault.repo.writer.clone());
+        let jobs = job_repo
+            .list(Some(&record.document.id))
+            .expect("list document jobs");
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].job_type, DocumentJobType::ParseText);
+        assert_eq!(jobs[0].status, DocumentJobStatus::Queued);
     }
 }

@@ -47,7 +47,7 @@ use mizan_storage_sqlite::{
     alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
     db::{self, write_actor},
-    documents::DocumentVaultRepository,
+    documents::{jobs::DocumentJobRepository, DocumentVaultRepository},
     fx::FxRepository,
     goals::GoalRepository,
     health::HealthDismissalRepository,
@@ -99,6 +99,8 @@ pub struct AppState {
     pub smart_alert_repository: Arc<SmartAlertRepository>,
     /// mizan-smart Phase 2 P10 — encrypted Document Vault.
     pub document_vault_repository: Arc<DocumentVaultRepository>,
+    /// mizan-smart Phase 2 P11 — Document Vault job queue.
+    pub document_job_repository: Arc<DocumentJobRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -297,6 +299,8 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         data_root_path.join("document-vault"),
         document_vault_key,
     )?);
+    let document_job_repository =
+        Arc::new(DocumentJobRepository::new(pool.clone(), writer.clone()));
     let valuation_service = Arc::new(ValuationService::new(
         base_currency.clone(),
         valuation_repository.clone(),
@@ -549,6 +553,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         manual_valuation_repository,
         smart_alert_repository,
         document_vault_repository,
+        document_job_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

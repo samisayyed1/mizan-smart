@@ -275,6 +275,20 @@ export type {
   DocumentStatus,
   UploadDocumentRequest,
 } from "../shared/documents";
+export {
+  cancelDocumentJob,
+  enqueueDocumentJob,
+  listDocumentJobs,
+  retryDocumentJob,
+  runNextDocumentJob,
+} from "../shared/document-jobs";
+export type {
+  DocumentJobStatus,
+  DocumentJobType,
+  DocumentProcessingJob,
+  EnqueueDocumentJobRequest,
+  RunDocumentJobResult,
+} from "../shared/document-jobs";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

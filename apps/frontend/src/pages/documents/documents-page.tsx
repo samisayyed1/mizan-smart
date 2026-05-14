@@ -1,5 +1,11 @@
-import { deleteDocument, listDocuments, uploadDocument } from "@/adapters";
-import type { DocumentMetadata } from "@/adapters";
+import {
+  deleteDocument,
+  listDocumentJobs,
+  listDocuments,
+  retryDocumentJob,
+  uploadDocument,
+} from "@/adapters";
+import type { DocumentMetadata, DocumentProcessingJob } from "@/adapters";
 import { Button, Icons, Page, PageContent, PageHeader } from "@mizan/ui";
 import { useEffect, useRef, useState } from "react";
 
@@ -10,6 +16,10 @@ function formatBytes(bytes: number): string {
 }
 
 function statusLabel(status: DocumentMetadata["status"]): string {
+  return status.replaceAll("_", " ");
+}
+
+function jobStatusLabel(status: DocumentProcessingJob["status"]): string {
   return status.replaceAll("_", " ");
 }
 
@@ -24,15 +34,19 @@ function uploadMessage(error: unknown): string {
 export default function DocumentsPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
+  const [jobs, setJobs] = useState<DocumentProcessingJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   async function refreshDocuments(): Promise<void> {
     setLoading(true);
     try {
-      setDocuments(await listDocuments());
+      const [loadedDocuments, loadedJobs] = await Promise.all([listDocuments(), listDocumentJobs()]);
+      setDocuments(loadedDocuments);
+      setJobs(loadedJobs);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load documents.");
@@ -71,6 +85,27 @@ export default function DocumentsPage() {
       setError(err instanceof Error ? err.message : "Could not delete document.");
     } finally {
       setDeletingId(null);
+    }
+  }
+
+  async function handleRetry(jobId: string): Promise<void> {
+    setRetryingJobId(jobId);
+    setError(null);
+    try {
+      await retryDocumentJob(jobId);
+      await refreshDocuments();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not retry document job.");
+    } finally {
+      setRetryingJobId(null);
+    }
+  }
+
+  const latestJobByDocument = new Map<string, DocumentProcessingJob>();
+  for (const job of jobs) {
+    const current = latestJobByDocument.get(job.documentId);
+    if (!current || job.createdAt > current.createdAt) {
+      latestJobByDocument.set(job.documentId, job);
     }
   }
 
@@ -137,42 +172,75 @@ export default function DocumentsPage() {
             </div>
           ) : (
             <div className="border-border overflow-hidden rounded-lg border">
-              <div className="bg-muted/40 text-muted-foreground grid grid-cols-[minmax(0,1fr)_120px_120px_72px] gap-3 px-4 py-2 text-xs font-medium uppercase">
+              <div className="bg-muted/40 text-muted-foreground grid grid-cols-[minmax(0,1fr)_120px_140px_120px_88px] gap-3 px-4 py-2 text-xs font-medium uppercase">
                 <span>Name</span>
                 <span>Status</span>
-                <span>Size</span>
+                <span>Processing</span>
+                <span className="text-right">Size</span>
                 <span className="text-right">Action</span>
               </div>
               <ul className="divide-border divide-y">
-                {documents.map((document) => (
-                  <li
-                    key={document.id}
-                    className="grid grid-cols-[minmax(0,1fr)_120px_120px_72px] items-center gap-3 px-4 py-3 text-sm"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{document.originalName}</p>
-                      <p className="text-muted-foreground truncate text-xs">{document.mimeType}</p>
-                    </div>
-                    <span className="capitalize">{statusLabel(document.status)}</span>
-                    <span>{formatBytes(document.fileSizeBytes)}</span>
-                    <div className="text-right">
-                      <Button
-                        aria-label={`Delete ${document.originalName}`}
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => void handleDelete(document.id)}
-                        disabled={deletingId === document.id}
-                      >
-                        {deletingId === document.id ? (
-                          <Icons.Loader className="size-4 animate-spin" aria-hidden="true" />
+                {documents.map((document) => {
+                  const job = latestJobByDocument.get(document.id);
+                  return (
+                    <li
+                      key={document.id}
+                      className="grid grid-cols-[minmax(0,1fr)_120px_140px_120px_88px] items-center gap-3 px-4 py-3 text-sm"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{document.originalName}</p>
+                        <p className="text-muted-foreground truncate text-xs">{document.mimeType}</p>
+                      </div>
+                      <span className="capitalize">{statusLabel(document.status)}</span>
+                      <div className="min-w-0">
+                        {job ? (
+                          <>
+                            <p className="capitalize">{jobStatusLabel(job.status)}</p>
+                            {job.status === "failed" && job.errorMessage ? (
+                              <p className="text-destructive truncate text-xs">{job.errorMessage}</p>
+                            ) : null}
+                            {job.status === "failed" && job.attempts < job.maxAttempts ? (
+                              <Button
+                                className="mt-1 h-7 px-2 text-xs"
+                                type="button"
+                                variant="secondary"
+                                aria-label="Retry"
+                                onClick={() => void handleRetry(job.id)}
+                                disabled={retryingJobId === job.id}
+                              >
+                                {retryingJobId === job.id ? (
+                                  <Icons.Loader className="mr-1 size-3 animate-spin" aria-hidden="true" />
+                                ) : (
+                                  <Icons.Refresh className="mr-1 size-3" aria-hidden="true" />
+                                )}
+                                Retry
+                              </Button>
+                            ) : null}
+                          </>
                         ) : (
-                          <Icons.Trash2 className="size-4" aria-hidden="true" />
+                          <span className="text-muted-foreground">No job</span>
                         )}
-                      </Button>
-                    </div>
-                  </li>
-                ))}
+                      </div>
+                      <span className="text-right">{formatBytes(document.fileSizeBytes)}</span>
+                      <div className="text-right">
+                        <Button
+                          aria-label={`Delete ${document.originalName}`}
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void handleDelete(document.id)}
+                          disabled={deletingId === document.id}
+                        >
+                          {deletingId === document.id ? (
+                            <Icons.Loader className="size-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Icons.Trash2 className="size-4" aria-hidden="true" />
+                          )}
+                        </Button>
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

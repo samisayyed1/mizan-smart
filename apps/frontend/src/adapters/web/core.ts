@@ -191,6 +191,11 @@ export const COMMANDS: CommandMap = {
   get_document_metadata: { method: "GET", path: "/documents" },
   delete_document: { method: "DELETE", path: "/documents" },
   read_document_bytes: { method: "GET", path: "/documents" },
+  enqueue_document_job: { method: "POST", path: "/document-jobs" },
+  list_document_jobs: { method: "GET", path: "/document-jobs" },
+  run_next_document_job: { method: "POST", path: "/document-jobs/run-next" },
+  cancel_document_job: { method: "POST", path: "/document-jobs" },
+  retry_document_job: { method: "POST", path: "/document-jobs" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -803,6 +808,30 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "read_document_bytes": {
       const { documentId } = payload as { documentId: string };
       url += `/${encodeURIComponent(documentId)}/content`;
+      break;
+    }
+    case "enqueue_document_job": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "list_document_jobs": {
+      const { documentId } = payload as { documentId?: string };
+      if (documentId) {
+        const params = new URLSearchParams();
+        params.set("documentId", documentId);
+        url += `?${params.toString()}`;
+      }
+      break;
+    }
+    case "cancel_document_job": {
+      const { jobId } = payload as { jobId: string };
+      url += `/${encodeURIComponent(jobId)}/cancel`;
+      break;
+    }
+    case "retry_document_job": {
+      const { jobId } = payload as { jobId: string };
+      url += `/${encodeURIComponent(jobId)}/retry`;
       break;
     }
     case "create_asset": {

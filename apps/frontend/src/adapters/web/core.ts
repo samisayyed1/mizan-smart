@@ -202,6 +202,9 @@ export const COMMANDS: CommandMap = {
   list_pending_extracted_facts: { method: "GET", path: "/extracted-facts/pending" },
   get_source_citation: { method: "GET", path: "/source-citations" },
   approve_extracted_fact: { method: "POST", path: "/extracted-facts" },
+  update_extracted_fact_before_approval: { method: "POST", path: "/extracted-facts" },
+  link_extracted_fact_to_entity: { method: "POST", path: "/extracted-facts" },
+  defer_extracted_fact: { method: "POST", path: "/extracted-facts" },
   reject_extracted_fact: { method: "POST", path: "/extracted-facts" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
@@ -865,6 +868,24 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "approve_extracted_fact": {
       const { factId, request } = payload as { factId: string; request: Record<string, unknown> };
       url += `/${encodeURIComponent(factId)}/approve`;
+      body = JSON.stringify(request);
+      break;
+    }
+    case "update_extracted_fact_before_approval": {
+      const { factId, request } = payload as { factId: string; request: Record<string, unknown> };
+      url += `/${encodeURIComponent(factId)}/edit`;
+      body = JSON.stringify(request);
+      break;
+    }
+    case "link_extracted_fact_to_entity": {
+      const { factId, request } = payload as { factId: string; request: Record<string, unknown> };
+      url += `/${encodeURIComponent(factId)}/link`;
+      body = JSON.stringify(request);
+      break;
+    }
+    case "defer_extracted_fact": {
+      const { factId, request } = payload as { factId: string; request: Record<string, unknown> };
+      url += `/${encodeURIComponent(factId)}/defer`;
       body = JSON.stringify(request);
       break;
     }

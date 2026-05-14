@@ -741,9 +741,35 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    extracted_fact_audit_log (id) {
+        id -> Text,
+        extracted_fact_id -> Text,
+        action -> Text,
+        previous_status -> Nullable<Text>,
+        next_status -> Nullable<Text>,
+        before_json -> Nullable<Text>,
+        after_json -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    extracted_fact_entity_links (id) {
+        id -> Text,
+        extracted_fact_id -> Text,
+        entity_type -> Text,
+        entity_id -> Text,
+        created_at -> Text,
+    }
+}
+
 diesel::joinable!(extracted_facts -> documents (document_id));
 diesel::joinable!(source_citations -> documents (document_id));
 diesel::joinable!(source_citations -> extracted_facts (extracted_fact_id));
+diesel::joinable!(extracted_fact_audit_log -> extracted_facts (extracted_fact_id));
+diesel::joinable!(extracted_fact_entity_links -> extracted_facts (extracted_fact_id));
 
 diesel::table! {
     documents (id) {
@@ -892,6 +918,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     document_table_cells,
     extracted_facts,
     source_citations,
+    extracted_fact_audit_log,
+    extracted_fact_entity_links,
     documents,
     document_files,
     document_links,

@@ -9,8 +9,9 @@ use axum::{
 };
 
 use mizan_core::documents::{
-    CreateExtractedFactRequest, CreateExtractedFactResult, ExtractedFact,
-    ReviewExtractedFactRequest, SourceCitation,
+    CreateExtractedFactRequest, CreateExtractedFactResult, DeferExtractedFactRequest,
+    ExtractedFact, ExtractedFactEntityLink, LinkExtractedFactRequest, ReviewExtractedFactRequest,
+    SourceCitation, UpdateExtractedFactRequest,
 };
 
 use crate::error::{ApiError, ApiResult};
@@ -62,6 +63,45 @@ async fn approve_extracted_fact(
     Ok(Json(fact))
 }
 
+async fn update_extracted_fact_before_approval(
+    State(state): State<Arc<AppState>>,
+    Path(fact_id): Path<String>,
+    Json(request): Json<UpdateExtractedFactRequest>,
+) -> ApiResult<Json<ExtractedFact>> {
+    let fact = state
+        .extracted_fact_repository
+        .update_extracted_fact_before_approval(&fact_id, request)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(fact))
+}
+
+async fn link_extracted_fact_to_entity(
+    State(state): State<Arc<AppState>>,
+    Path(fact_id): Path<String>,
+    Json(request): Json<LinkExtractedFactRequest>,
+) -> ApiResult<Json<ExtractedFactEntityLink>> {
+    let link = state
+        .extracted_fact_repository
+        .link_extracted_fact_to_entity(&fact_id, request)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(link))
+}
+
+async fn defer_extracted_fact(
+    State(state): State<Arc<AppState>>,
+    Path(fact_id): Path<String>,
+    Json(request): Json<DeferExtractedFactRequest>,
+) -> ApiResult<Json<ExtractedFact>> {
+    let fact = state
+        .extracted_fact_repository
+        .defer_extracted_fact(&fact_id, request)
+        .await
+        .map_err(ApiError::from)?;
+    Ok(Json(fact))
+}
+
 async fn reject_extracted_fact(
     State(state): State<Arc<AppState>>,
     Path(fact_id): Path<String>,
@@ -85,6 +125,18 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/extracted-facts/{fact_id}/approve",
             post(approve_extracted_fact),
+        )
+        .route(
+            "/extracted-facts/{fact_id}/edit",
+            post(update_extracted_fact_before_approval),
+        )
+        .route(
+            "/extracted-facts/{fact_id}/link",
+            post(link_extracted_fact_to_entity),
+        )
+        .route(
+            "/extracted-facts/{fact_id}/defer",
+            post(defer_extracted_fact),
         )
         .route(
             "/extracted-facts/{fact_id}/reject",

@@ -11,7 +11,7 @@
 - [x] p11 phase-2/p11  Document job system (1d483f4)
 - [x] p12 phase-2/p12  PDF/text/layout extraction adapter (b492059)
 - [x] p13 phase-2/p13  Extracted facts and citations (54882d6)
-- [ ] p14 phase-2/p14  Document Review Queue
+- [x] p14 phase-2/p14  Document Review Queue (2177d7b)
 - [ ] p15 phase-2/p15  Explain This Number
 - [ ] p16 phase-2/p16  Reconciliation Center
 - [ ] p17 phase-3/p17  Private investments foundation

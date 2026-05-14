@@ -15,6 +15,7 @@ import type {
 } from "@/adapters";
 import { Button, Icons, Page, PageContent, PageHeader } from "@mizan/ui";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -183,6 +184,9 @@ export default function DocumentsPage() {
               ? "1 extracted fact awaiting review"
               : `${pendingFacts.length} extracted facts awaiting review`}
           </p>
+          <Button asChild type="button" variant="secondary">
+            <Link to="/documents/review-queue">Review queue</Link>
+          </Button>
 
           {error ? (
             <div

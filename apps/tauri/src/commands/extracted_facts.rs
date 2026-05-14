@@ -6,8 +6,9 @@ use log::error;
 use tauri::State;
 
 use mizan_core::documents::{
-    CreateExtractedFactRequest, CreateExtractedFactResult, ExtractedFact,
-    ReviewExtractedFactRequest, SourceCitation,
+    CreateExtractedFactRequest, CreateExtractedFactResult, DeferExtractedFactRequest,
+    ExtractedFact, ExtractedFactEntityLink, LinkExtractedFactRequest, ReviewExtractedFactRequest,
+    SourceCitation, UpdateExtractedFactRequest,
 };
 
 use crate::context::ServiceContext;
@@ -66,6 +67,54 @@ pub async fn approve_extracted_fact(
         .await
         .map_err(|err| {
             error!("approve_extracted_fact failed: {}", err);
+            err.to_string()
+        })
+}
+
+#[tauri::command]
+pub async fn update_extracted_fact_before_approval(
+    fact_id: String,
+    request: UpdateExtractedFactRequest,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<ExtractedFact, String> {
+    state
+        .extracted_fact_repository()
+        .update_extracted_fact_before_approval(&fact_id, request)
+        .await
+        .map_err(|err| {
+            error!("update_extracted_fact_before_approval failed: {}", err);
+            err.to_string()
+        })
+}
+
+#[tauri::command]
+pub async fn link_extracted_fact_to_entity(
+    fact_id: String,
+    request: LinkExtractedFactRequest,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<ExtractedFactEntityLink, String> {
+    state
+        .extracted_fact_repository()
+        .link_extracted_fact_to_entity(&fact_id, request)
+        .await
+        .map_err(|err| {
+            error!("link_extracted_fact_to_entity failed: {}", err);
+            err.to_string()
+        })
+}
+
+#[tauri::command]
+pub async fn defer_extracted_fact(
+    fact_id: String,
+    request: DeferExtractedFactRequest,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<ExtractedFact, String> {
+    state
+        .extracted_fact_repository()
+        .defer_extracted_fact(&fact_id, request)
+        .await
+        .map_err(|err| {
+            error!("defer_extracted_fact failed: {}", err);
             err.to_string()
         })
 }

@@ -514,6 +514,9 @@ pub fn run() {
             commands::extracted_facts::list_pending_extracted_facts,
             commands::extracted_facts::get_source_citation,
             commands::extracted_facts::approve_extracted_fact,
+            commands::extracted_facts::update_extracted_fact_before_approval,
+            commands::extracted_facts::link_extracted_fact_to_entity,
+            commands::extracted_facts::defer_extracted_fact,
             commands::extracted_facts::reject_extracted_fact,
             // Market data commands
             commands::market_data::search_symbol,

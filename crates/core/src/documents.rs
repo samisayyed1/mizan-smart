@@ -439,6 +439,67 @@ pub struct ReviewExtractedFactRequest {
     pub review_notes: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExtractedFactLinkEntityType {
+    Asset,
+    Account,
+}
+
+impl ExtractedFactLinkEntityType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Asset => "asset",
+            Self::Account => "account",
+        }
+    }
+}
+
+impl TryFrom<&str> for ExtractedFactLinkEntityType {
+    type Error = String;
+
+    fn try_from(value: &str) -> std::result::Result<Self, String> {
+        match value {
+            "asset" => Ok(Self::Asset),
+            "account" => Ok(Self::Account),
+            other => Err(format!("Unknown extracted fact link entity type: {other}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateExtractedFactRequest {
+    pub normalized_value: Option<String>,
+    pub currency: Option<String>,
+    pub date_value: Option<String>,
+    pub review_notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkExtractedFactRequest {
+    pub entity_type: ExtractedFactLinkEntityType,
+    pub entity_id: String,
+    pub review_notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeferExtractedFactRequest {
+    pub review_notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedFactEntityLink {
+    pub id: String,
+    pub extracted_fact_id: String,
+    pub entity_type: ExtractedFactLinkEntityType,
+    pub entity_id: String,
+    pub created_at: DateTime<Utc>,
+}
+
 #[async_trait::async_trait]
 pub trait DocumentParser: Send + Sync {
     fn capabilities(&self) -> DocumentParserCapabilities;

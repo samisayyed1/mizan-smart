@@ -301,19 +301,27 @@ export type {
 export {
   approveExtractedFact,
   createExtractedFact,
+  deferExtractedFact,
   getSourceCitation,
+  linkExtractedFactToEntity,
   listPendingExtractedFacts,
   rejectExtractedFact,
+  updateExtractedFactBeforeApproval,
 } from "../shared/extracted-facts";
 export type {
   CreateExtractedFactRequest,
   CreateExtractedFactResult,
+  DeferExtractedFactRequest,
   ExtractedFact,
+  ExtractedFactEntityLink,
+  ExtractedFactLinkEntityType,
   ExtractedFactStatus,
   ExtractionMethod,
+  LinkExtractedFactRequest,
   ReviewExtractedFactRequest,
   SourceCitation,
   SourceCitationType,
+  UpdateExtractedFactRequest,
 } from "../shared/extracted-facts";
 
 // Connect Commands (Broker + Device Sync + Auth)

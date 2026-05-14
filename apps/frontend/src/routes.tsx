@@ -14,6 +14,7 @@ import ActivityImportPage from "@/pages/activity/import/activity-import-page";
 import AssetsPage from "@/pages/asset/assets-page";
 import PortfolioPage from "@/pages/dashboard/portfolio-page";
 import DocumentsPage from "@/pages/documents/documents-page";
+import DocumentReviewQueuePage from "@/pages/documents/review-queue-page";
 import HoldingsPage from "@/pages/holdings/holdings-page";
 import UniversalAddAssetPage from "@/pages/holdings/new/universal-add-asset-page";
 import ManualValuationsPage from "@/pages/holdings/update-values/manual-valuations-page";
@@ -100,6 +101,7 @@ export function AppRoutes() {
           <Route path="insights" element={<PortfolioInsightsPage />} />
           <Route path="health" element={<HealthPage />} />
           <Route path="documents" element={<DocumentsPage />} />
+          <Route path="documents/review-queue" element={<DocumentReviewQueuePage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="inbox" element={<InboxPage />} />
           <Route path="assistant" element={<AiAssistantPage />} />

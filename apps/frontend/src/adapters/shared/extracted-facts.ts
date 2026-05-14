@@ -4,6 +4,7 @@ import { invoke } from "./platform";
 export type ExtractionMethod = "parser" | "ocr" | "vlm" | "manual";
 export type ExtractedFactStatus = "pending" | "approved" | "rejected" | "superseded";
 export type SourceCitationType = "document" | "manual" | "import" | "web_evidence" | "calculated";
+export type ExtractedFactLinkEntityType = "asset" | "account";
 
 export interface CreateExtractedFactRequest {
   documentId: string;
@@ -60,6 +61,31 @@ export interface ReviewExtractedFactRequest {
   reviewNotes: string | null;
 }
 
+export interface UpdateExtractedFactRequest {
+  normalizedValue: string | null;
+  currency: string | null;
+  dateValue: string | null;
+  reviewNotes: string | null;
+}
+
+export interface LinkExtractedFactRequest {
+  entityType: ExtractedFactLinkEntityType;
+  entityId: string;
+  reviewNotes: string | null;
+}
+
+export interface DeferExtractedFactRequest {
+  reviewNotes: string | null;
+}
+
+export interface ExtractedFactEntityLink {
+  id: string;
+  extractedFactId: string;
+  entityType: ExtractedFactLinkEntityType;
+  entityId: string;
+  createdAt: string;
+}
+
 export async function createExtractedFact(
   request: CreateExtractedFactRequest,
 ): Promise<CreateExtractedFactResult> {
@@ -79,6 +105,27 @@ export async function approveExtractedFact(
   request: ReviewExtractedFactRequest,
 ): Promise<ExtractedFact> {
   return invoke<ExtractedFact>("approve_extracted_fact", { factId, request });
+}
+
+export async function updateExtractedFactBeforeApproval(
+  factId: string,
+  request: UpdateExtractedFactRequest,
+): Promise<ExtractedFact> {
+  return invoke<ExtractedFact>("update_extracted_fact_before_approval", { factId, request });
+}
+
+export async function linkExtractedFactToEntity(
+  factId: string,
+  request: LinkExtractedFactRequest,
+): Promise<ExtractedFactEntityLink> {
+  return invoke<ExtractedFactEntityLink>("link_extracted_fact_to_entity", { factId, request });
+}
+
+export async function deferExtractedFact(
+  factId: string,
+  request: DeferExtractedFactRequest,
+): Promise<ExtractedFact> {
+  return invoke<ExtractedFact>("defer_extracted_fact", { factId, request });
 }
 
 export async function rejectExtractedFact(

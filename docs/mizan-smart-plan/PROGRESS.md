@@ -1,0 +1,63 @@
+- [x] p1  phase-0      Stabilize mizan-smart baseline (768be8e)
+- [x] p2  phase-1/p2   Boomer-friendly navigation (c724987)
+- [x] p3  phase-1/p3   Home dashboard (8e37801)
+- [x] p4  phase-1/p4   Universal asset model (822a650)
+- [x] p5  phase-1/p5   Universal Add Asset (c1bb952)
+- [ ] p6  phase-1/p6   Manual valuations / bulk update
+- [x] p7  phase-1/p7   Data Quality Score (e6e5de9)
+- [x] p8  phase-1/p8   Smart alerts (71786b3)
+- [ ] p9  phase-1/p9   Wealth Inbox
+- [ ] p10 phase-2/p10  Document Vault storage
+- [ ] p11 phase-2/p11  Document job system
+- [ ] p12 phase-2/p12  PDF/text/layout extraction adapter
+- [ ] p13 phase-2/p13  Extracted facts and citations
+- [ ] p14 phase-2/p14  Document Review Queue
+- [ ] p15 phase-2/p15  Explain This Number
+- [ ] p16 phase-2/p16  Reconciliation Center
+- [ ] p17 phase-3/p17  Private investments foundation
+- [ ] p18 phase-3/p18  Private investment UI / J-curve
+- [ ] p19 phase-3/p19  Fixed income / Sukuk / FD engine
+- [ ] p20 phase-3/p20  Liquidity Ladder
+- [ ] p21 phase-3/p21  Corporate actions
+- [ ] p22 phase-3/p22  Accuracy invariants
+- [ ] p23 phase-3/p23  Golden import templates
+- [ ] p24 phase-4/p24  Optional Islamic mode foundation
+- [ ] p25 phase-4/p25  Shariah screening workflow
+- [ ] p26 phase-4/p26  Zakat calculator
+- [ ] p27 phase-4/p27  Dividend purification calculator
+- [ ] p28 phase-4/p28  Tax pack foundation
+- [ ] p29 phase-4/p29  CPA export bundle
+- [ ] p30 phase-4/p30  Report Builder foundation
+- [ ] p31 phase-4/p31  Monthly Wealth Letter (deterministic)
+- [ ] p32 phase-4/p32  Estate / Legacy Binder
+- [ ] p33 phase-4/p33  Fee Intelligence
+- [ ] p34 phase-4/p34  Concentration and fragility radar
+- [ ] p35 phase-5/p35  Web Evidence foundation
+- [ ] p36 phase-5/p36  SearXNG search provider
+- [ ] p37 phase-5/p37  Safe web fetcher and snapshot store
+- [ ] p38 phase-5/p38  Web content extraction
+- [ ] p39 phase-5/p39  Web price candidate normalization
+- [ ] p40 phase-5/p40  Web Evidence Review UI
+- [ ] p41 phase-5/p41  Asset Web Watchlists
+- [ ] p42 phase-5/p42  Property/car/watch comparable evidence
+- [ ] p43 phase-5/p43  Gold and silver reference evidence
+- [ ] p44 phase-5/p44  Sukuk/bond/fund factsheet evidence
+- [ ] p45 phase-5/p45  Web Evidence final hardening
+- [ ] p46 phase-6/p46  Intelligence settings / privacy
+- [ ] p47 phase-6/p47  AI guardrails and suggestion records
+- [ ] p48 phase-6/p48  Local AI model registry finalization
+- [ ] p49 phase-6/p49  AI job system
+- [ ] p50 phase-6/p50  Semantic index (FTS5 + vector-ready)
+- [ ] p51 phase-6/p51  Local memory layer
+- [ ] p52 phase-6/p52  Ask Mizan Privately
+- [ ] p53 phase-6/p53  Deterministic Daily Wealth Briefing
+- [ ] p54 phase-6/p54  Next Best Action engine
+- [ ] p55 phase-6/p55  Senior-mode AI wording hook
+- [ ] p56 phase-6/p56  AI Document Triage
+- [ ] p57 phase-6/p57  AI Review Copilot
+- [ ] p58 phase-6/p58  AI report commentary
+- [ ] p59 phase-6/p59  AI + Web Evidence guardrails
+- [ ] p60 phase-6/p60  Memory Safety Center
+- [ ] p61 phase-7/p61  Entitlement abstraction
+- [ ] p62 phase-7/p62  Offline signed license validation
+- [ ] p63 phase-7/p63  Full final hardening pass

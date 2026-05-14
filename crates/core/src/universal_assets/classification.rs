@@ -9,6 +9,8 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
+use crate::assets::AssetKind;
+
 /// The 22 universal asset classes from `docs/mizan-smart-plan/PLAN.md`
 /// Phase 1 / Prompt 4. The string values are SQL-friendly snake_case
 /// and are used as the persisted form on `assets.classification` and
@@ -136,6 +138,45 @@ impl AssetClassification {
         }
     }
 
+    /// Maps a universal class to the legacy `AssetKind` enum that the
+    /// existing portfolio/holdings/quotes pipeline reads. Keeping this
+    /// mapping in one place is critical: it is how new universal-flow
+    /// rows continue to participate in net-worth math without forcing
+    /// every consumer of `assets.kind` to learn about the 23-class
+    /// classification.
+    ///
+    /// The legacy enum is coarser than the universal one, so several
+    /// universal classes map to the same `AssetKind`. The reverse map
+    /// is intentionally one-way: a legacy row without a classification
+    /// column value still works; only the universal flow sets it.
+    pub const fn to_legacy_kind(self) -> AssetKind {
+        match self {
+            AssetClassification::PublicEquity
+            | AssetClassification::Etf
+            | AssetClassification::MutualFund
+            | AssetClassification::FixedIncome
+            | AssetClassification::Sukuk
+            | AssetClassification::FixedDeposit
+            | AssetClassification::Cash
+            | AssetClassification::Crypto => AssetKind::Investment,
+            AssetClassification::RealEstate => AssetKind::Property,
+            AssetClassification::PrivateEquity
+            | AssetClassification::PrivateCredit
+            | AssetClassification::HedgeFund
+            | AssetClassification::VentureCapital
+            | AssetClassification::BusinessOwnership => AssetKind::PrivateEquity,
+            AssetClassification::Commodity
+            | AssetClassification::Gold
+            | AssetClassification::Silver => AssetKind::PreciousMetal,
+            AssetClassification::Collectible => AssetKind::Collectible,
+            AssetClassification::Liability => AssetKind::Liability,
+            AssetClassification::Insurance
+            | AssetClassification::Ulip
+            | AssetClassification::Pension
+            | AssetClassification::Custom => AssetKind::Other,
+        }
+    }
+
     /// Enumerates every class — useful for fixtures and round-trip
     /// tests. Order matches the spec listing.
     pub const fn all() -> [AssetClassification; 23] {
@@ -243,5 +284,51 @@ mod tests {
     #[test]
     fn display_matches_as_str() {
         assert_eq!(format!("{}", AssetClassification::Sukuk), "sukuk");
+    }
+
+    #[test]
+    fn legacy_kind_mapping_covers_every_universal_class() {
+        // The match in to_legacy_kind is exhaustive, but covering each
+        // variant here protects against future drift: any new class
+        // added to the enum without a mapping entry fails this test
+        // immediately via the compiler-enforced match below.
+        for class in AssetClassification::all() {
+            let legacy = class.to_legacy_kind();
+            // Sanity: the legacy enum is never Investment for assets
+            // whose classification is "Liability" — net-worth math
+            // depends on the legacy AssetKind for sign.
+            if class == AssetClassification::Liability {
+                assert_eq!(legacy, AssetKind::Liability);
+            }
+            // Property class only maps from RealEstate.
+            if legacy == AssetKind::Property {
+                assert_eq!(class, AssetClassification::RealEstate);
+            }
+        }
+    }
+
+    #[test]
+    fn fixed_income_family_maps_to_investment_legacy_kind() {
+        // The fixed-income family rides on Investment so existing
+        // portfolio math keeps working until the dedicated fixed-income
+        // engine lands (Phase 3 P19).
+        for class in [
+            AssetClassification::FixedIncome,
+            AssetClassification::Sukuk,
+            AssetClassification::FixedDeposit,
+        ] {
+            assert_eq!(class.to_legacy_kind(), AssetKind::Investment);
+        }
+    }
+
+    #[test]
+    fn precious_metals_share_legacy_kind() {
+        for class in [
+            AssetClassification::Commodity,
+            AssetClassification::Gold,
+            AssetClassification::Silver,
+        ] {
+            assert_eq!(class.to_legacy_kind(), AssetKind::PreciousMetal);
+        }
     }
 }

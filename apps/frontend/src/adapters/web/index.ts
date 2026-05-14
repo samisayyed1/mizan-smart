@@ -228,6 +228,18 @@ export {
   updateAlternativeAssetValuation,
 } from "../shared/alternative-assets";
 
+// Universal Add Asset (mizan-smart Phase 1 P5)
+export { createUniversalAsset } from "../shared/universal-assets";
+export type {
+  CreateUniversalAssetResponse,
+  UniversalAssetClassification,
+  UniversalAssetCommon,
+  UniversalAssetCreateRequest,
+  FixedIncomeSubtype,
+  CommodityRequestType,
+  LiabilityRequestType,
+} from "../shared/universal-assets";
+
 // Connect Commands (Broker + Device Sync + Auth)
 export {
   approvePairing,

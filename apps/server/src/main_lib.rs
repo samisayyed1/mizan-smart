@@ -87,6 +87,9 @@ pub struct AppState {
     pub taxonomy_service: Arc<dyn TaxonomyServiceTrait + Send + Sync>,
     pub net_worth_service: Arc<dyn NetWorthServiceTrait + Send + Sync>,
     pub alternative_asset_service: Arc<dyn AlternativeAssetServiceTrait + Send + Sync>,
+    /// mizan-smart Phase 1 P5 — transactional universal Add Asset path.
+    pub universal_asset_create_repository:
+        Arc<mizan_storage_sqlite::universal_assets::UniversalAssetCreateRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -380,6 +383,14 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         .with_event_sink(domain_event_sink.clone()),
     );
 
+    // mizan-smart Phase 1 P5 — transactional universal Add Asset path.
+    let universal_asset_create_repository = Arc::new(
+        mizan_storage_sqlite::universal_assets::UniversalAssetCreateRepository::new(
+            pool.clone(),
+            writer.clone(),
+        ),
+    );
+
     // Connect sync service for broker data synchronization
     let platform_repository = Arc::new(PlatformRepository::new(pool.clone(), writer.clone()));
     let connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync> = Arc::new(
@@ -514,6 +525,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         taxonomy_service,
         net_worth_service,
         alternative_asset_service,
+        universal_asset_create_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

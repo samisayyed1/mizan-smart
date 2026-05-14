@@ -491,6 +491,8 @@ pub fn run() {
             commands::alternative_assets::get_net_worth,
             commands::alternative_assets::get_net_worth_history,
             commands::alternative_assets::get_alternative_holdings,
+            // Universal Add Asset (mizan-smart Phase 1 P5)
+            commands::universal_asset::create_universal_asset,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

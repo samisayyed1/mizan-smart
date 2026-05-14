@@ -12,8 +12,11 @@
 //! follow-up prompts (P19 fixed-income, P17 private investments, etc.)
 //! without further migration work.
 
+pub mod create_repository;
+pub mod details_models;
 pub mod valuation_model;
 pub mod valuation_repository;
 
+pub use create_repository::{UniversalAssetCreateRepository, UniversalAssetCreated};
 pub use valuation_model::ValuationDB;
 pub use valuation_repository::ValuationRepository;

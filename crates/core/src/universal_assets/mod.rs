@@ -20,10 +20,12 @@
 //! boundary, so legacy callers do not need to migrate.
 
 pub mod classification;
+pub mod create_request;
 pub mod details;
 pub mod valuation;
 
 pub use classification::AssetClassification;
+pub use create_request::{UniversalAssetCommon, UniversalAssetCreateRequest};
 pub use details::{
     BusinessDetails, CollectibleDetails, CommodityDetails, CommodityType, DayCountConvention,
     FixedIncomeDetails, FixedIncomeSubtype, InsuranceDetails, InsurancePolicyType,

@@ -276,6 +276,14 @@ pub async fn initialize_context(
         .with_event_sink(domain_event_sink.clone()),
     );
 
+    // mizan-smart Phase 1 P5 — transactional universal Add Asset path.
+    let universal_asset_create_repository = Arc::new(
+        mizan_storage_sqlite::universal_assets::UniversalAssetCreateRepository::new(
+            pool.clone(),
+            writer.clone(),
+        ),
+    );
+
     let sync_service = Arc::new(
         BrokerSyncService::new(
             account_service.clone(),
@@ -376,6 +384,7 @@ pub async fn initialize_context(
             net_worth_service,
             sync_service,
             alternative_asset_service,
+            universal_asset_create_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

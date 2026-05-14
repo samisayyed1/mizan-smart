@@ -91,6 +91,9 @@ export * from "../shared/taxonomies";
 // Alternative Assets Commands
 export * from "../shared/alternative-assets";
 
+// Universal Add Asset (mizan-smart Phase 1 P5)
+export * from "../shared/universal-assets";
+
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";
 

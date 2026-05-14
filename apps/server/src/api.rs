@@ -47,6 +47,7 @@ pub mod shared;
 #[cfg(feature = "device-sync")]
 mod sync_crypto;
 mod taxonomies;
+mod universal_assets;
 
 #[utoipa::path(get, path = "/api/v1/healthz", responses((status = 200, description = "Health")))]
 pub async fn healthz() -> &'static str {
@@ -103,6 +104,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(taxonomies::router())
         .merge(net_worth::router())
         .merge(alternative_assets::router())
+        .merge(universal_assets::router())
         .merge(ai_providers::router())
         .merge(ai_chat::router())
         .merge(health::router())

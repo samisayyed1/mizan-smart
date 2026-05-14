@@ -51,7 +51,7 @@ describe("QuickActions (Home dashboard)", () => {
         <QuickActions />
       </MemoryRouter>,
     );
-    expect(screen.getByTestId("quick-action-plus")).toHaveAttribute("href", "/holdings");
+    expect(screen.getByTestId("quick-action-plus")).toHaveAttribute("href", "/holdings/new");
     expect(screen.getByTestId("quick-action-refreshcw")).toHaveAttribute("href", "/holdings");
     expect(screen.getByTestId("quick-action-filetext")).toHaveAttribute("href", "/documents");
     expect(screen.getByTestId("quick-action-inbox")).toHaveAttribute("href", "/inbox");

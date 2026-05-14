@@ -326,6 +326,8 @@ export const COMMANDS: CommandMap = {
   unlink_liability: { method: "DELETE", path: "/alternative-assets" },
   update_alternative_asset_metadata: { method: "PUT", path: "/alternative-assets" },
   get_alternative_holdings: { method: "GET", path: "/alternative-holdings" },
+  // Universal Add Asset (mizan-smart Phase 1 P5)
+  create_universal_asset: { method: "POST", path: "/universal-assets" },
 };
 
 /**
@@ -1310,6 +1312,14 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     }
     // Alternative Assets commands
     case "create_alternative_asset": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "create_universal_asset": {
+      // Universal Add Asset — body IS the discriminated-union request,
+      // with `classification` as the tag field (matches the Axum
+      // handler in apps/server/src/api/universal_assets.rs).
       const { request } = payload as { request: Record<string, unknown> };
       body = JSON.stringify(request);
       break;

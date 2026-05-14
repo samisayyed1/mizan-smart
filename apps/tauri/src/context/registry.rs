@@ -7,7 +7,10 @@ use mizan_core::{
     fx, goals, health, limits, portfolio, quotes, settings, taxonomies,
 };
 use mizan_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
-use mizan_storage_sqlite::{portfolio::snapshot::SnapshotRepository, sync::AppSyncRepository};
+use mizan_storage_sqlite::{
+    portfolio::snapshot::SnapshotRepository, sync::AppSyncRepository,
+    universal_assets::UniversalAssetCreateRepository,
+};
 use std::sync::{Arc, RwLock};
 
 use super::TauriAiEnvironment;
@@ -46,6 +49,8 @@ pub struct ServiceContext {
     pub net_worth_service: Arc<dyn portfolio::net_worth::NetWorthServiceTrait>,
     pub sync_service: Arc<dyn BrokerSyncServiceTrait>,
     pub alternative_asset_service: Arc<dyn AlternativeAssetServiceTrait>,
+    /// mizan-smart Phase 1 P5 — transactional universal Add Asset path.
+    pub universal_asset_create_repository: Arc<UniversalAssetCreateRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -147,6 +152,10 @@ impl ServiceContext {
 
     pub fn alternative_asset_service(&self) -> Arc<dyn AlternativeAssetServiceTrait> {
         Arc::clone(&self.alternative_asset_service)
+    }
+
+    pub fn universal_asset_create_repository(&self) -> Arc<UniversalAssetCreateRepository> {
+        Arc::clone(&self.universal_asset_create_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

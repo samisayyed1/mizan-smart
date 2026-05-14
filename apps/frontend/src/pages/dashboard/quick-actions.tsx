@@ -22,7 +22,7 @@ const ACTIONS: QuickAction[] = [
   {
     title: "Add asset",
     description: "Stock, fund, bond, property, gold, crypto, or other.",
-    href: "/holdings",
+    href: "/holdings/new",
     icon: "Plus",
   },
   {

@@ -324,6 +324,15 @@ export type {
   UpdateExtractedFactRequest,
 } from "../shared/extracted-facts";
 export { getDataLineage } from "../shared/data-lineage";
+export {
+  acceptReconciliationAdjustment,
+  getReconciliationRun,
+  ignoreReconciliationMatch,
+  manualReconciliationMatch,
+  reconcileAccount,
+  reconcileDocumentFacts,
+  reconcileImportPreview,
+} from "../shared/reconciliation";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -334,6 +343,26 @@ export type {
   DataLineageSourceDocument,
   GetDataLineageRequest,
 } from "../shared/data-lineage";
+export type {
+  AcceptReconciliationAdjustmentRequest,
+  AcceptReconciliationAdjustmentResult,
+  IgnoreReconciliationMatchRequest,
+  JsonValue,
+  ManualReconciliationMatchRequest,
+  ReconcileAccountRequest,
+  ReconcileDocumentFactsRequest,
+  ReconcileImportPreviewRequest,
+  ReconciliationInputItem,
+  ReconciliationItem,
+  ReconciliationItemStatus,
+  ReconciliationMatch,
+  ReconciliationMatchStatus,
+  ReconciliationRun,
+  ReconciliationRunDetail,
+  ReconciliationRunStatus,
+  ReconciliationScopeType,
+  ReconciliationSourceSide,
+} from "../shared/reconciliation";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

@@ -24,6 +24,7 @@ import IncomePage from "@/pages/income/income-page";
 import PortfolioInsightsPage from "@/pages/insights/portfolio-insights";
 import NotFoundPage from "@/pages/not-found";
 import PerformancePage from "@/pages/performance/performance-page";
+import ReconciliationCenterPage from "@/pages/reconciliation/reconciliation-center-page";
 import SettingsAccountsPage from "@/pages/settings/accounts/accounts-page";
 import SettingsAppearancePage from "@/pages/settings/appearance/appearance-page";
 import AccountPage from "./pages/account/account-page";
@@ -103,6 +104,7 @@ export function AppRoutes() {
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="documents/review-queue" element={<DocumentReviewQueuePage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="reconciliation" element={<ReconciliationCenterPage />} />
           <Route path="inbox" element={<InboxPage />} />
           <Route path="assistant" element={<AiAssistantPage />} />
           <Route path="connect" element={<ConnectPage />} />

@@ -24,6 +24,7 @@ pub mod limits;
 pub mod planning;
 pub mod portfolio;
 pub mod quotes;
+pub mod reconciliation;
 pub mod secrets;
 pub mod settings;
 pub mod sync;

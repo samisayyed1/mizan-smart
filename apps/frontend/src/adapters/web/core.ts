@@ -207,6 +207,16 @@ export const COMMANDS: CommandMap = {
   defer_extracted_fact: { method: "POST", path: "/extracted-facts" },
   reject_extracted_fact: { method: "POST", path: "/extracted-facts" },
   get_data_lineage: { method: "GET", path: "/data-lineage" },
+  reconcile_import_preview: { method: "POST", path: "/reconciliation/import-preview" },
+  reconcile_account: { method: "POST", path: "/reconciliation/account" },
+  reconcile_document_facts: { method: "POST", path: "/reconciliation/document-facts" },
+  get_reconciliation_run: { method: "GET", path: "/reconciliation/runs" },
+  accept_reconciliation_adjustment: {
+    method: "POST",
+    path: "/reconciliation/accept-adjustment",
+  },
+  ignore_reconciliation_match: { method: "POST", path: "/reconciliation/ignore" },
+  manual_reconciliation_match: { method: "POST", path: "/reconciliation/manual-match" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -907,6 +917,20 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
       params.set("entityId", entityId);
       params.set("metricType", metricType);
       url += `?${params.toString()}`;
+      break;
+    }
+    case "reconcile_import_preview":
+    case "reconcile_account":
+    case "reconcile_document_facts":
+    case "accept_reconciliation_adjustment":
+    case "ignore_reconciliation_match":
+    case "manual_reconciliation_match": {
+      body = JSON.stringify(payload ?? {});
+      break;
+    }
+    case "get_reconciliation_run": {
+      const { runId } = payload as { runId: string };
+      url += `/${encodeURIComponent(runId)}`;
       break;
     }
     case "create_asset": {

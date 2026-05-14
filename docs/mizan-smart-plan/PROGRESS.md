@@ -13,7 +13,7 @@
 - [x] p13 phase-2/p13  Extracted facts and citations (54882d6)
 - [x] p14 phase-2/p14  Document Review Queue (2177d7b)
 - [x] p15 phase-2/p15  Explain This Number (a343c83)
-- [ ] p16 phase-2/p16  Reconciliation Center
+- [x] p16 phase-2/p16  Reconciliation Center (fe2b5f0)
 - [ ] p17 phase-3/p17  Private investments foundation
 - [ ] p18 phase-3/p18  Private investment UI / J-curve
 - [ ] p19 phase-3/p19  Fixed income / Sukuk / FD engine

@@ -15,6 +15,7 @@ use mizan_storage_sqlite::{
         jobs::DocumentJobRepository, DocumentVaultRepository,
     },
     portfolio::snapshot::SnapshotRepository,
+    reconciliation::ReconciliationRepository,
     sync::AppSyncRepository,
     universal_assets::{ManualValuationRepository, UniversalAssetCreateRepository},
 };
@@ -72,6 +73,8 @@ pub struct ServiceContext {
     pub extracted_fact_repository: Arc<ExtractedFactRepository>,
     /// mizan-smart Phase 2 P15 — deterministic Explain This Number lineage.
     pub data_lineage_repository: Arc<DataLineageRepository>,
+    /// mizan-smart Phase 2 P16 — deterministic Reconciliation Center.
+    pub reconciliation_repository: Arc<ReconciliationRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -205,6 +208,10 @@ impl ServiceContext {
 
     pub fn data_lineage_repository(&self) -> Arc<DataLineageRepository> {
         Arc::clone(&self.data_lineage_repository)
+    }
+
+    pub fn reconciliation_repository(&self) -> Arc<ReconciliationRepository> {
+        Arc::clone(&self.reconciliation_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

@@ -375,6 +375,46 @@ diesel::table! {
 }
 
 diesel::table! {
+    reconciliation_runs (id) {
+        id -> Text,
+        scope_type -> Text,
+        scope_id -> Text,
+        status -> Text,
+        date_tolerance_days -> Integer,
+        created_at -> Text,
+        completed_at -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    reconciliation_items (id) {
+        id -> Text,
+        run_id -> Text,
+        item_type -> Text,
+        source_side -> Text,
+        raw_json -> Text,
+        normalized_hash -> Text,
+        amount -> Nullable<Text>,
+        currency -> Nullable<Text>,
+        effective_date -> Nullable<Text>,
+        status -> Text,
+    }
+}
+
+diesel::table! {
+    reconciliation_matches (id) {
+        id -> Text,
+        run_id -> Text,
+        mizan_item_id -> Nullable<Text>,
+        external_item_id -> Nullable<Text>,
+        match_status -> Text,
+        confidence -> Text,
+        reason -> Text,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
     sync_applied_events (event_id) {
         event_id -> Text,
         seq -> BigInt,
@@ -857,6 +897,8 @@ diesel::joinable!(asset_commodity_details -> assets (asset_id));
 diesel::joinable!(asset_business_details -> assets (asset_id));
 diesel::joinable!(asset_collectible_details -> assets (asset_id));
 diesel::joinable!(asset_liability_details -> assets (asset_id));
+diesel::joinable!(reconciliation_items -> reconciliation_runs (run_id));
+diesel::joinable!(reconciliation_matches -> reconciliation_runs (run_id));
 
 // Smart Alerts — mizan-smart Phase 1 P8.
 diesel::table! {
@@ -906,6 +948,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     platforms,
     quote_sync_state,
     quotes,
+    reconciliation_runs,
+    reconciliation_items,
+    reconciliation_matches,
     sync_applied_events,
     sync_cursor,
     sync_device_config,

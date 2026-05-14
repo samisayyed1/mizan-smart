@@ -47,6 +47,7 @@ mod market_data;
 mod net_worth;
 mod performance;
 mod portfolio;
+mod reconciliation;
 mod secrets;
 mod settings;
 pub mod shared;
@@ -120,6 +121,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(document_jobs::router())
         .merge(extracted_facts::router())
         .merge(data_lineage::router())
+        .merge(reconciliation::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

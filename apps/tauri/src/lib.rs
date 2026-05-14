@@ -519,6 +519,13 @@ pub fn run() {
             commands::extracted_facts::defer_extracted_fact,
             commands::extracted_facts::reject_extracted_fact,
             commands::data_lineage::get_data_lineage,
+            commands::reconciliation::reconcile_import_preview,
+            commands::reconciliation::reconcile_account,
+            commands::reconciliation::reconcile_document_facts,
+            commands::reconciliation::get_reconciliation_run,
+            commands::reconciliation::accept_reconciliation_adjustment,
+            commands::reconciliation::ignore_reconciliation_match,
+            commands::reconciliation::manual_reconciliation_match,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

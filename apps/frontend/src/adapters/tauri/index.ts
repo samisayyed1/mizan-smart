@@ -105,6 +105,7 @@ export * from "../shared/documents";
 export * from "../shared/document-jobs";
 export * from "../shared/extracted-facts";
 export * from "../shared/data-lineage";
+export * from "../shared/reconciliation";
 
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";

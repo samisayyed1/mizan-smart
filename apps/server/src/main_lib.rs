@@ -46,6 +46,7 @@ use mizan_storage_sqlite::{
     ai_chat::AiChatRepository,
     alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
+    data_lineage::DataLineageRepository,
     db::{self, write_actor},
     documents::{
         extraction::{
@@ -112,6 +113,8 @@ pub struct AppState {
     pub document_extraction_repository: Arc<DocumentExtractionRepository>,
     /// mizan-smart Phase 2 P13 — citation-backed extracted facts.
     pub extracted_fact_repository: Arc<ExtractedFactRepository>,
+    /// mizan-smart Phase 2 P15 — deterministic Explain This Number lineage.
+    pub data_lineage_repository: Arc<DataLineageRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -316,6 +319,8 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
     ));
     let extracted_fact_repository =
         Arc::new(ExtractedFactRepository::new(pool.clone(), writer.clone()));
+    let data_lineage_repository =
+        Arc::new(DataLineageRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,
@@ -582,6 +587,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         document_job_repository,
         document_extraction_repository,
         extracted_fact_repository,
+        data_lineage_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

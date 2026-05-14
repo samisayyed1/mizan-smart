@@ -35,6 +35,7 @@ use mizan_storage_sqlite::{
     ai_chat::AiChatRepository,
     alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
+    data_lineage::DataLineageRepository,
     db::{self, write_actor},
     fx::FxRepository,
     goals::GoalRepository,
@@ -142,6 +143,8 @@ pub async fn initialize_context(
             writer.clone(),
         ),
     );
+    let data_lineage_repository =
+        Arc::new(DataLineageRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -437,6 +440,7 @@ pub async fn initialize_context(
             document_job_repository,
             document_extraction_repository,
             extracted_fact_repository,
+            data_lineage_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

@@ -1,5 +1,6 @@
 import { getEstimatedHistoricalValuation } from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
+import { ExplainableNumber } from "@/components/explainable-number";
 import { useHapticFeedback } from "@/hooks";
 import { useHoldings } from "@/hooks/use-holdings";
 import { useValuationHistory } from "@/hooks/use-valuation-history";
@@ -179,6 +180,11 @@ export function DashboardContent() {
                 targetValue={totalValue}
                 currency={baseCurrency}
                 displayCurrency={true}
+              />
+              <ExplainableNumber
+                entityType="portfolio"
+                entityId="total"
+                metricType="net_worth"
               />
               <div className="text-md flex space-x-3">
                 {isValuationHistoryLoading && !valuationHistory ? (

@@ -28,6 +28,7 @@ mod assets;
 #[cfg(any(feature = "connect-sync", feature = "device-sync"))]
 pub mod connect;
 mod custom_providers;
+mod data_lineage;
 #[cfg(feature = "device-sync")]
 mod device_sync;
 #[cfg(feature = "device-sync")]
@@ -118,6 +119,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(documents::router())
         .merge(document_jobs::router())
         .merge(extracted_facts::router())
+        .merge(data_lineage::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

@@ -9,6 +9,7 @@ use mizan_core::{
 use mizan_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
 use mizan_storage_sqlite::{
     alerts::SmartAlertRepository,
+    data_lineage::DataLineageRepository,
     documents::{
         extraction::DocumentExtractionRepository, facts::ExtractedFactRepository,
         jobs::DocumentJobRepository, DocumentVaultRepository,
@@ -69,6 +70,8 @@ pub struct ServiceContext {
     pub document_extraction_repository: Arc<DocumentExtractionRepository>,
     /// mizan-smart Phase 2 P13 — citation-backed extracted facts.
     pub extracted_fact_repository: Arc<ExtractedFactRepository>,
+    /// mizan-smart Phase 2 P15 — deterministic Explain This Number lineage.
+    pub data_lineage_repository: Arc<DataLineageRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -198,6 +201,10 @@ impl ServiceContext {
 
     pub fn extracted_fact_repository(&self) -> Arc<ExtractedFactRepository> {
         Arc::clone(&self.extracted_fact_repository)
+    }
+
+    pub fn data_lineage_repository(&self) -> Arc<DataLineageRepository> {
+        Arc::clone(&self.data_lineage_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

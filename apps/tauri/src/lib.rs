@@ -518,6 +518,7 @@ pub fn run() {
             commands::extracted_facts::link_extracted_fact_to_entity,
             commands::extracted_facts::defer_extracted_fact,
             commands::extracted_facts::reject_extracted_fact,
+            commands::data_lineage::get_data_lineage,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

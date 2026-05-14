@@ -323,6 +323,17 @@ export type {
   SourceCitationType,
   UpdateExtractedFactRequest,
 } from "../shared/extracted-facts";
+export { getDataLineage } from "../shared/data-lineage";
+export type {
+  DataLineageEntityType,
+  DataLineageFxRate,
+  DataLineageInputRow,
+  DataLineageMetricType,
+  DataLineageResponse,
+  DataLineageSourceCitation,
+  DataLineageSourceDocument,
+  GetDataLineageRequest,
+} from "../shared/data-lineage";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

@@ -206,6 +206,7 @@ export const COMMANDS: CommandMap = {
   link_extracted_fact_to_entity: { method: "POST", path: "/extracted-facts" },
   defer_extracted_fact: { method: "POST", path: "/extracted-facts" },
   reject_extracted_fact: { method: "POST", path: "/extracted-facts" },
+  get_data_lineage: { method: "GET", path: "/data-lineage" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -893,6 +894,19 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
       const { factId, request } = payload as { factId: string; request: Record<string, unknown> };
       url += `/${encodeURIComponent(factId)}/reject`;
       body = JSON.stringify(request);
+      break;
+    }
+    case "get_data_lineage": {
+      const { entityType, entityId, metricType } = payload as {
+        entityType: string;
+        entityId: string;
+        metricType: string;
+      };
+      const params = new URLSearchParams();
+      params.set("entityType", entityType);
+      params.set("entityId", entityId);
+      params.set("metricType", metricType);
+      url += `?${params.toString()}`;
       break;
     }
     case "create_asset": {

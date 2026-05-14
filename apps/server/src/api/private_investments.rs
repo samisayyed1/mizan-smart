@@ -9,8 +9,8 @@ use axum::{
 use mizan_core::private_investments::{
     CapitalCall, CreateCapitalCallRequest, CreatePrivateDistributionRequest,
     CreatePrivateInvestmentValuationRequest, PrivateDistribution, PrivateInvestment,
-    PrivateInvestmentRepositoryTrait, PrivateInvestmentSummary, PrivateInvestmentValuation,
-    UpdateCapitalCallStatusRequest, UpsertPrivateInvestmentRequest,
+    PrivateInvestmentDetail, PrivateInvestmentRepositoryTrait, PrivateInvestmentSummary,
+    PrivateInvestmentValuation, UpdateCapitalCallStatusRequest, UpsertPrivateInvestmentRequest,
 };
 
 use crate::error::{ApiError, ApiResult};
@@ -112,6 +112,18 @@ async fn get_private_investment_summary(
         .map_err(ApiError::from)
 }
 
+async fn get_private_investment_detail(
+    State(state): State<Arc<AppState>>,
+    Path(asset_id): Path<String>,
+) -> ApiResult<Json<Option<PrivateInvestmentDetail>>> {
+    state
+        .private_investment_repository
+        .get_detail(&asset_id)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route(
@@ -125,6 +137,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/private-investments/{asset_id}/summary",
             get(get_private_investment_summary),
+        )
+        .route(
+            "/private-investments/{asset_id}/detail",
+            get(get_private_investment_detail),
         )
         .route(
             "/private-investments/valuations",

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   addCapitalCall,
+  getPrivateInvestmentDetail,
   getPrivateInvestmentSummary,
   upsertPrivateInvestment,
 } from "./private-investments";
@@ -74,6 +75,12 @@ describe("private investment adapter", () => {
     invokeMock.mockResolvedValueOnce(null);
     await getPrivateInvestmentSummary("asset-1");
     expect(invokeMock).toHaveBeenLastCalledWith("get_private_investment_summary", {
+      assetId: "asset-1",
+    });
+
+    invokeMock.mockResolvedValueOnce({ jCurve: [] });
+    await getPrivateInvestmentDetail("asset-1");
+    expect(invokeMock).toHaveBeenLastCalledWith("get_private_investment_detail", {
       assetId: "asset-1",
     });
   });

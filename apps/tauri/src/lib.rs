@@ -534,6 +534,7 @@ pub fn run() {
             commands::private_investments::update_capital_call_status,
             commands::private_investments::add_private_distribution,
             commands::private_investments::get_private_investment_summary,
+            commands::private_investments::get_private_investment_detail,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

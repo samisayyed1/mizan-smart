@@ -10,9 +10,10 @@ use uuid::Uuid;
 
 use mizan_core::errors::ValidationError;
 use mizan_core::private_investments::{
-    calculate_private_investment_summary, CapitalCall, CapitalCallStatus, CreateCapitalCallRequest,
-    CreatePrivateDistributionRequest, CreatePrivateInvestmentValuationRequest, PrivateDistribution,
-    PrivateInvestment, PrivateInvestmentRepositoryTrait, PrivateInvestmentSummary,
+    build_private_investment_detail, calculate_private_investment_summary, CapitalCall,
+    CapitalCallStatus, CreateCapitalCallRequest, CreatePrivateDistributionRequest,
+    CreatePrivateInvestmentValuationRequest, PrivateDistribution, PrivateInvestment,
+    PrivateInvestmentDetail, PrivateInvestmentRepositoryTrait, PrivateInvestmentSummary,
     PrivateInvestmentValuation, UpdateCapitalCallStatusRequest, UpsertPrivateInvestmentRequest,
 };
 use mizan_core::{Error, Result};
@@ -380,22 +381,68 @@ impl PrivateInvestmentRepositoryTrait for PrivateInvestmentRepository {
     }
 
     async fn get_summary(&self, target_asset_id: &str) -> Result<Option<PrivateInvestmentSummary>> {
-        let Some(investment) = self.get_investment(target_asset_id).await? else {
+        let Some((investment, valuations, calls, distributions)) =
+            self.load_detail_parts(target_asset_id)?
+        else {
             return Ok(None);
         };
+        Ok(Some(calculate_private_investment_summary(
+            investment,
+            &valuations,
+            &calls,
+            &distributions,
+        )))
+    }
+
+    async fn get_detail(&self, target_asset_id: &str) -> Result<Option<PrivateInvestmentDetail>> {
+        let Some((investment, valuations, calls, distributions)) =
+            self.load_detail_parts(target_asset_id)?
+        else {
+            return Ok(None);
+        };
+        Ok(Some(build_private_investment_detail(
+            investment,
+            valuations,
+            calls,
+            distributions,
+        )))
+    }
+}
+
+type DetailParts = (
+    PrivateInvestment,
+    Vec<PrivateInvestmentValuation>,
+    Vec<CapitalCall>,
+    Vec<PrivateDistribution>,
+);
+
+impl PrivateInvestmentRepository {
+    fn load_detail_parts(&self, target_asset_id: &str) -> Result<Option<DetailParts>> {
         let mut conn = get_connection(&self.pool)?;
+        let Some(investment_row) = private_investments::table
+            .find(target_asset_id)
+            .first::<PrivateInvestmentRow>(&mut conn)
+            .optional()
+            .map_err(StorageError::from)?
+        else {
+            return Ok(None);
+        };
         let valuation_rows = private_investment_valuations::table
             .filter(private_investment_valuations::asset_id.eq(target_asset_id))
+            .order(private_investment_valuations::valuation_date.asc())
             .load::<PrivateInvestmentValuationRow>(&mut conn)
             .map_err(StorageError::from)?;
         let call_rows = capital_calls::table
             .filter(capital_calls::asset_id.eq(target_asset_id))
+            .order(capital_calls::due_date.asc())
             .load::<CapitalCallRow>(&mut conn)
             .map_err(StorageError::from)?;
         let distribution_rows = private_distributions::table
             .filter(private_distributions::asset_id.eq(target_asset_id))
+            .order(private_distributions::distribution_date.asc())
             .load::<PrivateDistributionRow>(&mut conn)
             .map_err(StorageError::from)?;
+        let investment = PrivateInvestment::try_from(investment_row)?;
         let valuations = valuation_rows
             .into_iter()
             .map(PrivateInvestmentValuation::try_from)
@@ -408,12 +455,7 @@ impl PrivateInvestmentRepositoryTrait for PrivateInvestmentRepository {
             .into_iter()
             .map(PrivateDistribution::try_from)
             .collect::<Result<Vec<_>>>()?;
-        Ok(Some(calculate_private_investment_summary(
-            investment,
-            &valuations,
-            &calls,
-            &distributions,
-        )))
+        Ok(Some((investment, valuations, calls, distributions)))
     }
 }
 
@@ -569,5 +611,67 @@ mod tests {
         assert_eq!(summary.recallable_distributions, dec!(50));
         assert_eq!(summary.unfunded_commitment, dec!(650));
         assert_eq!(summary.rvpi, Some(dec!(1.125)));
+    }
+
+    #[tokio::test]
+    async fn detail_returns_metrics_events_and_j_curve() {
+        let (_pool, writer) = setup();
+        let repo = PrivateInvestmentRepository::new(_pool.clone(), writer);
+        repo.upsert_investment(upsert_request()).await.unwrap();
+        let paid_call = repo
+            .add_capital_call(CreateCapitalCallRequest {
+                asset_id: "asset-1".into(),
+                notice_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                due_date: NaiveDate::from_ymd_opt(2026, 1, 15).unwrap(),
+                amount: dec!(400),
+                currency: "USD".into(),
+                status: CapitalCallStatus::Paid,
+                source_citation_id: None,
+                notes: Some("first close call".into()),
+            })
+            .await
+            .unwrap();
+        repo.add_capital_call(CreateCapitalCallRequest {
+            asset_id: "asset-1".into(),
+            notice_date: NaiveDate::from_ymd_opt(2026, 2, 1).unwrap(),
+            due_date: NaiveDate::from_ymd_opt(2026, 2, 15).unwrap(),
+            amount: dec!(100),
+            currency: "USD".into(),
+            status: CapitalCallStatus::Due,
+            source_citation_id: None,
+            notes: None,
+        })
+        .await
+        .unwrap();
+        repo.add_distribution(CreatePrivateDistributionRequest {
+            asset_id: "asset-1".into(),
+            distribution_date: NaiveDate::from_ymd_opt(2026, 3, 1).unwrap(),
+            amount: dec!(50),
+            currency: "USD".into(),
+            recallable: false,
+            source_citation_id: None,
+            notes: None,
+        })
+        .await
+        .unwrap();
+        repo.add_valuation(CreatePrivateInvestmentValuationRequest {
+            asset_id: "asset-1".into(),
+            valuation_date: NaiveDate::from_ymd_opt(2026, 3, 31).unwrap(),
+            nav: dec!(375),
+            currency: "USD".into(),
+            source_citation_id: None,
+        })
+        .await
+        .unwrap();
+
+        let detail = repo.get_detail("asset-1").await.unwrap().expect("detail");
+        assert_eq!(detail.summary.paid_in_capital, dec!(400));
+        assert_eq!(detail.capital_calls.len(), 2);
+        assert_eq!(detail.upcoming_capital_calls.len(), 1);
+        assert_eq!(detail.upcoming_capital_calls[0].amount, dec!(100));
+        assert_eq!(detail.j_curve[0].cumulative_net_cashflow, dec!(-400));
+        assert_eq!(detail.j_curve[1].cumulative_net_cashflow, dec!(-350));
+        assert_eq!(detail.j_curve[2].nav, Some(dec!(375)));
+        assert_eq!(paid_call.status, CapitalCallStatus::Paid);
     }
 }

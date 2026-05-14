@@ -24,6 +24,7 @@ import IncomePage from "@/pages/income/income-page";
 import PortfolioInsightsPage from "@/pages/insights/portfolio-insights";
 import NotFoundPage from "@/pages/not-found";
 import PerformancePage from "@/pages/performance/performance-page";
+import PrivateInvestmentDetailPage from "@/pages/private-investments/private-investment-detail-page";
 import ReconciliationCenterPage from "@/pages/reconciliation/reconciliation-center-page";
 import SettingsAccountsPage from "@/pages/settings/accounts/accounts-page";
 import SettingsAppearancePage from "@/pages/settings/appearance/appearance-page";
@@ -95,6 +96,7 @@ export function AppRoutes() {
           <Route path="holdings/new" element={<UniversalAddAssetPage />} />
           <Route path="holdings/update-values" element={<ManualValuationsPage />} />
           <Route path="holdings/:assetId" element={<AssetProfilePage />} />
+          <Route path="private-investments/:assetId" element={<PrivateInvestmentDetailPage />} />
           <Route path="import" element={<ActivityImportPage />} />
           <Route path="accounts/:id" element={<AccountPage />} />
           <Route path="income" element={<IncomePage />} />

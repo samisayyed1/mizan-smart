@@ -60,6 +60,22 @@ export interface PrivateInvestmentSummary {
   warnings: string[];
 }
 
+export interface PrivateInvestmentJCurvePoint {
+  date: string;
+  cumulativeNetCashflow: string;
+  nav?: string | null;
+}
+
+export interface PrivateInvestmentDetail {
+  summary: PrivateInvestmentSummary;
+  valuations: PrivateInvestmentValuation[];
+  capitalCalls: CapitalCall[];
+  distributions: PrivateDistribution[];
+  upcomingCapitalCalls: CapitalCall[];
+  jCurve: PrivateInvestmentJCurvePoint[];
+  sourceCitationIds: string[];
+}
+
 export interface UpsertPrivateInvestmentRequest {
   assetId: string;
   manager: string;
@@ -145,4 +161,8 @@ export function getPrivateInvestmentSummary(
   assetId: string,
 ): Promise<PrivateInvestmentSummary | null> {
   return invoke<PrivateInvestmentSummary | null>("get_private_investment_summary", { assetId });
+}
+
+export function getPrivateInvestmentDetail(assetId: string): Promise<PrivateInvestmentDetail | null> {
+  return invoke<PrivateInvestmentDetail | null>("get_private_investment_detail", { assetId });
 }

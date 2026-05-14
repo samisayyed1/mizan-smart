@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 use std::str::FromStr;
 
 use crate::errors::{Error, ValidationError};
@@ -107,6 +108,26 @@ pub struct PrivateInvestmentSummary {
     pub tvpi: Option<Decimal>,
     pub moic: Option<Decimal>,
     pub warnings: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivateInvestmentJCurvePoint {
+    pub date: NaiveDate,
+    pub cumulative_net_cashflow: Decimal,
+    pub nav: Option<Decimal>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PrivateInvestmentDetail {
+    pub summary: PrivateInvestmentSummary,
+    pub valuations: Vec<PrivateInvestmentValuation>,
+    pub capital_calls: Vec<CapitalCall>,
+    pub distributions: Vec<PrivateDistribution>,
+    pub upcoming_capital_calls: Vec<CapitalCall>,
+    pub j_curve: Vec<PrivateInvestmentJCurvePoint>,
+    pub source_citation_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -275,6 +296,115 @@ pub fn calculate_private_investment_summary(
     }
 }
 
+pub fn build_private_investment_detail(
+    investment: PrivateInvestment,
+    valuations: Vec<PrivateInvestmentValuation>,
+    capital_calls: Vec<CapitalCall>,
+    distributions: Vec<PrivateDistribution>,
+) -> PrivateInvestmentDetail {
+    let summary = calculate_private_investment_summary(
+        investment,
+        &valuations,
+        &capital_calls,
+        &distributions,
+    );
+    let mut upcoming_capital_calls = capital_calls
+        .iter()
+        .filter(|call| {
+            matches!(
+                call.status,
+                CapitalCallStatus::Expected | CapitalCallStatus::Due
+            )
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    upcoming_capital_calls.sort_by_key(|call| call.due_date);
+
+    let j_curve = build_j_curve(&valuations, &capital_calls, &distributions);
+    let source_citation_ids =
+        collect_source_citation_ids(&valuations, &capital_calls, &distributions);
+
+    PrivateInvestmentDetail {
+        summary,
+        valuations,
+        capital_calls,
+        distributions,
+        upcoming_capital_calls,
+        j_curve,
+        source_citation_ids,
+    }
+}
+
+fn build_j_curve(
+    valuations: &[PrivateInvestmentValuation],
+    capital_calls: &[CapitalCall],
+    distributions: &[PrivateDistribution],
+) -> Vec<PrivateInvestmentJCurvePoint> {
+    let mut cashflows_by_date = BTreeMap::<NaiveDate, Decimal>::new();
+    for call in capital_calls
+        .iter()
+        .filter(|call| call.status == CapitalCallStatus::Paid)
+    {
+        let entry = cashflows_by_date
+            .entry(call.due_date)
+            .or_insert(Decimal::ZERO);
+        *entry -= call.amount;
+    }
+    for distribution in distributions {
+        let entry = cashflows_by_date
+            .entry(distribution.distribution_date)
+            .or_insert(Decimal::ZERO);
+        *entry += distribution.amount;
+    }
+
+    let mut nav_by_date = BTreeMap::<NaiveDate, Decimal>::new();
+    for valuation in valuations {
+        nav_by_date.insert(valuation.valuation_date, valuation.nav);
+    }
+
+    let dates = cashflows_by_date
+        .keys()
+        .chain(nav_by_date.keys())
+        .copied()
+        .collect::<BTreeSet<_>>();
+    let mut cumulative = Decimal::ZERO;
+    let mut points = Vec::with_capacity(dates.len());
+    for date in dates {
+        if let Some(cashflow) = cashflows_by_date.get(&date) {
+            cumulative += *cashflow;
+        }
+        points.push(PrivateInvestmentJCurvePoint {
+            date,
+            cumulative_net_cashflow: cumulative,
+            nav: nav_by_date.get(&date).copied(),
+        });
+    }
+    points
+}
+
+fn collect_source_citation_ids(
+    valuations: &[PrivateInvestmentValuation],
+    capital_calls: &[CapitalCall],
+    distributions: &[PrivateDistribution],
+) -> Vec<String> {
+    valuations
+        .iter()
+        .filter_map(|valuation| valuation.source_citation_id.clone())
+        .chain(
+            capital_calls
+                .iter()
+                .filter_map(|call| call.source_citation_id.clone()),
+        )
+        .chain(
+            distributions
+                .iter()
+                .filter_map(|distribution| distribution.source_citation_id.clone()),
+        )
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect()
+}
+
 #[async_trait]
 pub trait PrivateInvestmentRepositoryTrait: Send + Sync {
     async fn upsert_investment(
@@ -297,6 +427,7 @@ pub trait PrivateInvestmentRepositoryTrait: Send + Sync {
         request: CreatePrivateDistributionRequest,
     ) -> Result<PrivateDistribution>;
     async fn get_summary(&self, asset_id: &str) -> Result<Option<PrivateInvestmentSummary>>;
+    async fn get_detail(&self, asset_id: &str) -> Result<Option<PrivateInvestmentDetail>>;
 }
 
 fn validate_asset_id(value: &str) -> Result<()> {
@@ -443,5 +574,40 @@ mod tests {
         assert_eq!(summary.rvpi, Some(dec!(0.9)));
         assert_eq!(summary.tvpi, Some(dec!(1.1)));
         assert_eq!(summary.moic, Some(dec!(1.1)));
+    }
+
+    #[test]
+    fn detail_builds_j_curve_from_actual_cashflows_only() {
+        let detail = build_private_investment_detail(
+            investment(),
+            vec![valuation(dec!(425), 30)],
+            vec![
+                call(dec!(300), CapitalCallStatus::Paid),
+                call(dec!(200), CapitalCallStatus::Due),
+            ],
+            vec![distribution(dec!(75), false)],
+        );
+
+        assert_eq!(detail.j_curve.len(), 3);
+        assert_eq!(detail.j_curve[0].cumulative_net_cashflow, dec!(-300));
+        assert_eq!(detail.j_curve[1].cumulative_net_cashflow, dec!(-225));
+        assert_eq!(detail.j_curve[2].nav, Some(dec!(425)));
+        assert_eq!(detail.upcoming_capital_calls.len(), 1);
+    }
+
+    #[test]
+    fn detail_collects_unique_source_citations() {
+        let mut cited_call = call(dec!(100), CapitalCallStatus::Paid);
+        cited_call.source_citation_id = Some("citation-2".into());
+        let mut cited_valuation = valuation(dec!(200), 1);
+        cited_valuation.source_citation_id = Some("citation-1".into());
+        let detail = build_private_investment_detail(
+            investment(),
+            vec![cited_valuation],
+            vec![cited_call],
+            vec![],
+        );
+
+        assert_eq!(detail.source_citation_ids, vec!["citation-1", "citation-2"]);
     }
 }

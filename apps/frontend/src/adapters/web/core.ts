@@ -225,6 +225,7 @@ export const COMMANDS: CommandMap = {
   update_capital_call_status: { method: "PUT", path: "/private-investments/capital-calls/status" },
   add_private_distribution: { method: "POST", path: "/private-investments/distributions" },
   get_private_investment_summary: { method: "GET", path: "/private-investments" },
+  get_private_investment_detail: { method: "GET", path: "/private-investments" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -959,6 +960,11 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "get_private_investment_summary": {
       const { assetId } = payload as { assetId: string };
       url += `/${encodeURIComponent(assetId)}/summary`;
+      break;
+    }
+    case "get_private_investment_detail": {
+      const { assetId } = payload as { assetId: string };
+      url += `/${encodeURIComponent(assetId)}/detail`;
       break;
     }
     case "create_asset": {

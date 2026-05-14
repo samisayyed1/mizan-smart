@@ -4,8 +4,8 @@ use log::error;
 use mizan_core::private_investments::{
     CapitalCall, CreateCapitalCallRequest, CreatePrivateDistributionRequest,
     CreatePrivateInvestmentValuationRequest, PrivateDistribution, PrivateInvestment,
-    PrivateInvestmentRepositoryTrait, PrivateInvestmentSummary, PrivateInvestmentValuation,
-    UpdateCapitalCallStatusRequest, UpsertPrivateInvestmentRequest,
+    PrivateInvestmentDetail, PrivateInvestmentRepositoryTrait, PrivateInvestmentSummary,
+    PrivateInvestmentValuation, UpdateCapitalCallStatusRequest, UpsertPrivateInvestmentRequest,
 };
 use tauri::State;
 
@@ -105,6 +105,18 @@ pub async fn get_private_investment_summary(
         .get_summary(&asset_id)
         .await
         .map_err(command_error("get_private_investment_summary"))
+}
+
+#[tauri::command]
+pub async fn get_private_investment_detail(
+    asset_id: String,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<Option<PrivateInvestmentDetail>, String> {
+    state
+        .private_investment_repository()
+        .get_detail(&asset_id)
+        .await
+        .map_err(command_error("get_private_investment_detail"))
 }
 
 fn command_error(command: &'static str) -> impl FnOnce(mizan_core::Error) -> String {

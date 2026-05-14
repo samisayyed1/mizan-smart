@@ -9,6 +9,7 @@ use mizan_core::{
 use mizan_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
 use mizan_storage_sqlite::{
     alerts::SmartAlertRepository,
+    documents::DocumentVaultRepository,
     portfolio::snapshot::SnapshotRepository,
     sync::AppSyncRepository,
     universal_assets::{ManualValuationRepository, UniversalAssetCreateRepository},
@@ -57,6 +58,8 @@ pub struct ServiceContext {
     pub manual_valuation_repository: Arc<ManualValuationRepository>,
     /// mizan-smart Phase 1 P9 — Wealth Inbox alert source.
     pub smart_alert_repository: Arc<SmartAlertRepository>,
+    /// mizan-smart Phase 2 P10 — encrypted Document Vault.
+    pub document_vault_repository: Arc<DocumentVaultRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -170,6 +173,10 @@ impl ServiceContext {
 
     pub fn smart_alert_repository(&self) -> Arc<SmartAlertRepository> {
         Arc::clone(&self.smart_alert_repository)
+    }
+
+    pub fn document_vault_repository(&self) -> Arc<DocumentVaultRepository> {
+        Arc::clone(&self.document_vault_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

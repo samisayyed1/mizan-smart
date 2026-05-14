@@ -47,6 +47,7 @@ use mizan_storage_sqlite::{
     alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
     db::{self, write_actor},
+    documents::DocumentVaultRepository,
     fx::FxRepository,
     goals::GoalRepository,
     health::HealthDismissalRepository,
@@ -96,6 +97,8 @@ pub struct AppState {
     pub manual_valuation_repository: Arc<ManualValuationRepository>,
     /// mizan-smart Phase 1 P9 — Wealth Inbox alert source.
     pub smart_alert_repository: Arc<SmartAlertRepository>,
+    /// mizan-smart Phase 2 P10 — encrypted Document Vault.
+    pub document_vault_repository: Arc<DocumentVaultRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -286,6 +289,14 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
     let manual_valuation_repository =
         Arc::new(ManualValuationRepository::new(pool.clone(), writer.clone()));
     let smart_alert_repository = Arc::new(SmartAlertRepository::new(pool.clone(), writer.clone()));
+    let document_vault_key =
+        mizan_storage_sqlite::documents::load_or_create_document_vault_key(secret_store.as_ref())?;
+    let document_vault_repository = Arc::new(DocumentVaultRepository::new(
+        pool.clone(),
+        writer.clone(),
+        data_root_path.join("document-vault"),
+        document_vault_key,
+    )?);
     let valuation_service = Arc::new(ValuationService::new(
         base_currency.clone(),
         valuation_repository.clone(),
@@ -537,6 +548,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         universal_asset_create_repository,
         manual_valuation_repository,
         smart_alert_repository,
+        document_vault_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

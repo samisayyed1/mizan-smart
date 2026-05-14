@@ -260,6 +260,22 @@ export type {
 export { listWealthInboxItems } from "../shared/inbox";
 export type { InboxItem, InboxItemType, InboxSeverity, InboxStatus } from "../shared/inbox";
 
+// Document Vault (mizan-smart Phase 2 P10)
+export {
+  deleteDocument,
+  getDocumentMetadata,
+  listDocuments,
+  readDocumentBytes,
+  uploadDocument,
+} from "../shared/documents";
+export type {
+  DocumentFileMetadata,
+  DocumentMetadata,
+  DocumentRecord,
+  DocumentStatus,
+  UploadDocumentRequest,
+} from "../shared/documents";
+
 // Connect Commands (Broker + Device Sync + Auth)
 export {
   approvePairing,

@@ -12,6 +12,7 @@ pub mod assets;
 pub mod constants;
 pub mod custom_provider;
 pub mod data_quality;
+pub mod documents;
 pub mod errors;
 pub mod events;
 pub mod fx;

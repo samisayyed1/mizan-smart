@@ -120,6 +120,16 @@ pub async fn initialize_context(
     let instance_id = Arc::new(settings.instance_id.clone());
 
     let secret_store = shared_secret_store();
+    let document_vault_key =
+        mizan_storage_sqlite::documents::load_or_create_document_vault_key(secret_store.as_ref())?;
+    let document_vault_repository = Arc::new(
+        mizan_storage_sqlite::documents::DocumentVaultRepository::new(
+            pool.clone(),
+            writer.clone(),
+            std::path::Path::new(app_data_dir).join("document-vault"),
+            document_vault_key,
+        )?,
+    );
 
     // Custom provider repository
     let custom_provider_repository = Arc::new(
@@ -392,6 +402,7 @@ pub async fn initialize_context(
             universal_asset_create_repository,
             manual_valuation_repository,
             smart_alert_repository,
+            document_vault_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

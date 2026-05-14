@@ -100,6 +100,9 @@ export * from "../shared/manual-valuations";
 // Wealth Inbox (mizan-smart Phase 1 P9)
 export * from "../shared/inbox";
 
+// Document Vault (mizan-smart Phase 2 P10)
+export * from "../shared/documents";
+
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";
 

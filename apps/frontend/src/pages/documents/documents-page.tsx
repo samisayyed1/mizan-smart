@@ -1,39 +1,181 @@
+import { deleteDocument, listDocuments, uploadDocument } from "@/adapters";
+import type { DocumentMetadata } from "@/adapters";
 import { Button, Icons, Page, PageContent, PageHeader } from "@mizan/ui";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 
-// Documents page — landing surface for the Document Vault. The encrypted
-// store, document jobs, extraction adapter, citations, and review queue
-// are implemented in Phase 2 (docs/mizan-smart-plan/PLAN.md prompts 10–14).
-//
-// Until then this page surfaces what already exists today: source
-// documents attached to imports live alongside the import history in
-// Activities, and asset-level notes/files live on each asset profile.
-// No fake document rows are rendered.
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function statusLabel(status: DocumentMetadata["status"]): string {
+  return status.replaceAll("_", " ");
+}
+
+function uploadMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.toLowerCase().includes("duplicate")) {
+    return "This file is already in the Document Vault.";
+  }
+  return message || "Upload failed.";
+}
 
 export default function DocumentsPage() {
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  async function refreshDocuments(): Promise<void> {
+    setLoading(true);
+    try {
+      setDocuments(await listDocuments());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load documents.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshDocuments();
+  }, []);
+
+  async function handleFiles(files: FileList | File[]): Promise<void> {
+    const file = Array.from(files)[0];
+    if (!file) return;
+    setUploading(true);
+    setError(null);
+    try {
+      await uploadDocument(file);
+      await refreshDocuments();
+    } catch (err) {
+      setError(uploadMessage(err));
+    } finally {
+      setUploading(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  async function handleDelete(documentId: string): Promise<void> {
+    setDeletingId(documentId);
+    setError(null);
+    try {
+      await deleteDocument(documentId);
+      setDocuments((current) => current.filter((document) => document.id !== documentId));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete document.");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <Page>
-      <PageHeader heading="Documents" text="Statements, factsheets, and source files." />
+      <PageHeader heading="Documents" text="Encrypted statements, factsheets, and source files." />
       <PageContent>
-        <div
-          data-testid="documents-empty"
-          className="rounded-lg border border-dashed bg-muted/30 px-6 py-12 text-center"
-        >
-          <Icons.FileText className="text-muted-foreground mx-auto size-10" aria-hidden="true" />
-          <p className="mt-4 text-base font-medium">Document Vault is being built</p>
-          <p className="text-muted-foreground mx-auto mt-2 max-w-prose text-sm">
-            The encrypted Document Vault, extraction, citations, and review queue land in
-            Phase 2 of this branch. Today, source files attached to imports live in
-            Activities, and per-asset documents live on each asset’s profile.
-          </p>
-          <div className="mt-6 flex flex-wrap justify-center gap-2">
-            <Button asChild variant="secondary">
-              <Link to="/activities">Open Activities</Link>
-            </Button>
-            <Button asChild variant="ghost">
-              <Link to="/holdings">View Holdings</Link>
+        <div className="space-y-4">
+          <div
+            data-testid="document-dropzone"
+            className="border-border bg-muted/20 flex min-h-40 flex-col items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center"
+            onDragOver={(event) => event.preventDefault()}
+            onDrop={(event) => {
+              event.preventDefault();
+              void handleFiles(event.dataTransfer.files);
+            }}
+          >
+            <Icons.Upload className="text-muted-foreground size-10" aria-hidden="true" />
+            <p className="mt-3 text-sm font-medium">Drop a file here</p>
+            <p className="text-muted-foreground mt-1 text-sm">PDFs, statements, and source files</p>
+            <input
+              ref={inputRef}
+              aria-label="Choose document"
+              className="sr-only"
+              type="file"
+              onChange={(event) => void handleFiles(event.currentTarget.files ?? [])}
+            />
+            <Button
+              className="mt-4"
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading}
+            >
+              {uploading ? (
+                <Icons.Loader className="mr-2 size-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Icons.Upload className="mr-2 size-4" aria-hidden="true" />
+              )}
+              Upload
             </Button>
           </div>
+
+          {error ? (
+            <div
+              role="alert"
+              className="border-destructive/30 bg-destructive/10 text-destructive rounded-md border px-4 py-3 text-sm"
+            >
+              {error}
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="text-muted-foreground flex items-center gap-2 text-sm">
+              <Icons.Loader className="size-4 animate-spin" aria-hidden="true" />
+              Loading documents
+            </div>
+          ) : documents.length === 0 ? (
+            <div
+              data-testid="documents-empty"
+              className="border-border bg-card rounded-lg border px-6 py-10 text-center"
+            >
+              <Icons.FileText className="text-muted-foreground mx-auto size-10" aria-hidden="true" />
+              <p className="mt-4 text-base font-medium">No documents in the vault</p>
+            </div>
+          ) : (
+            <div className="border-border overflow-hidden rounded-lg border">
+              <div className="bg-muted/40 text-muted-foreground grid grid-cols-[minmax(0,1fr)_120px_120px_72px] gap-3 px-4 py-2 text-xs font-medium uppercase">
+                <span>Name</span>
+                <span>Status</span>
+                <span>Size</span>
+                <span className="text-right">Action</span>
+              </div>
+              <ul className="divide-border divide-y">
+                {documents.map((document) => (
+                  <li
+                    key={document.id}
+                    className="grid grid-cols-[minmax(0,1fr)_120px_120px_72px] items-center gap-3 px-4 py-3 text-sm"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{document.originalName}</p>
+                      <p className="text-muted-foreground truncate text-xs">{document.mimeType}</p>
+                    </div>
+                    <span className="capitalize">{statusLabel(document.status)}</span>
+                    <span>{formatBytes(document.fileSizeBytes)}</span>
+                    <div className="text-right">
+                      <Button
+                        aria-label={`Delete ${document.originalName}`}
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => void handleDelete(document.id)}
+                        disabled={deletingId === document.id}
+                      >
+                        {deletingId === document.id ? (
+                          <Icons.Loader className="size-4 animate-spin" aria-hidden="true" />
+                        ) : (
+                          <Icons.Trash2 className="size-4" aria-hidden="true" />
+                        )}
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </PageContent>
     </Page>

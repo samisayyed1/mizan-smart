@@ -36,6 +36,7 @@ pub mod ai_chat;
 pub mod alerts;
 pub mod assets;
 pub mod custom_provider;
+pub mod documents;
 pub mod fx;
 pub mod goals;
 pub mod health;

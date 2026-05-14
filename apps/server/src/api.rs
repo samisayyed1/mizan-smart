@@ -32,6 +32,7 @@ mod custom_providers;
 mod device_sync;
 #[cfg(feature = "device-sync")]
 pub(crate) mod device_sync_engine;
+mod documents;
 mod exchange_rates;
 mod goals;
 mod health;
@@ -112,6 +113,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(ai_chat::router())
         .merge(health::router())
         .merge(inbox::router())
+        .merge(documents::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

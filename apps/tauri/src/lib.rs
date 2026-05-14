@@ -497,6 +497,12 @@ pub fn run() {
             commands::manual_valuations::list_manual_valuation_assets,
             commands::manual_valuations::bulk_update_valuations,
             commands::manual_valuations::get_manual_valuation_history,
+            // Document Vault commands (mizan-smart Phase 2 P10)
+            commands::documents::upload_document,
+            commands::documents::list_documents,
+            commands::documents::delete_document,
+            commands::documents::get_document_metadata,
+            commands::documents::read_document_bytes,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

@@ -185,6 +185,12 @@ export const COMMANDS: CommandMap = {
   update_health_config: { method: "PUT", path: "/health/config" },
   // Wealth Inbox
   list_wealth_inbox_items: { method: "GET", path: "/inbox/items" },
+  // Document Vault
+  upload_document: { method: "POST", path: "/documents" },
+  list_documents: { method: "GET", path: "/documents" },
+  get_document_metadata: { method: "GET", path: "/documents" },
+  delete_document: { method: "DELETE", path: "/documents" },
+  read_document_bytes: { method: "GET", path: "/documents" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -777,6 +783,26 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "delete_contribution_limit": {
       const { id } = payload as { id: string };
       url += `/${encodeURIComponent(id)}`;
+      break;
+    }
+    case "upload_document": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "get_document_metadata": {
+      const { documentId } = payload as { documentId: string };
+      url += `/${encodeURIComponent(documentId)}`;
+      break;
+    }
+    case "delete_document": {
+      const { documentId } = payload as { documentId: string };
+      url += `/${encodeURIComponent(documentId)}`;
+      break;
+    }
+    case "read_document_bytes": {
+      const { documentId } = payload as { documentId: string };
+      url += `/${encodeURIComponent(documentId)}/content`;
       break;
     }
     case "create_asset": {

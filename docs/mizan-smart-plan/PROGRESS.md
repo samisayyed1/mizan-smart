@@ -7,7 +7,7 @@
 - [x] p7  phase-1/p7   Data Quality Score (e6e5de9)
 - [x] p8  phase-1/p8   Smart alerts (71786b3)
 - [x] p9  phase-1/p9   Wealth Inbox (d7cc298)
-- [ ] p10 phase-2/p10  Document Vault storage
+- [x] p10 phase-2/p10  Document Vault storage (c1bda8a)
 - [ ] p11 phase-2/p11  Document job system
 - [ ] p12 phase-2/p12  PDF/text/layout extraction adapter
 - [ ] p13 phase-2/p13  Extracted facts and citations

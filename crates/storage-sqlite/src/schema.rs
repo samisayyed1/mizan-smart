@@ -636,6 +636,47 @@ diesel::table! {
 }
 
 diesel::table! {
+    documents (id) {
+        id -> Text,
+        file_hash -> Text,
+        original_name -> Text,
+        mime_type -> Text,
+        file_size_bytes -> BigInt,
+        encrypted_storage_path -> Text,
+        status -> Text,
+        source_type -> Nullable<Text>,
+        error_message -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    document_files (id) {
+        id -> Text,
+        document_id -> Text,
+        encryption_version -> Integer,
+        nonce -> Text,
+        checksum_sha256 -> Text,
+        storage_path -> Text,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    document_links (id) {
+        id -> Text,
+        document_id -> Text,
+        linked_entity_type -> Text,
+        linked_entity_id -> Text,
+        created_at -> Text,
+    }
+}
+
+diesel::joinable!(document_files -> documents (document_id));
+diesel::joinable!(document_links -> documents (document_id));
+
+diesel::table! {
     asset_collectible_details (asset_id) {
         asset_id -> Text,
         collectible_type -> Nullable<Text>,
@@ -733,6 +774,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     sync_device_config,
     sync_engine_state,
     sync_entity_metadata,
+    documents,
+    document_files,
+    document_links,
     smart_alerts,
     valuations,
     asset_public_market_details,

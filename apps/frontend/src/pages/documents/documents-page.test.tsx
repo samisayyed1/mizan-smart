@@ -1,57 +1,145 @@
-import { render, screen } from "@testing-library/react";
+import type { DocumentMetadata, DocumentRecord } from "@/adapters";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
-import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const listDocumentsMock = vi.fn<() => Promise<DocumentMetadata[]>>();
+const uploadDocumentMock = vi.fn<(file: File) => Promise<DocumentRecord>>();
+const deleteDocumentMock = vi.fn<(documentId: string) => Promise<void>>();
+
+vi.mock("@/adapters", () => ({
+  listDocuments: () => listDocumentsMock(),
+  uploadDocument: (file: File) => uploadDocumentMock(file),
+  deleteDocument: (documentId: string) => deleteDocumentMock(documentId),
+}));
 
 vi.mock("@mizan/ui", () => ({
   Button: ({
     children,
-    asChild,
     ...props
-  }: {
-    children: React.ReactNode;
-    asChild?: boolean;
-    [key: string]: unknown;
-  }) => {
-    if (asChild && React.isValidElement(children)) {
-      return React.cloneElement(children, props);
-    }
-    return (
-      <button type="button" {...props}>
-        {children}
-      </button>
-    );
-  },
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & { children: React.ReactNode }) => (
+    <button type="button" {...props}>
+      {children}
+    </button>
+  ),
   Icons: {
     FileText: () => <span>FileText</span>,
+    Loader: () => <span>Loader</span>,
+    Trash2: () => <span>Trash2</span>,
+    Upload: () => <span>Upload</span>,
   },
   Page: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  PageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  PageContent: ({ children }: { children: React.ReactNode }) => <main>{children}</main>,
   PageHeader: ({ heading }: { heading?: string }) => <header>{heading}</header>,
 }));
 
 import DocumentsPage from "./documents-page";
 
+function metadata(overrides: Partial<DocumentMetadata> = {}): DocumentMetadata {
+  return {
+    id: "doc-1",
+    fileHash: "hash-1",
+    originalName: "statement.pdf",
+    mimeType: "application/pdf",
+    fileSizeBytes: 2048,
+    encryptedStoragePath: "doc-1.mizdoc",
+    status: "ingested",
+    sourceType: null,
+    errorMessage: null,
+    createdAt: "2026-05-14T09:00:00Z",
+    updatedAt: "2026-05-14T09:00:00Z",
+    ...overrides,
+  };
+}
+
+function record(document: DocumentMetadata): DocumentRecord {
+  return {
+    document,
+    file: {
+      id: "file-1",
+      documentId: document.id,
+      encryptionVersion: 1,
+      nonce: "abc",
+      checksumSha256: "checksum",
+      storagePath: document.encryptedStoragePath,
+      createdAt: document.createdAt,
+    },
+  };
+}
+
 describe("DocumentsPage", () => {
-  it("renders an honest empty state explaining Phase 2 will deliver the vault", () => {
-    render(
-      <MemoryRouter>
-        <DocumentsPage />
-      </MemoryRouter>,
-    );
-    expect(screen.getByTestId("documents-empty")).toBeInTheDocument();
-    expect(screen.getByText(/Document Vault is being built/i)).toBeInTheDocument();
+  beforeEach(() => {
+    listDocumentsMock.mockReset().mockResolvedValue([]);
+    uploadDocumentMock
+      .mockReset()
+      .mockImplementation((file) => Promise.resolve(record(metadata({ originalName: file.name }))));
+    deleteDocumentMock.mockReset().mockResolvedValue();
   });
 
-  it("offers links to the closest existing surfaces (Activities, Holdings)", () => {
-    render(
-      <MemoryRouter>
-        <DocumentsPage />
-      </MemoryRouter>,
+  it("renders an honest empty state when no documents exist", async () => {
+    render(<DocumentsPage />);
+    expect(await screen.findByTestId("documents-empty")).toBeInTheDocument();
+    expect(screen.getByText("No documents in the vault")).toBeInTheDocument();
+  });
+
+  it("lists persisted document metadata", async () => {
+    listDocumentsMock.mockResolvedValueOnce([
+      metadata({ id: "doc-1", originalName: "statement.pdf", fileSizeBytes: 2048 }),
+    ]);
+    render(<DocumentsPage />);
+    expect(await screen.findByText("statement.pdf")).toBeInTheDocument();
+    expect(screen.getByText("application/pdf")).toBeInTheDocument();
+    expect(screen.getByText("2.0 KB")).toBeInTheDocument();
+    expect(screen.getByText("ingested")).toBeInTheDocument();
+  });
+
+  it("uploads a selected file and refreshes the list", async () => {
+    const uploaded = metadata({ id: "doc-2", originalName: "factsheet.pdf" });
+    listDocumentsMock.mockResolvedValueOnce([]).mockResolvedValueOnce([uploaded]);
+    uploadDocumentMock.mockResolvedValueOnce(record(uploaded));
+    const user = userEvent.setup();
+
+    render(<DocumentsPage />);
+    const file = new File(["facts"], "factsheet.pdf", { type: "application/pdf" });
+    await user.upload(await screen.findByLabelText("Choose document"), file);
+
+    expect(uploadDocumentMock).toHaveBeenCalledWith(file);
+    expect(await screen.findByText("factsheet.pdf")).toBeInTheDocument();
+  });
+
+  it("shows duplicate upload errors", async () => {
+    uploadDocumentMock.mockRejectedValueOnce(new Error("Duplicate document already exists"));
+    const user = userEvent.setup();
+
+    render(<DocumentsPage />);
+    const file = new File(["same"], "statement.pdf", { type: "application/pdf" });
+    await user.upload(await screen.findByLabelText("Choose document"), file);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "This file is already in the Document Vault.",
     );
-    const activities = screen.getByRole("link", { name: /Open Activities/i });
-    expect(activities).toHaveAttribute("href", "/activities");
-    const holdings = screen.getByRole("link", { name: /View Holdings/i });
-    expect(holdings).toHaveAttribute("href", "/holdings");
+  });
+
+  it("shows generic upload errors", async () => {
+    uploadDocumentMock.mockRejectedValueOnce(new Error("Disk is full"));
+    const user = userEvent.setup();
+
+    render(<DocumentsPage />);
+    const file = new File(["bytes"], "statement.pdf", { type: "application/pdf" });
+    await user.upload(await screen.findByLabelText("Choose document"), file);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Disk is full");
+  });
+
+  it("deletes a document from the list", async () => {
+    listDocumentsMock.mockResolvedValueOnce([metadata({ id: "doc-1", originalName: "statement.pdf" })]);
+    const user = userEvent.setup();
+
+    render(<DocumentsPage />);
+    await user.click(await screen.findByRole("button", { name: "Delete statement.pdf" }));
+
+    expect(deleteDocumentMock).toHaveBeenCalledWith("doc-1");
+    await waitFor(() => expect(screen.queryByText("statement.pdf")).not.toBeInTheDocument());
   });
 });

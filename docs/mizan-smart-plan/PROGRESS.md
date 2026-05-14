@@ -17,7 +17,7 @@
 - [x] p17 phase-3/p17  Private investments foundation (893137e)
 - [x] p18 phase-3/p18  Private investment UI / J-curve (baa3248)
 - [x] p19 phase-3/p19  Fixed income / Sukuk / FD engine (7000f00)
-- [ ] p20 phase-3/p20  Liquidity Ladder
+- [x] p20 phase-3/p20  Liquidity Ladder (afce9e9)
 - [ ] p21 phase-3/p21  Corporate actions
 - [ ] p22 phase-3/p22  Accuracy invariants
 - [ ] p23 phase-3/p23  Golden import templates

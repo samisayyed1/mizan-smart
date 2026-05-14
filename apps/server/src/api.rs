@@ -43,6 +43,7 @@ mod health;
 mod holdings;
 mod inbox;
 mod limits;
+mod liquidity_ladder;
 mod manual_valuations;
 mod market_data;
 mod net_worth;
@@ -126,6 +127,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(reconciliation::router())
         .merge(private_investments::router())
         .merge(fixed_income::router())
+        .merge(liquidity_ladder::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

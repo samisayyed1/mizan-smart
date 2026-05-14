@@ -22,6 +22,7 @@ pub mod goals;
 pub mod health;
 pub mod inbox;
 pub mod limits;
+pub mod liquidity_ladder;
 pub mod planning;
 pub mod portfolio;
 pub mod private_investments;

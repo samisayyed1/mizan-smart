@@ -43,6 +43,7 @@ pub mod fx;
 pub mod goals;
 pub mod health;
 pub mod limits;
+pub mod liquidity_ladder;
 pub mod market_data;
 pub mod portfolio;
 pub mod private_investments;

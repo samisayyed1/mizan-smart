@@ -228,6 +228,7 @@ export const COMMANDS: CommandMap = {
   get_private_investment_detail: { method: "GET", path: "/private-investments" },
   upsert_fixed_income_details: { method: "POST", path: "/fixed-income" },
   get_fixed_income_projection: { method: "GET", path: "/fixed-income" },
+  get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -977,6 +978,15 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "get_fixed_income_projection": {
       const { assetId } = payload as { assetId: string };
       url += `/${encodeURIComponent(assetId)}/projection`;
+      break;
+    }
+    case "get_liquidity_ladder": {
+      const { asOf } = (payload ?? {}) as { asOf?: string };
+      if (asOf) {
+        const params = new URLSearchParams();
+        params.set("asOf", asOf);
+        url += `?${params.toString()}`;
+      }
       break;
     }
     case "create_asset": {

@@ -31,6 +31,7 @@ import { AccountsSummary } from "./accounts-summary";
 import Balance from "./balance";
 import SavingGoals from "./goals";
 import InboxPreview from "./inbox-preview";
+import LiquidityLadderCard from "../liquidity-ladder/liquidity-ladder-card";
 import QuickActions from "./quick-actions";
 import TopHoldings from "./top-holdings";
 
@@ -278,6 +279,7 @@ export function DashboardContent() {
             </div>
             <div className="space-y-6 lg:col-span-1">
               <InboxPreview />
+              <LiquidityLadderCard />
               <QuickActions />
               <TopHoldings
                 holdings={holdings}

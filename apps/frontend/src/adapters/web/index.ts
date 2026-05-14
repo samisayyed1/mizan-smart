@@ -345,6 +345,7 @@ export {
   upsertPrivateInvestment,
 } from "../shared/private-investments";
 export { getFixedIncomeProjection, upsertFixedIncomeDetails } from "../shared/fixed-income";
+export { getLiquidityLadder } from "../shared/liquidity-ladder";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -401,6 +402,16 @@ export type {
   FixedIncomeProjection,
   UpsertFixedIncomeDetailsRequest,
 } from "../shared/fixed-income";
+export type {
+  LiquidityConfidence,
+  LiquidityCurrencyGroup,
+  LiquidityDirection,
+  LiquidityItemType,
+  LiquidityLadderItem,
+  LiquidityLadderReport,
+  LiquidityLadderView,
+  LiquidityLadderWindow,
+} from "../shared/liquidity-ladder";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

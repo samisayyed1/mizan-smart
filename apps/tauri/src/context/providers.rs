@@ -42,6 +42,7 @@ use mizan_storage_sqlite::{
     goals::GoalRepository,
     health::HealthDismissalRepository,
     limits::ContributionLimitRepository,
+    liquidity_ladder::LiquidityLadderRepository,
     market_data::{MarketDataRepository, QuoteSyncStateRepository},
     portfolio::{snapshot::SnapshotRepository, valuation::ValuationRepository},
     private_investments::PrivateInvestmentRepository,
@@ -156,6 +157,7 @@ pub async fn initialize_context(
     ));
     let fixed_income_repository =
         Arc::new(FixedIncomeRepository::new(pool.clone(), writer.clone()));
+    let liquidity_ladder_repository = Arc::new(LiquidityLadderRepository::new(pool.clone()));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -455,6 +457,7 @@ pub async fn initialize_context(
             reconciliation_repository,
             private_investment_repository,
             fixed_income_repository,
+            liquidity_ladder_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

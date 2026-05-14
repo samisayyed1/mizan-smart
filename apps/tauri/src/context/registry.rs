@@ -15,6 +15,7 @@ use mizan_storage_sqlite::{
         jobs::DocumentJobRepository, DocumentVaultRepository,
     },
     fixed_income::FixedIncomeRepository,
+    liquidity_ladder::LiquidityLadderRepository,
     portfolio::snapshot::SnapshotRepository,
     private_investments::PrivateInvestmentRepository,
     reconciliation::ReconciliationRepository,
@@ -81,6 +82,8 @@ pub struct ServiceContext {
     pub private_investment_repository: Arc<PrivateInvestmentRepository>,
     /// mizan-smart Phase 3 P19 — fixed income / Sukuk / FD engine.
     pub fixed_income_repository: Arc<FixedIncomeRepository>,
+    /// mizan-smart Phase 3 P20 — Liquidity Ladder read model.
+    pub liquidity_ladder_repository: Arc<LiquidityLadderRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -226,6 +229,10 @@ impl ServiceContext {
 
     pub fn fixed_income_repository(&self) -> Arc<FixedIncomeRepository> {
         Arc::clone(&self.fixed_income_repository)
+    }
+
+    pub fn liquidity_ladder_repository(&self) -> Arc<LiquidityLadderRepository> {
+        Arc::clone(&self.liquidity_ladder_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

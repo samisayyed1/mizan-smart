@@ -22,6 +22,7 @@ import InboxPage from "@/pages/inbox/inbox-page";
 import ReportsPage from "@/pages/reports/reports-page";
 import IncomePage from "@/pages/income/income-page";
 import PortfolioInsightsPage from "@/pages/insights/portfolio-insights";
+import LiquidityLadderPage from "@/pages/liquidity-ladder/liquidity-ladder-page";
 import NotFoundPage from "@/pages/not-found";
 import PerformancePage from "@/pages/performance/performance-page";
 import PrivateInvestmentDetailPage from "@/pages/private-investments/private-investment-detail-page";
@@ -100,6 +101,7 @@ export function AppRoutes() {
           <Route path="import" element={<ActivityImportPage />} />
           <Route path="accounts/:id" element={<AccountPage />} />
           <Route path="income" element={<IncomePage />} />
+          <Route path="liquidity-ladder" element={<LiquidityLadderPage />} />
           <Route path="performance" element={<PerformancePage />} />
           <Route path="insights" element={<PortfolioInsightsPage />} />
           <Route path="health" element={<HealthPage />} />

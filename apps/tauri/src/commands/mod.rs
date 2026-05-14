@@ -23,6 +23,7 @@ pub mod goal;
 pub mod health;
 pub mod inbox;
 pub mod limits;
+pub mod liquidity_ladder;
 pub mod manual_valuations;
 pub mod market_data;
 #[cfg(any(feature = "connect-sync", feature = "device-sync"))]

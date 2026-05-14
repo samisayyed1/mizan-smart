@@ -1,0 +1,12 @@
+# Workspace-wide Cargo settings.
+#
+# Pins the build output to a single `target/` directory at the workspace
+# root so no crate accidentally creates its own (and so `cargo clean`
+# from any subdir reclaims everything in one shot). git-fetch-with-cli
+# avoids libgit2 thrash on macOS dev machines.
+
+[build]
+target-dir = "target"
+
+[net]
+git-fetch-with-cli = true

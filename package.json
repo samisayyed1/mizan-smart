@@ -41,7 +41,9 @@
     "publish:ui": "cd packages/ui && npm publish --access public",
     "publish:addon-dev-tools": "cd packages/addon-dev-tools && npm publish --access public",
     "addon:create": "cd packages/addon-dev-tools && node cli.js create",
-    "addon:dev": "cd packages/addon-dev-tools && node dev-server.js"
+    "addon:dev": "cd packages/addon-dev-tools && node dev-server.js",
+    "clean:deep": "bash scripts/clean-deep.sh",
+    "disk:check": "bash scripts/disk-check.sh"
   },
   "devDependencies": {
     "@eslint/compat": "^1.4.1",

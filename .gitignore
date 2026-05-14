@@ -62,10 +62,38 @@ apps/tauri/db/*
 
 # Rust/Cargo
 target/
+**/target/
 **/*.rs.bk
 
 # Tauri generated
-apps/tauri/gen/schemas/
+apps/tauri/gen/
+apps/tauri/src-tauri/target/
+*.tauri-build
+
+# Build artifacts (binary installers / app bundles)
+*.app
+*.dmg
+*.AppImage
+*.msi
+*.exe
+
+# Local AI models — never commit weights
+*.gguf
+*.bin
+*.onnx
+*.safetensors
+models/
+.ollama/
+
+# Bundler / framework caches
+.next/
+.turbo/
+.parcel-cache/
+.vite/
+
+# Misc temp files
+*.tmp
+**/node_modules/
 
 # OS generated files
 .DS_Store

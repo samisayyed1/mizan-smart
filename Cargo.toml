@@ -74,3 +74,21 @@ mizan-connect = { path = "crates/connect" }
 mizan-storage-sqlite = { path = "crates/storage-sqlite" }
 mizan-device-sync = { path = "crates/device-sync" }
 mizan-ai = { path = "crates/ai" }
+
+# ─── Build profiles ─────────────────────────────────────────────────
+# Applied workspace-wide. The big win for laptop dev is
+# split-debuginfo = "unpacked" on macOS: by default rustc embeds debug
+# info into every .rlib and the final .dylib, which can multiply target/
+# size 3-5× during iterative Tauri builds. "unpacked" writes debug info
+# to side-car .dSYM bundles instead, which the linker shares.
+#
+# incremental defaults to true for dev, but we set it explicitly so a
+# future tweak to a child Cargo.toml can't silently turn it off.
+
+[profile.dev]
+incremental = true
+split-debuginfo = "unpacked"
+
+[profile.test]
+incremental = true
+split-debuginfo = "unpacked"

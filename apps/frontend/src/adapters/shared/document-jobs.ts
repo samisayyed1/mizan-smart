@@ -35,6 +35,56 @@ export interface RunDocumentJobResult {
   job: DocumentProcessingJob | null;
 }
 
+export interface DocumentParserCapabilities {
+  text: boolean;
+  layout: boolean;
+  tables: boolean;
+  ocr: boolean;
+}
+
+export interface DocumentBoundingBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface ParsedDocumentPage {
+  pageNumber: number;
+  width: number | null;
+  height: number | null;
+  rotation: number | null;
+}
+
+export interface ParsedTextBlock {
+  pageNumber: number;
+  text: string;
+  boundingBox: DocumentBoundingBox | null;
+  blockOrder: number;
+  confidence: number | null;
+}
+
+export interface ParsedTableCell {
+  rowIndex: number;
+  columnIndex: number;
+  text: string;
+  boundingBox: DocumentBoundingBox | null;
+  confidence: number | null;
+}
+
+export interface ParsedTable {
+  pageNumber: number;
+  boundingBox: DocumentBoundingBox | null;
+  cells: ParsedTableCell[];
+}
+
+export interface ParsedDocument {
+  documentId: string;
+  pages: ParsedDocumentPage[];
+  textBlocks: ParsedTextBlock[];
+  tables: ParsedTable[];
+}
+
 export async function enqueueDocumentJob(
   request: EnqueueDocumentJobRequest,
 ): Promise<DocumentProcessingJob> {
@@ -43,6 +93,14 @@ export async function enqueueDocumentJob(
 
 export async function listDocumentJobs(documentId?: string): Promise<DocumentProcessingJob[]> {
   return invoke<DocumentProcessingJob[]>("list_document_jobs", { documentId });
+}
+
+export async function getDocumentParserCapabilities(): Promise<DocumentParserCapabilities> {
+  return invoke<DocumentParserCapabilities>("get_document_parser_capabilities", {});
+}
+
+export async function getParsedDocument(documentId: string): Promise<ParsedDocument> {
+  return invoke<ParsedDocument>("get_parsed_document", { documentId });
 }
 
 export async function runNextDocumentJob(): Promise<RunDocumentJobResult> {

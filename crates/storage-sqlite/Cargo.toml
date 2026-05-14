@@ -32,6 +32,7 @@ chacha20poly1305 = { workspace = true }
 sha2 = { workspace = true }
 rand = { workspace = true }
 hex = "0.4"
+pdf-extract = "0.10.0"
 
 # Database (SQLite/Diesel specific)
 diesel = { workspace = true }

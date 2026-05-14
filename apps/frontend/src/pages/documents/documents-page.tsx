@@ -1,11 +1,12 @@
 import {
   deleteDocument,
+  getDocumentParserCapabilities,
   listDocumentJobs,
   listDocuments,
   retryDocumentJob,
   uploadDocument,
 } from "@/adapters";
-import type { DocumentMetadata, DocumentProcessingJob } from "@/adapters";
+import type { DocumentMetadata, DocumentParserCapabilities, DocumentProcessingJob } from "@/adapters";
 import { Button, Icons, Page, PageContent, PageHeader } from "@mizan/ui";
 import { useEffect, useRef, useState } from "react";
 
@@ -35,6 +36,9 @@ export default function DocumentsPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [jobs, setJobs] = useState<DocumentProcessingJob[]>([]);
+  const [parserCapabilities, setParserCapabilities] = useState<DocumentParserCapabilities | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -44,9 +48,14 @@ export default function DocumentsPage() {
   async function refreshDocuments(): Promise<void> {
     setLoading(true);
     try {
-      const [loadedDocuments, loadedJobs] = await Promise.all([listDocuments(), listDocumentJobs()]);
+      const [loadedDocuments, loadedJobs, loadedParserCapabilities] = await Promise.all([
+        listDocuments(),
+        listDocumentJobs(),
+        getDocumentParserCapabilities(),
+      ]);
       setDocuments(loadedDocuments);
       setJobs(loadedJobs);
+      setParserCapabilities(loadedParserCapabilities);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load documents.");
@@ -147,6 +156,17 @@ export default function DocumentsPage() {
               Upload
             </Button>
           </div>
+
+          {parserCapabilities ? (
+            <p className="text-muted-foreground text-sm">
+              {parserCapabilities.text
+                ? "Local text extraction available"
+                : "Local text extraction unavailable"}
+              {parserCapabilities.layout || parserCapabilities.tables
+                ? ""
+                : "; layout and table extraction unavailable"}
+            </p>
+          ) : null}
 
           {error ? (
             <div

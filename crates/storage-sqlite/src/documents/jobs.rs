@@ -10,8 +10,8 @@ use tokio::time;
 use uuid::Uuid;
 
 use mizan_core::documents::{
-    DocumentJobStatus, DocumentJobType, DocumentProcessingJob, EnqueueDocumentJobRequest,
-    RunDocumentJobResult,
+    DocumentJobStatus, DocumentJobType, DocumentParserCapabilities, DocumentProcessingJob,
+    EnqueueDocumentJobRequest, RunDocumentJobResult,
 };
 use mizan_core::errors::{DatabaseError, Error, ValidationError};
 use mizan_core::Result;
@@ -78,6 +78,7 @@ impl TryFrom<DocumentProcessingJobRow> for DocumentProcessingJob {
 
 #[async_trait]
 pub trait DocumentJobProcessor: Send + Sync {
+    fn capabilities(&self) -> DocumentParserCapabilities;
     async fn process(&self, job: &DocumentProcessingJob) -> Result<()>;
 }
 
@@ -86,6 +87,15 @@ pub struct UnavailableDocumentJobProcessor;
 
 #[async_trait]
 impl DocumentJobProcessor for UnavailableDocumentJobProcessor {
+    fn capabilities(&self) -> DocumentParserCapabilities {
+        DocumentParserCapabilities {
+            text: false,
+            layout: false,
+            tables: false,
+            ocr: false,
+        }
+    }
+
     async fn process(&self, job: &DocumentProcessingJob) -> Result<()> {
         let capability = match job.job_type {
             DocumentJobType::ParseText => "text parser",
@@ -133,6 +143,10 @@ impl DocumentJobRepository {
             processor,
             timeout,
         }
+    }
+
+    pub fn processor_capabilities(&self) -> DocumentParserCapabilities {
+        self.processor.capabilities()
     }
 
     pub async fn enqueue(
@@ -454,6 +468,15 @@ mod tests {
 
     #[async_trait]
     impl DocumentJobProcessor for SuccessfulProcessor {
+        fn capabilities(&self) -> DocumentParserCapabilities {
+            DocumentParserCapabilities {
+                text: true,
+                layout: false,
+                tables: false,
+                ocr: false,
+            }
+        }
+
         async fn process(&self, _job: &DocumentProcessingJob) -> Result<()> {
             Ok(())
         }

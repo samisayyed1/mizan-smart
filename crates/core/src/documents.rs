@@ -1,6 +1,8 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
+use crate::Result;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DocumentStatus {
@@ -201,4 +203,77 @@ pub struct DocumentProcessingJob {
 #[serde(rename_all = "camelCase")]
 pub struct RunDocumentJobResult {
     pub job: Option<DocumentProcessingJob>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentParserCapabilities {
+    pub text: bool,
+    pub layout: bool,
+    pub tables: bool,
+    pub ocr: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentBoundingBox {
+    pub x: f64,
+    pub y: f64,
+    pub width: f64,
+    pub height: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedDocumentPage {
+    pub page_number: i32,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+    pub rotation: Option<i32>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedTextBlock {
+    pub page_number: i32,
+    pub text: String,
+    pub bounding_box: Option<DocumentBoundingBox>,
+    pub block_order: i32,
+    pub confidence: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedTableCell {
+    pub row_index: i32,
+    pub column_index: i32,
+    pub text: String,
+    pub bounding_box: Option<DocumentBoundingBox>,
+    pub confidence: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedTable {
+    pub page_number: i32,
+    pub bounding_box: Option<DocumentBoundingBox>,
+    pub cells: Vec<ParsedTableCell>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ParsedDocument {
+    pub document_id: String,
+    pub pages: Vec<ParsedDocumentPage>,
+    pub text_blocks: Vec<ParsedTextBlock>,
+    pub tables: Vec<ParsedTable>,
+}
+
+#[async_trait::async_trait]
+pub trait DocumentParser: Send + Sync {
+    fn capabilities(&self) -> DocumentParserCapabilities;
+    async fn parse_document(&self, document_id: &str) -> Result<ParsedDocument>;
+    async fn parse_text(&self, document_id: &str) -> Result<ParsedDocument>;
+    async fn parse_layout(&self, document_id: &str) -> Result<ParsedDocument>;
+    async fn parse_tables(&self, document_id: &str) -> Result<ParsedDocument>;
 }

@@ -278,6 +278,8 @@ export type {
 export {
   cancelDocumentJob,
   enqueueDocumentJob,
+  getDocumentParserCapabilities,
+  getParsedDocument,
   listDocumentJobs,
   retryDocumentJob,
   runNextDocumentJob,
@@ -286,7 +288,13 @@ export type {
   DocumentJobStatus,
   DocumentJobType,
   DocumentProcessingJob,
+  DocumentParserCapabilities,
   EnqueueDocumentJobRequest,
+  ParsedDocument,
+  ParsedDocumentPage,
+  ParsedTable,
+  ParsedTableCell,
+  ParsedTextBlock,
   RunDocumentJobResult,
 } from "../shared/document-jobs";
 

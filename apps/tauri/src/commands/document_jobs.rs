@@ -6,7 +6,8 @@ use log::error;
 use tauri::State;
 
 use mizan_core::documents::{
-    DocumentProcessingJob, EnqueueDocumentJobRequest, RunDocumentJobResult,
+    DocumentParserCapabilities, DocumentProcessingJob, EnqueueDocumentJobRequest, ParsedDocument,
+    RunDocumentJobResult,
 };
 
 use crate::context::ServiceContext;
@@ -36,6 +37,27 @@ pub fn list_document_jobs(
         .list(document_id.as_deref())
         .map_err(|err| {
             error!("list_document_jobs failed: {}", err);
+            err.to_string()
+        })
+}
+
+#[tauri::command]
+pub fn get_document_parser_capabilities(
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<DocumentParserCapabilities, String> {
+    Ok(state.document_job_repository().processor_capabilities())
+}
+
+#[tauri::command]
+pub fn get_parsed_document(
+    document_id: String,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<ParsedDocument, String> {
+    state
+        .document_extraction_repository()
+        .get_parsed_document(&document_id)
+        .map_err(|err| {
+            error!("get_parsed_document failed: {}", err);
             err.to_string()
         })
 }

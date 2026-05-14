@@ -47,7 +47,13 @@ use mizan_storage_sqlite::{
     alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
     db::{self, write_actor},
-    documents::{jobs::DocumentJobRepository, DocumentVaultRepository},
+    documents::{
+        extraction::{
+            DocumentExtractionJobProcessor, DocumentExtractionRepository, LocalDocumentParser,
+        },
+        jobs::DocumentJobRepository,
+        DocumentVaultRepository,
+    },
     fx::FxRepository,
     goals::GoalRepository,
     health::HealthDismissalRepository,
@@ -101,6 +107,8 @@ pub struct AppState {
     pub document_vault_repository: Arc<DocumentVaultRepository>,
     /// mizan-smart Phase 2 P11 — Document Vault job queue.
     pub document_job_repository: Arc<DocumentJobRepository>,
+    /// mizan-smart Phase 2 P12 — parsed Document Vault content.
+    pub document_extraction_repository: Arc<DocumentExtractionRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -299,8 +307,21 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         data_root_path.join("document-vault"),
         document_vault_key,
     )?);
-    let document_job_repository =
-        Arc::new(DocumentJobRepository::new(pool.clone(), writer.clone()));
+    let document_extraction_repository = Arc::new(DocumentExtractionRepository::new(
+        pool.clone(),
+        writer.clone(),
+    ));
+    let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
+    let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
+        document_parser,
+        document_extraction_repository.clone(),
+    ));
+    let document_job_repository = Arc::new(DocumentJobRepository::new_with_processor(
+        pool.clone(),
+        writer.clone(),
+        document_job_processor,
+        std::time::Duration::from_secs(30),
+    ));
     let valuation_service = Arc::new(ValuationService::new(
         base_currency.clone(),
         valuation_repository.clone(),
@@ -554,6 +575,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         smart_alert_repository,
         document_vault_repository,
         document_job_repository,
+        document_extraction_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

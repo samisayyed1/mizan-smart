@@ -130,10 +130,29 @@ pub async fn initialize_context(
             document_vault_key,
         )?,
     );
-    let document_job_repository = Arc::new(
-        mizan_storage_sqlite::documents::jobs::DocumentJobRepository::new(
+    let document_extraction_repository = Arc::new(
+        mizan_storage_sqlite::documents::extraction::DocumentExtractionRepository::new(
             pool.clone(),
             writer.clone(),
+        ),
+    );
+    let document_parser = Arc::new(
+        mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
+            document_vault_repository.clone(),
+        ),
+    );
+    let document_job_processor = Arc::new(
+        mizan_storage_sqlite::documents::extraction::DocumentExtractionJobProcessor::new(
+            document_parser,
+            document_extraction_repository.clone(),
+        ),
+    );
+    let document_job_repository = Arc::new(
+        mizan_storage_sqlite::documents::jobs::DocumentJobRepository::new_with_processor(
+            pool.clone(),
+            writer.clone(),
+            document_job_processor,
+            std::time::Duration::from_secs(30),
         ),
     );
 
@@ -410,6 +429,7 @@ pub async fn initialize_context(
             smart_alert_repository,
             document_vault_repository,
             document_job_repository,
+            document_extraction_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

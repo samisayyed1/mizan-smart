@@ -654,6 +654,58 @@ diesel::table! {
 diesel::joinable!(document_processing_jobs -> documents (document_id));
 
 diesel::table! {
+    document_pages (id) {
+        id -> Text,
+        document_id -> Text,
+        page_number -> Integer,
+        width -> Nullable<Double>,
+        height -> Nullable<Double>,
+        rotation -> Nullable<Integer>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    document_text_blocks (id) {
+        id -> Text,
+        document_id -> Text,
+        page_number -> Integer,
+        text -> Text,
+        bounding_box_json -> Nullable<Text>,
+        block_order -> Integer,
+        confidence -> Nullable<Double>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    document_tables (id) {
+        id -> Text,
+        document_id -> Text,
+        page_number -> Integer,
+        bounding_box_json -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    document_table_cells (id) {
+        id -> Text,
+        table_id -> Text,
+        row_index -> Integer,
+        column_index -> Integer,
+        text -> Text,
+        bounding_box_json -> Nullable<Text>,
+        confidence -> Nullable<Double>,
+    }
+}
+
+diesel::joinable!(document_pages -> documents (document_id));
+diesel::joinable!(document_text_blocks -> documents (document_id));
+diesel::joinable!(document_tables -> documents (document_id));
+diesel::joinable!(document_table_cells -> document_tables (table_id));
+
+diesel::table! {
     documents (id) {
         id -> Text,
         file_hash -> Text,
@@ -793,6 +845,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     sync_engine_state,
     sync_entity_metadata,
     document_processing_jobs,
+    document_pages,
+    document_text_blocks,
+    document_tables,
+    document_table_cells,
     documents,
     document_files,
     document_links,

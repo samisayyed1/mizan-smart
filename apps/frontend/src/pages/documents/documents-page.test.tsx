@@ -1,4 +1,9 @@
-import type { DocumentMetadata, DocumentProcessingJob, DocumentRecord } from "@/adapters";
+import type {
+  DocumentMetadata,
+  DocumentParserCapabilities,
+  DocumentProcessingJob,
+  DocumentRecord,
+} from "@/adapters";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
@@ -6,12 +11,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const listDocumentsMock = vi.fn<() => Promise<DocumentMetadata[]>>();
 const listDocumentJobsMock = vi.fn<() => Promise<DocumentProcessingJob[]>>();
+const getDocumentParserCapabilitiesMock = vi.fn<() => Promise<DocumentParserCapabilities>>();
 const uploadDocumentMock = vi.fn<(file: File) => Promise<DocumentRecord>>();
 const deleteDocumentMock = vi.fn<(documentId: string) => Promise<void>>();
 const retryDocumentJobMock = vi.fn<(jobId: string) => Promise<DocumentProcessingJob>>();
 
 vi.mock("@/adapters", () => ({
   listDocumentJobs: () => listDocumentJobsMock(),
+  getDocumentParserCapabilities: () => getDocumentParserCapabilitiesMock(),
   listDocuments: () => listDocumentsMock(),
   uploadDocument: (file: File) => uploadDocumentMock(file),
   deleteDocument: (documentId: string) => deleteDocumentMock(documentId),
@@ -94,6 +101,9 @@ describe("DocumentsPage", () => {
   beforeEach(() => {
     listDocumentsMock.mockReset().mockResolvedValue([]);
     listDocumentJobsMock.mockReset().mockResolvedValue([]);
+    getDocumentParserCapabilitiesMock
+      .mockReset()
+      .mockResolvedValue({ text: true, layout: false, tables: false, ocr: false });
     uploadDocumentMock
       .mockReset()
       .mockImplementation((file) => Promise.resolve(record(metadata({ originalName: file.name }))));
@@ -105,6 +115,9 @@ describe("DocumentsPage", () => {
     render(<DocumentsPage />);
     expect(await screen.findByTestId("documents-empty")).toBeInTheDocument();
     expect(screen.getByText("No documents in the vault")).toBeInTheDocument();
+    expect(
+      screen.getByText("Local text extraction available; layout and table extraction unavailable"),
+    ).toBeInTheDocument();
   });
 
   it("lists persisted document metadata", async () => {

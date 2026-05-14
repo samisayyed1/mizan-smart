@@ -193,6 +193,8 @@ export const COMMANDS: CommandMap = {
   read_document_bytes: { method: "GET", path: "/documents" },
   enqueue_document_job: { method: "POST", path: "/document-jobs" },
   list_document_jobs: { method: "GET", path: "/document-jobs" },
+  get_document_parser_capabilities: { method: "GET", path: "/document-jobs/capabilities" },
+  get_parsed_document: { method: "GET", path: "/documents" },
   run_next_document_job: { method: "POST", path: "/document-jobs/run-next" },
   cancel_document_job: { method: "POST", path: "/document-jobs" },
   retry_document_job: { method: "POST", path: "/document-jobs" },
@@ -822,6 +824,14 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
         params.set("documentId", documentId);
         url += `?${params.toString()}`;
       }
+      break;
+    }
+    case "get_document_parser_capabilities": {
+      break;
+    }
+    case "get_parsed_document": {
+      const { documentId } = payload as { documentId: string };
+      url += `/${encodeURIComponent(documentId)}/parsed`;
       break;
     }
     case "cancel_document_job": {

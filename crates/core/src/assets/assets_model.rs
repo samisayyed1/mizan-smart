@@ -236,6 +236,12 @@ pub struct Asset {
     // Provider configuration (single JSON blob)
     pub provider_config: Option<Value>,
 
+    // mizan-smart Phase 1 P4 — universal asset class. None on legacy
+    // rows; new universal-flow assets carry the matching class string
+    // (see `mizan_core::universal_assets::AssetClassification`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub classification: Option<String>,
+
     // Derived (not stored in DB)
     #[serde(skip_deserializing)]
     pub exchange_name: Option<String>, // Friendly exchange name (derived from MIC)

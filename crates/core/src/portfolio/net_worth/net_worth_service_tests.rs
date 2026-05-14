@@ -846,6 +846,7 @@ fn create_test_asset(id: &str, kind: AssetKind, currency: &str) -> Asset {
         exchange_name: None,
         quote_mode: QuoteMode::Market,
         provider_config: None,
+        classification: None,
         is_active: true,
         metadata: None,
     }

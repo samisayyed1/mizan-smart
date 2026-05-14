@@ -45,6 +45,7 @@ pub mod portfolio;
 pub mod settings;
 pub mod sync;
 pub mod taxonomies;
+pub mod universal_assets;
 
 // Re-export database utilities
 pub use db::{

@@ -67,10 +67,12 @@ pub struct AssetDB {
     pub provider_config: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    // mizan-smart Phase 1 P4 — universal asset class.
+    pub classification: Option<String>,
 }
 
 /// Database write model for assets (excludes generated columns).
-#[derive(Insertable, AsChangeset, Debug, Clone)]
+#[derive(Insertable, AsChangeset, Debug, Clone, Default)]
 #[diesel(table_name = crate::schema::assets)]
 pub struct InsertableAssetDB {
     pub id: Option<String>,
@@ -89,6 +91,9 @@ pub struct InsertableAssetDB {
     pub provider_config: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    // mizan-smart Phase 1 P4 — universal asset class. Legacy callers
+    // leave this None; the universal Add Asset flow (Phase 1 P5) sets it.
+    pub classification: Option<String>,
 }
 
 // Conversion: DB read model → domain model
@@ -129,6 +134,7 @@ impl From<AssetDB> for Asset {
             instrument_exchange_mic: db.instrument_exchange_mic,
             instrument_key: db.instrument_key,
             provider_config,
+            classification: db.classification,
             exchange_name: None, // Computed by Asset::enrich()
             created_at: text_to_datetime(&db.created_at),
             updated_at: text_to_datetime(&db.updated_at),
@@ -175,6 +181,7 @@ impl From<NewAsset> for InsertableAssetDB {
             provider_config,
             created_at: now.clone(),
             updated_at: now,
+            classification: None,
         }
     }
 }

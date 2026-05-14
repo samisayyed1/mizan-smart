@@ -147,6 +147,9 @@ diesel::table! {
         provider_config -> Nullable<Text>,
         created_at -> Text,
         updated_at -> Text,
+        // mizan-smart Phase 1 P4 — universal asset class.
+        // Nullable so existing rows are unaffected.
+        classification -> Nullable<Text>,
     }
 }
 
@@ -500,6 +503,183 @@ diesel::joinable!(taxonomy_categories -> taxonomies (taxonomy_id));
 
 diesel::joinable!(import_account_templates -> import_templates (template_id));
 
+// Universal asset model — mizan-smart Phase 1 P4.
+
+diesel::table! {
+    valuations (id) {
+        id -> Text,
+        asset_id -> Text,
+        valuation_date -> Text,
+        value_native -> Text,
+        currency -> Text,
+        source_type -> Text,
+        source_id -> Nullable<Text>,
+        confidence -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_public_market_details (asset_id) {
+        asset_id -> Text,
+        sub_class -> Nullable<Text>,
+        isin -> Nullable<Text>,
+        cusip -> Nullable<Text>,
+        figi -> Nullable<Text>,
+        expense_ratio_bps -> Nullable<Integer>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_fixed_income_details (asset_id) {
+        asset_id -> Text,
+        instrument_subtype -> Text,
+        issuer -> Nullable<Text>,
+        isin -> Nullable<Text>,
+        face_value -> Nullable<Text>,
+        currency -> Nullable<Text>,
+        purchase_date -> Nullable<Text>,
+        maturity_date -> Nullable<Text>,
+        coupon_or_profit_rate -> Nullable<Text>,
+        payment_frequency -> Nullable<Text>,
+        day_count_convention -> Nullable<Text>,
+        is_sukuk -> Integer,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_real_estate_details (asset_id) {
+        asset_id -> Text,
+        property_type -> Nullable<Text>,
+        address_approximate -> Nullable<Text>,
+        address_exact -> Nullable<Text>,
+        size_value -> Nullable<Text>,
+        size_unit -> Nullable<Text>,
+        bedrooms -> Nullable<Integer>,
+        purchase_date -> Nullable<Text>,
+        purchase_price -> Nullable<Text>,
+        purchase_currency -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_private_investment_details (asset_id) {
+        asset_id -> Text,
+        instrument_subtype -> Text,
+        manager -> Nullable<Text>,
+        strategy -> Nullable<Text>,
+        vintage_year -> Nullable<Integer>,
+        commitment_amount -> Nullable<Text>,
+        commitment_currency -> Nullable<Text>,
+        inception_date -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_insurance_details (asset_id) {
+        asset_id -> Text,
+        policy_type -> Text,
+        provider -> Nullable<Text>,
+        policy_number_hash -> Nullable<Text>,
+        start_date -> Nullable<Text>,
+        maturity_date -> Nullable<Text>,
+        premium_amount -> Nullable<Text>,
+        premium_currency -> Nullable<Text>,
+        payment_frequency -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_commodity_details (asset_id) {
+        asset_id -> Text,
+        commodity_type -> Text,
+        weight_value -> Nullable<Text>,
+        weight_unit -> Nullable<Text>,
+        purity -> Nullable<Text>,
+        storage_location -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_business_details (asset_id) {
+        asset_id -> Text,
+        business_name -> Nullable<Text>,
+        ownership_percent -> Nullable<Text>,
+        legal_form -> Nullable<Text>,
+        country -> Nullable<Text>,
+        incorporation_date -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_collectible_details (asset_id) {
+        asset_id -> Text,
+        collectible_type -> Nullable<Text>,
+        maker -> Nullable<Text>,
+        model_reference -> Nullable<Text>,
+        year -> Nullable<Integer>,
+        condition -> Nullable<Text>,
+        has_box -> Integer,
+        has_papers -> Integer,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    asset_liability_details (asset_id) {
+        asset_id -> Text,
+        liability_type -> Text,
+        lender -> Nullable<Text>,
+        principal_original -> Nullable<Text>,
+        principal_currency -> Nullable<Text>,
+        interest_rate -> Nullable<Text>,
+        interest_compounding -> Nullable<Text>,
+        start_date -> Nullable<Text>,
+        end_date -> Nullable<Text>,
+        linked_asset_id -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::joinable!(valuations -> assets (asset_id));
+diesel::joinable!(asset_public_market_details -> assets (asset_id));
+diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
+diesel::joinable!(asset_real_estate_details -> assets (asset_id));
+diesel::joinable!(asset_private_investment_details -> assets (asset_id));
+diesel::joinable!(asset_insurance_details -> assets (asset_id));
+diesel::joinable!(asset_commodity_details -> assets (asset_id));
+diesel::joinable!(asset_business_details -> assets (asset_id));
+diesel::joinable!(asset_collectible_details -> assets (asset_id));
+diesel::joinable!(asset_liability_details -> assets (asset_id));
+
 // Smart Alerts — mizan-smart Phase 1 P8.
 diesel::table! {
     smart_alerts (id) {
@@ -554,6 +734,16 @@ diesel::allow_tables_to_appear_in_same_query!(
     sync_engine_state,
     sync_entity_metadata,
     smart_alerts,
+    valuations,
+    asset_public_market_details,
+    asset_fixed_income_details,
+    asset_real_estate_details,
+    asset_private_investment_details,
+    asset_insurance_details,
+    asset_commodity_details,
+    asset_business_details,
+    asset_collectible_details,
+    asset_liability_details,
     sync_outbox,
     sync_table_state,
     taxonomies,

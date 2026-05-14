@@ -44,6 +44,7 @@ pub mod health;
 pub mod limits;
 pub mod market_data;
 pub mod portfolio;
+pub mod private_investments;
 pub mod reconciliation;
 pub mod settings;
 pub mod sync;

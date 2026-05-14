@@ -23,6 +23,7 @@ pub mod inbox;
 pub mod limits;
 pub mod planning;
 pub mod portfolio;
+pub mod private_investments;
 pub mod quotes;
 pub mod reconciliation;
 pub mod secrets;

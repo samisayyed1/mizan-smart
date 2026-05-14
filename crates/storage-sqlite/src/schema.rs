@@ -648,6 +648,65 @@ diesel::table! {
 }
 
 diesel::table! {
+    private_investments (asset_id) {
+        asset_id -> Text,
+        manager -> Text,
+        strategy -> Text,
+        vintage_year -> Nullable<Integer>,
+        commitment_amount -> Text,
+        commitment_currency -> Text,
+        inception_date -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    private_investment_valuations (id) {
+        id -> Text,
+        asset_id -> Text,
+        valuation_date -> Text,
+        nav -> Text,
+        currency -> Text,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    capital_calls (id) {
+        id -> Text,
+        asset_id -> Text,
+        notice_date -> Text,
+        due_date -> Text,
+        amount -> Text,
+        currency -> Text,
+        status -> Text,
+        source_citation_id -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
+    private_distributions (id) {
+        id -> Text,
+        asset_id -> Text,
+        distribution_date -> Text,
+        amount -> Text,
+        currency -> Text,
+        recallable -> Integer,
+        source_citation_id -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     asset_commodity_details (asset_id) {
         asset_id -> Text,
         commodity_type -> Text,
@@ -892,6 +951,13 @@ diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
 diesel::joinable!(asset_private_investment_details -> assets (asset_id));
+diesel::joinable!(private_investments -> assets (asset_id));
+diesel::joinable!(private_investment_valuations -> assets (asset_id));
+diesel::joinable!(private_investment_valuations -> source_citations (source_citation_id));
+diesel::joinable!(capital_calls -> assets (asset_id));
+diesel::joinable!(capital_calls -> source_citations (source_citation_id));
+diesel::joinable!(private_distributions -> assets (asset_id));
+diesel::joinable!(private_distributions -> source_citations (source_citation_id));
 diesel::joinable!(asset_insurance_details -> assets (asset_id));
 diesel::joinable!(asset_commodity_details -> assets (asset_id));
 diesel::joinable!(asset_business_details -> assets (asset_id));
@@ -951,6 +1017,10 @@ diesel::allow_tables_to_appear_in_same_query!(
     reconciliation_runs,
     reconciliation_items,
     reconciliation_matches,
+    private_investments,
+    private_investment_valuations,
+    capital_calls,
+    private_distributions,
     sync_applied_events,
     sync_cursor,
     sync_device_config,

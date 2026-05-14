@@ -43,6 +43,7 @@ use mizan_storage_sqlite::{
     limits::ContributionLimitRepository,
     market_data::{MarketDataRepository, QuoteSyncStateRepository},
     portfolio::{snapshot::SnapshotRepository, valuation::ValuationRepository},
+    private_investments::PrivateInvestmentRepository,
     reconciliation::ReconciliationRepository,
     settings::SettingsRepository,
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
@@ -148,6 +149,10 @@ pub async fn initialize_context(
         Arc::new(DataLineageRepository::new(pool.clone(), writer.clone()));
     let reconciliation_repository =
         Arc::new(ReconciliationRepository::new(pool.clone(), writer.clone()));
+    let private_investment_repository = Arc::new(PrivateInvestmentRepository::new(
+        pool.clone(),
+        writer.clone(),
+    ));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -445,6 +450,7 @@ pub async fn initialize_context(
             extracted_fact_repository,
             data_lineage_repository,
             reconciliation_repository,
+            private_investment_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

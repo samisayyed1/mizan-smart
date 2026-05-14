@@ -62,6 +62,7 @@ use mizan_storage_sqlite::{
     limits::ContributionLimitRepository,
     market_data::{MarketDataRepository, QuoteSyncStateRepository},
     portfolio::{snapshot::SnapshotRepository, valuation::ValuationRepository},
+    private_investments::PrivateInvestmentRepository,
     reconciliation::ReconciliationRepository,
     settings::SettingsRepository,
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
@@ -118,6 +119,8 @@ pub struct AppState {
     pub data_lineage_repository: Arc<DataLineageRepository>,
     /// mizan-smart Phase 2 P16 — deterministic Reconciliation Center.
     pub reconciliation_repository: Arc<ReconciliationRepository>,
+    /// mizan-smart Phase 3 P17 — private investments foundation.
+    pub private_investment_repository: Arc<PrivateInvestmentRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -326,6 +329,10 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         Arc::new(DataLineageRepository::new(pool.clone(), writer.clone()));
     let reconciliation_repository =
         Arc::new(ReconciliationRepository::new(pool.clone(), writer.clone()));
+    let private_investment_repository = Arc::new(PrivateInvestmentRepository::new(
+        pool.clone(),
+        writer.clone(),
+    ));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,
@@ -594,6 +601,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         extracted_fact_repository,
         data_lineage_repository,
         reconciliation_repository,
+        private_investment_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

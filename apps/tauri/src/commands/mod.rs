@@ -28,6 +28,7 @@ pub mod market_data;
 pub mod mizan_connect;
 pub mod platform;
 pub mod portfolio;
+pub mod private_investments;
 pub mod providers_settings;
 pub mod reconciliation;
 pub mod secrets;

@@ -333,6 +333,16 @@ export {
   reconcileDocumentFacts,
   reconcileImportPreview,
 } from "../shared/reconciliation";
+export {
+  addCapitalCall,
+  addPrivateDistribution,
+  addPrivateInvestmentValuation,
+  deletePrivateInvestment,
+  getPrivateInvestment,
+  getPrivateInvestmentSummary,
+  updateCapitalCallStatus,
+  upsertPrivateInvestment,
+} from "../shared/private-investments";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -363,6 +373,19 @@ export type {
   ReconciliationScopeType,
   ReconciliationSourceSide,
 } from "../shared/reconciliation";
+export type {
+  CapitalCall,
+  CapitalCallStatus,
+  CreateCapitalCallRequest,
+  CreatePrivateDistributionRequest,
+  CreatePrivateInvestmentValuationRequest,
+  PrivateDistribution,
+  PrivateInvestment,
+  PrivateInvestmentSummary,
+  PrivateInvestmentValuation,
+  UpdateCapitalCallStatusRequest,
+  UpsertPrivateInvestmentRequest,
+} from "../shared/private-investments";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

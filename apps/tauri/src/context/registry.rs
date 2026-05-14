@@ -15,6 +15,7 @@ use mizan_storage_sqlite::{
         jobs::DocumentJobRepository, DocumentVaultRepository,
     },
     portfolio::snapshot::SnapshotRepository,
+    private_investments::PrivateInvestmentRepository,
     reconciliation::ReconciliationRepository,
     sync::AppSyncRepository,
     universal_assets::{ManualValuationRepository, UniversalAssetCreateRepository},
@@ -75,6 +76,8 @@ pub struct ServiceContext {
     pub data_lineage_repository: Arc<DataLineageRepository>,
     /// mizan-smart Phase 2 P16 — deterministic Reconciliation Center.
     pub reconciliation_repository: Arc<ReconciliationRepository>,
+    /// mizan-smart Phase 3 P17 — private investments foundation.
+    pub private_investment_repository: Arc<PrivateInvestmentRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -212,6 +215,10 @@ impl ServiceContext {
 
     pub fn reconciliation_repository(&self) -> Arc<ReconciliationRepository> {
         Arc::clone(&self.reconciliation_repository)
+    }
+
+    pub fn private_investment_repository(&self) -> Arc<PrivateInvestmentRepository> {
+        Arc::clone(&self.private_investment_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

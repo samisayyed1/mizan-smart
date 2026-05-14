@@ -217,6 +217,14 @@ export const COMMANDS: CommandMap = {
   },
   ignore_reconciliation_match: { method: "POST", path: "/reconciliation/ignore" },
   manual_reconciliation_match: { method: "POST", path: "/reconciliation/manual-match" },
+  upsert_private_investment: { method: "POST", path: "/private-investments" },
+  get_private_investment: { method: "GET", path: "/private-investments" },
+  delete_private_investment: { method: "DELETE", path: "/private-investments" },
+  add_private_investment_valuation: { method: "POST", path: "/private-investments/valuations" },
+  add_capital_call: { method: "POST", path: "/private-investments/capital-calls" },
+  update_capital_call_status: { method: "PUT", path: "/private-investments/capital-calls/status" },
+  add_private_distribution: { method: "POST", path: "/private-investments/distributions" },
+  get_private_investment_summary: { method: "GET", path: "/private-investments" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -931,6 +939,26 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "get_reconciliation_run": {
       const { runId } = payload as { runId: string };
       url += `/${encodeURIComponent(runId)}`;
+      break;
+    }
+    case "upsert_private_investment":
+    case "add_private_investment_valuation":
+    case "add_capital_call":
+    case "update_capital_call_status":
+    case "add_private_distribution": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "get_private_investment":
+    case "delete_private_investment": {
+      const { assetId } = payload as { assetId: string };
+      url += `/${encodeURIComponent(assetId)}`;
+      break;
+    }
+    case "get_private_investment_summary": {
+      const { assetId } = payload as { assetId: string };
+      url += `/${encodeURIComponent(assetId)}/summary`;
       break;
     }
     case "create_asset": {

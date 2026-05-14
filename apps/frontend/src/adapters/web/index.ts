@@ -287,6 +287,7 @@ export {
 export type {
   DocumentJobStatus,
   DocumentJobType,
+  DocumentBoundingBox,
   DocumentProcessingJob,
   DocumentParserCapabilities,
   EnqueueDocumentJobRequest,
@@ -297,6 +298,23 @@ export type {
   ParsedTextBlock,
   RunDocumentJobResult,
 } from "../shared/document-jobs";
+export {
+  approveExtractedFact,
+  createExtractedFact,
+  getSourceCitation,
+  listPendingExtractedFacts,
+  rejectExtractedFact,
+} from "../shared/extracted-facts";
+export type {
+  CreateExtractedFactRequest,
+  CreateExtractedFactResult,
+  ExtractedFact,
+  ExtractedFactStatus,
+  ExtractionMethod,
+  ReviewExtractedFactRequest,
+  SourceCitation,
+  SourceCitationType,
+} from "../shared/extracted-facts";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

@@ -365,6 +365,7 @@ mod tests {
             notes: None,
             created_at: "2026-05-14T00:00:00Z".into(),
             updated_at: "2026-05-14T00:00:00Z".into(),
+            source_citation_id: None,
         };
         let result = diesel::insert_into(valuations::table)
             .values(&bad_row)

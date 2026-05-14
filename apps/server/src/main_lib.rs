@@ -51,6 +51,7 @@ use mizan_storage_sqlite::{
         extraction::{
             DocumentExtractionJobProcessor, DocumentExtractionRepository, LocalDocumentParser,
         },
+        facts::ExtractedFactRepository,
         jobs::DocumentJobRepository,
         DocumentVaultRepository,
     },
@@ -109,6 +110,8 @@ pub struct AppState {
     pub document_job_repository: Arc<DocumentJobRepository>,
     /// mizan-smart Phase 2 P12 — parsed Document Vault content.
     pub document_extraction_repository: Arc<DocumentExtractionRepository>,
+    /// mizan-smart Phase 2 P13 — citation-backed extracted facts.
+    pub extracted_fact_repository: Arc<ExtractedFactRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -311,6 +314,8 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         pool.clone(),
         writer.clone(),
     ));
+    let extracted_fact_repository =
+        Arc::new(ExtractedFactRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,
@@ -576,6 +581,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         document_vault_repository,
         document_job_repository,
         document_extraction_repository,
+        extracted_fact_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

@@ -518,6 +518,7 @@ diesel::table! {
         notes -> Nullable<Text>,
         created_at -> Text,
         updated_at -> Text,
+        source_citation_id -> Nullable<Text>,
     }
 }
 
@@ -706,6 +707,45 @@ diesel::joinable!(document_tables -> documents (document_id));
 diesel::joinable!(document_table_cells -> document_tables (table_id));
 
 diesel::table! {
+    extracted_facts (id) {
+        id -> Text,
+        document_id -> Text,
+        page_number -> Nullable<Integer>,
+        fact_type -> Text,
+        raw_value -> Text,
+        normalized_value -> Nullable<Text>,
+        currency -> Nullable<Text>,
+        date_value -> Nullable<Text>,
+        confidence_score -> Nullable<Double>,
+        bounding_box_json -> Nullable<Text>,
+        extraction_method -> Text,
+        extraction_version -> Text,
+        status -> Text,
+        created_at -> Text,
+        reviewed_at -> Nullable<Text>,
+        review_notes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    source_citations (id) {
+        id -> Text,
+        source_type -> Text,
+        source_id -> Nullable<Text>,
+        document_id -> Nullable<Text>,
+        extracted_fact_id -> Nullable<Text>,
+        page_number -> Nullable<Integer>,
+        bounding_box_json -> Nullable<Text>,
+        citation_label -> Text,
+        created_at -> Text,
+    }
+}
+
+diesel::joinable!(extracted_facts -> documents (document_id));
+diesel::joinable!(source_citations -> documents (document_id));
+diesel::joinable!(source_citations -> extracted_facts (extracted_fact_id));
+
+diesel::table! {
     documents (id) {
         id -> Text,
         file_hash -> Text,
@@ -781,6 +821,7 @@ diesel::table! {
 }
 
 diesel::joinable!(valuations -> assets (asset_id));
+diesel::joinable!(valuations -> source_citations (source_citation_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -849,6 +890,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     document_text_blocks,
     document_tables,
     document_table_cells,
+    extracted_facts,
+    source_citations,
     documents,
     document_files,
     document_links,

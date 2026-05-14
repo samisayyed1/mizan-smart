@@ -3,6 +3,7 @@ import type {
   DocumentParserCapabilities,
   DocumentProcessingJob,
   DocumentRecord,
+  ExtractedFact,
 } from "@/adapters";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const listDocumentsMock = vi.fn<() => Promise<DocumentMetadata[]>>();
 const listDocumentJobsMock = vi.fn<() => Promise<DocumentProcessingJob[]>>();
 const getDocumentParserCapabilitiesMock = vi.fn<() => Promise<DocumentParserCapabilities>>();
+const listPendingExtractedFactsMock = vi.fn<() => Promise<ExtractedFact[]>>();
 const uploadDocumentMock = vi.fn<(file: File) => Promise<DocumentRecord>>();
 const deleteDocumentMock = vi.fn<(documentId: string) => Promise<void>>();
 const retryDocumentJobMock = vi.fn<(jobId: string) => Promise<DocumentProcessingJob>>();
@@ -19,6 +21,7 @@ const retryDocumentJobMock = vi.fn<(jobId: string) => Promise<DocumentProcessing
 vi.mock("@/adapters", () => ({
   listDocumentJobs: () => listDocumentJobsMock(),
   getDocumentParserCapabilities: () => getDocumentParserCapabilitiesMock(),
+  listPendingExtractedFacts: () => listPendingExtractedFactsMock(),
   listDocuments: () => listDocumentsMock(),
   uploadDocument: (file: File) => uploadDocumentMock(file),
   deleteDocument: (documentId: string) => deleteDocumentMock(documentId),
@@ -97,6 +100,28 @@ function job(overrides: Partial<DocumentProcessingJob> = {}): DocumentProcessing
   };
 }
 
+function extractedFact(overrides: Partial<ExtractedFact> = {}): ExtractedFact {
+  return {
+    id: "fact-1",
+    documentId: "doc-1",
+    pageNumber: 1,
+    factType: "statement_balance",
+    rawValue: "$1,250.00",
+    normalizedValue: "1250.00",
+    currency: "USD",
+    dateValue: null,
+    confidenceScore: 0.91,
+    boundingBox: null,
+    extractionMethod: "parser",
+    extractionVersion: "local-parser-v1",
+    status: "pending",
+    createdAt: "2026-05-14T09:02:00Z",
+    reviewedAt: null,
+    reviewNotes: null,
+    ...overrides,
+  };
+}
+
 describe("DocumentsPage", () => {
   beforeEach(() => {
     listDocumentsMock.mockReset().mockResolvedValue([]);
@@ -104,6 +129,7 @@ describe("DocumentsPage", () => {
     getDocumentParserCapabilitiesMock
       .mockReset()
       .mockResolvedValue({ text: true, layout: false, tables: false, ocr: false });
+    listPendingExtractedFactsMock.mockReset().mockResolvedValue([]);
     uploadDocumentMock
       .mockReset()
       .mockImplementation((file) => Promise.resolve(record(metadata({ originalName: file.name }))));
@@ -118,6 +144,18 @@ describe("DocumentsPage", () => {
     expect(
       screen.getByText("Local text extraction available; layout and table extraction unavailable"),
     ).toBeInTheDocument();
+    expect(screen.getByText("0 extracted facts awaiting review")).toBeInTheDocument();
+  });
+
+  it("shows the pending extracted fact count", async () => {
+    listPendingExtractedFactsMock.mockResolvedValueOnce([
+      extractedFact({ id: "fact-1" }),
+      extractedFact({ id: "fact-2" }),
+    ]);
+
+    render(<DocumentsPage />);
+
+    expect(await screen.findByText("2 extracted facts awaiting review")).toBeInTheDocument();
   });
 
   it("lists persisted document metadata", async () => {

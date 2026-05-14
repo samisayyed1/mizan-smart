@@ -510,6 +510,11 @@ pub fn run() {
             commands::document_jobs::run_next_document_job,
             commands::document_jobs::cancel_document_job,
             commands::document_jobs::retry_document_job,
+            commands::extracted_facts::create_extracted_fact,
+            commands::extracted_facts::list_pending_extracted_facts,
+            commands::extracted_facts::get_source_citation,
+            commands::extracted_facts::approve_extracted_fact,
+            commands::extracted_facts::reject_extracted_fact,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

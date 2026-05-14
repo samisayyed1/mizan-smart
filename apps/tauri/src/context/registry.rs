@@ -10,8 +10,8 @@ use mizan_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
 use mizan_storage_sqlite::{
     alerts::SmartAlertRepository,
     documents::{
-        extraction::DocumentExtractionRepository, jobs::DocumentJobRepository,
-        DocumentVaultRepository,
+        extraction::DocumentExtractionRepository, facts::ExtractedFactRepository,
+        jobs::DocumentJobRepository, DocumentVaultRepository,
     },
     portfolio::snapshot::SnapshotRepository,
     sync::AppSyncRepository,
@@ -67,6 +67,8 @@ pub struct ServiceContext {
     pub document_job_repository: Arc<DocumentJobRepository>,
     /// mizan-smart Phase 2 P12 — parsed Document Vault content.
     pub document_extraction_repository: Arc<DocumentExtractionRepository>,
+    /// mizan-smart Phase 2 P13 — citation-backed extracted facts.
+    pub extracted_fact_repository: Arc<ExtractedFactRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -192,6 +194,10 @@ impl ServiceContext {
 
     pub fn document_extraction_repository(&self) -> Arc<DocumentExtractionRepository> {
         Arc::clone(&self.document_extraction_repository)
+    }
+
+    pub fn extracted_fact_repository(&self) -> Arc<ExtractedFactRepository> {
+        Arc::clone(&self.extracted_fact_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

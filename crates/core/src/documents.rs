@@ -269,6 +269,176 @@ pub struct ParsedDocument {
     pub tables: Vec<ParsedTable>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExtractionMethod {
+    Parser,
+    Ocr,
+    Vlm,
+    Manual,
+}
+
+impl ExtractionMethod {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Parser => "parser",
+            Self::Ocr => "ocr",
+            Self::Vlm => "vlm",
+            Self::Manual => "manual",
+        }
+    }
+}
+
+impl TryFrom<&str> for ExtractionMethod {
+    type Error = String;
+
+    fn try_from(value: &str) -> std::result::Result<Self, String> {
+        match value {
+            "parser" => Ok(Self::Parser),
+            "ocr" => Ok(Self::Ocr),
+            "vlm" => Ok(Self::Vlm),
+            "manual" => Ok(Self::Manual),
+            other => Err(format!("Unknown extraction method: {other}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExtractedFactStatus {
+    Pending,
+    Approved,
+    Rejected,
+    Superseded,
+}
+
+impl ExtractedFactStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Approved => "approved",
+            Self::Rejected => "rejected",
+            Self::Superseded => "superseded",
+        }
+    }
+}
+
+impl TryFrom<&str> for ExtractedFactStatus {
+    type Error = String;
+
+    fn try_from(value: &str) -> std::result::Result<Self, String> {
+        match value {
+            "pending" => Ok(Self::Pending),
+            "approved" => Ok(Self::Approved),
+            "rejected" => Ok(Self::Rejected),
+            "superseded" => Ok(Self::Superseded),
+            other => Err(format!("Unknown extracted fact status: {other}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceCitationType {
+    Document,
+    Manual,
+    Import,
+    WebEvidence,
+    Calculated,
+}
+
+impl SourceCitationType {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Document => "document",
+            Self::Manual => "manual",
+            Self::Import => "import",
+            Self::WebEvidence => "web_evidence",
+            Self::Calculated => "calculated",
+        }
+    }
+}
+
+impl TryFrom<&str> for SourceCitationType {
+    type Error = String;
+
+    fn try_from(value: &str) -> std::result::Result<Self, String> {
+        match value {
+            "document" => Ok(Self::Document),
+            "manual" => Ok(Self::Manual),
+            "import" => Ok(Self::Import),
+            "web_evidence" => Ok(Self::WebEvidence),
+            "calculated" => Ok(Self::Calculated),
+            other => Err(format!("Unknown source citation type: {other}")),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateExtractedFactRequest {
+    pub document_id: String,
+    pub page_number: Option<i32>,
+    pub fact_type: String,
+    pub raw_value: String,
+    pub normalized_value: Option<String>,
+    pub currency: Option<String>,
+    pub date_value: Option<String>,
+    pub confidence_score: Option<f64>,
+    pub bounding_box: Option<DocumentBoundingBox>,
+    pub extraction_method: ExtractionMethod,
+    pub extraction_version: String,
+    pub citation_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExtractedFact {
+    pub id: String,
+    pub document_id: String,
+    pub page_number: Option<i32>,
+    pub fact_type: String,
+    pub raw_value: String,
+    pub normalized_value: Option<String>,
+    pub currency: Option<String>,
+    pub date_value: Option<String>,
+    pub confidence_score: Option<f64>,
+    pub bounding_box: Option<DocumentBoundingBox>,
+    pub extraction_method: ExtractionMethod,
+    pub extraction_version: String,
+    pub status: ExtractedFactStatus,
+    pub created_at: DateTime<Utc>,
+    pub reviewed_at: Option<DateTime<Utc>>,
+    pub review_notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceCitation {
+    pub id: String,
+    pub source_type: SourceCitationType,
+    pub source_id: Option<String>,
+    pub document_id: Option<String>,
+    pub extracted_fact_id: Option<String>,
+    pub page_number: Option<i32>,
+    pub bounding_box: Option<DocumentBoundingBox>,
+    pub citation_label: String,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateExtractedFactResult {
+    pub fact: ExtractedFact,
+    pub citation: SourceCitation,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReviewExtractedFactRequest {
+    pub review_notes: Option<String>,
+}
+
 #[async_trait::async_trait]
 pub trait DocumentParser: Send + Sync {
     fn capabilities(&self) -> DocumentParserCapabilities;

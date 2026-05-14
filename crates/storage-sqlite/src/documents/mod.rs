@@ -1,6 +1,7 @@
 //! SQLite-backed encrypted Document Vault storage.
 
 pub mod extraction;
+pub mod facts;
 pub mod jobs;
 
 use std::fs;

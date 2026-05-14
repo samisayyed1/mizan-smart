@@ -198,6 +198,11 @@ export const COMMANDS: CommandMap = {
   run_next_document_job: { method: "POST", path: "/document-jobs/run-next" },
   cancel_document_job: { method: "POST", path: "/document-jobs" },
   retry_document_job: { method: "POST", path: "/document-jobs" },
+  create_extracted_fact: { method: "POST", path: "/extracted-facts" },
+  list_pending_extracted_facts: { method: "GET", path: "/extracted-facts/pending" },
+  get_source_citation: { method: "GET", path: "/source-citations" },
+  approve_extracted_fact: { method: "POST", path: "/extracted-facts" },
+  reject_extracted_fact: { method: "POST", path: "/extracted-facts" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -842,6 +847,31 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "retry_document_job": {
       const { jobId } = payload as { jobId: string };
       url += `/${encodeURIComponent(jobId)}/retry`;
+      break;
+    }
+    case "create_extracted_fact": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "list_pending_extracted_facts": {
+      break;
+    }
+    case "get_source_citation": {
+      const { citationId } = payload as { citationId: string };
+      url += `/${encodeURIComponent(citationId)}`;
+      break;
+    }
+    case "approve_extracted_fact": {
+      const { factId, request } = payload as { factId: string; request: Record<string, unknown> };
+      url += `/${encodeURIComponent(factId)}/approve`;
+      body = JSON.stringify(request);
+      break;
+    }
+    case "reject_extracted_fact": {
+      const { factId, request } = payload as { factId: string; request: Record<string, unknown> };
+      url += `/${encodeURIComponent(factId)}/reject`;
+      body = JSON.stringify(request);
       break;
     }
     case "create_asset": {

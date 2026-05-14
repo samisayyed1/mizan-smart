@@ -15,6 +15,7 @@ pub mod device_sync;
 pub mod document_jobs;
 pub mod documents;
 pub mod error;
+pub mod extracted_facts;
 pub mod fire;
 pub mod goal;
 pub mod health;

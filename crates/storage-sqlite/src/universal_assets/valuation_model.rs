@@ -26,6 +26,7 @@ pub struct ValuationDB {
     pub notes: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    pub source_citation_id: Option<String>,
 }
 
 impl ValuationDB {
@@ -45,6 +46,7 @@ impl ValuationDB {
             notes: new.notes.clone(),
             created_at: now.to_rfc3339(),
             updated_at: now.to_rfc3339(),
+            source_citation_id: None,
         }
     }
 }

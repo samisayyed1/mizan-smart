@@ -103,6 +103,7 @@ export * from "../shared/inbox";
 // Document Vault (mizan-smart Phase 2 P10)
 export * from "../shared/documents";
 export * from "../shared/document-jobs";
+export * from "../shared/extracted-facts";
 
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";

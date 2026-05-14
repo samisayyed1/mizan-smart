@@ -1,12 +1,18 @@
 import {
   deleteDocument,
   getDocumentParserCapabilities,
+  listPendingExtractedFacts,
   listDocumentJobs,
   listDocuments,
   retryDocumentJob,
   uploadDocument,
 } from "@/adapters";
-import type { DocumentMetadata, DocumentParserCapabilities, DocumentProcessingJob } from "@/adapters";
+import type {
+  DocumentMetadata,
+  DocumentParserCapabilities,
+  DocumentProcessingJob,
+  ExtractedFact,
+} from "@/adapters";
 import { Button, Icons, Page, PageContent, PageHeader } from "@mizan/ui";
 import { useEffect, useRef, useState } from "react";
 
@@ -36,6 +42,7 @@ export default function DocumentsPage() {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [documents, setDocuments] = useState<DocumentMetadata[]>([]);
   const [jobs, setJobs] = useState<DocumentProcessingJob[]>([]);
+  const [pendingFacts, setPendingFacts] = useState<ExtractedFact[]>([]);
   const [parserCapabilities, setParserCapabilities] = useState<DocumentParserCapabilities | null>(
     null,
   );
@@ -48,14 +55,17 @@ export default function DocumentsPage() {
   async function refreshDocuments(): Promise<void> {
     setLoading(true);
     try {
-      const [loadedDocuments, loadedJobs, loadedParserCapabilities] = await Promise.all([
-        listDocuments(),
-        listDocumentJobs(),
-        getDocumentParserCapabilities(),
-      ]);
+      const [loadedDocuments, loadedJobs, loadedParserCapabilities, loadedPendingFacts] =
+        await Promise.all([
+          listDocuments(),
+          listDocumentJobs(),
+          getDocumentParserCapabilities(),
+          listPendingExtractedFacts(),
+        ]);
       setDocuments(loadedDocuments);
       setJobs(loadedJobs);
       setParserCapabilities(loadedParserCapabilities);
+      setPendingFacts(loadedPendingFacts);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not load documents.");
@@ -167,6 +177,12 @@ export default function DocumentsPage() {
                 : "; layout and table extraction unavailable"}
             </p>
           ) : null}
+
+          <p className="text-muted-foreground text-sm">
+            {pendingFacts.length === 1
+              ? "1 extracted fact awaiting review"
+              : `${pendingFacts.length} extracted facts awaiting review`}
+          </p>
 
           {error ? (
             <div

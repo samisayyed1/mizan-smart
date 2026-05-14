@@ -35,6 +35,7 @@ pub(crate) mod device_sync_engine;
 mod document_jobs;
 mod documents;
 mod exchange_rates;
+mod extracted_facts;
 mod goals;
 mod health;
 mod holdings;
@@ -116,6 +117,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(inbox::router())
         .merge(documents::router())
         .merge(document_jobs::router())
+        .merge(extracted_facts::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

@@ -256,6 +256,10 @@ export type {
   RowValidationError,
 } from "../shared/manual-valuations";
 
+// Wealth Inbox (mizan-smart Phase 1 P9)
+export { listWealthInboxItems } from "../shared/inbox";
+export type { InboxItem, InboxItemType, InboxSeverity, InboxStatus } from "../shared/inbox";
+
 // Connect Commands (Broker + Device Sync + Auth)
 export {
   approvePairing,

@@ -44,6 +44,7 @@ use mizan_storage_sqlite::{
     accounts::AccountRepository,
     activities::ActivityRepository,
     ai_chat::AiChatRepository,
+    alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
     db::{self, write_actor},
     fx::FxRepository,
@@ -93,6 +94,8 @@ pub struct AppState {
         Arc<mizan_storage_sqlite::universal_assets::UniversalAssetCreateRepository>,
     /// mizan-smart Phase 1 P6 — manual valuation bulk-update grid.
     pub manual_valuation_repository: Arc<ManualValuationRepository>,
+    /// mizan-smart Phase 1 P9 — Wealth Inbox alert source.
+    pub smart_alert_repository: Arc<SmartAlertRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -282,6 +285,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
     let valuation_repository = Arc::new(ValuationRepository::new(pool.clone(), writer.clone()));
     let manual_valuation_repository =
         Arc::new(ManualValuationRepository::new(pool.clone(), writer.clone()));
+    let smart_alert_repository = Arc::new(SmartAlertRepository::new(pool.clone(), writer.clone()));
     let valuation_service = Arc::new(ValuationService::new(
         base_currency.clone(),
         valuation_repository.clone(),
@@ -532,6 +536,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         alternative_asset_service,
         universal_asset_create_repository,
         manual_valuation_repository,
+        smart_alert_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

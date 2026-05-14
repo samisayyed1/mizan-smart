@@ -183,6 +183,8 @@ export const COMMANDS: CommandMap = {
   execute_health_fix: { method: "POST", path: "/health/fix" },
   get_health_config: { method: "GET", path: "/health/config" },
   update_health_config: { method: "PUT", path: "/health/config" },
+  // Wealth Inbox
+  list_wealth_inbox_items: { method: "GET", path: "/inbox/items" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },

@@ -1,29 +1,30 @@
-import type { HealthIssue, HealthStatus } from "@/lib/types";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import type { InboxItem } from "@/adapters";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const listWealthInboxItemsMock = vi.fn<() => Promise<InboxItem[]>>();
+
+vi.mock("@/adapters", () => ({
+  listWealthInboxItems: () => listWealthInboxItemsMock(),
+}));
 
 vi.mock("@mizan/ui", () => ({
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Button: ({
     children,
     asChild,
-    ...props
   }: {
     children: React.ReactNode;
     asChild?: boolean;
     [key: string]: unknown;
   }) => {
     if (asChild && React.isValidElement(children)) {
-      return React.cloneElement(children, props);
+      return children;
     }
-    return (
-      <button type="button" {...props}>
-        {children}
-      </button>
-    );
+    return <button type="button">{children}</button>;
   },
   Icons: {
     CheckCircle: () => <span>CheckCircle</span>,
@@ -39,97 +40,130 @@ vi.mock("@mizan/ui", () => ({
   Skeleton: () => <div data-testid="skel" />,
 }));
 
-const mockUseHealthStatus = vi.fn();
-vi.mock("@/hooks/use-health", () => ({
-  useHealthStatus: () => mockUseHealthStatus(),
-}));
-
 import InboxPage from "./inbox-page";
 
 function renderInbox() {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
   return render(
-    <QueryClientProvider client={client}>
-      <MemoryRouter>
-        <InboxPage />
-      </MemoryRouter>
-    </QueryClientProvider>,
+    <MemoryRouter>
+      <InboxPage />
+    </MemoryRouter>,
   );
 }
 
-function makeIssue(overrides: Partial<HealthIssue> = {}): HealthIssue {
+function item(overrides: Partial<InboxItem>): InboxItem {
   return {
-    id: "issue:1",
-    severity: "WARNING",
-    category: "PRICE_STALENESS",
-    title: "Stale prices",
-    message: "Some quotes are older than 7 days.",
-    affectedCount: 3,
-    dataHash: "h1",
-    timestamp: "2026-05-01T00:00:00Z",
+    id: "alert:1",
+    itemType: "security",
+    title: "Missing FX rate",
+    description: "A deterministic alert needs review.",
+    severity: "warning",
+    dueDate: null,
+    sourceEntityType: "alert",
+    sourceEntityId: "alert-1",
+    actionRoute: "/health",
+    status: "active",
+    createdAt: "2026-05-01T00:00:00Z",
     ...overrides,
   };
 }
 
 beforeEach(() => {
-  mockUseHealthStatus.mockReset();
-});
-
-afterEach(() => {
-  vi.clearAllMocks();
+  listWealthInboxItemsMock.mockReset();
 });
 
 describe("InboxPage", () => {
-  it("renders the empty state when there are no health issues", () => {
-    const status: HealthStatus = {
-      overallSeverity: "INFO",
-      issueCounts: {},
-      issues: [],
-      checkedAt: "2026-05-01T00:00:00Z",
-      isStale: false,
-    };
-    mockUseHealthStatus.mockReturnValue({
-      data: status,
-      isLoading: false,
-    });
+  it("renders the empty state when no real inbox items exist", async () => {
+    listWealthInboxItemsMock.mockResolvedValue([]);
+
     renderInbox();
-    expect(screen.getByTestId("inbox-empty")).toBeInTheDocument();
-    expect(screen.getByText(/Nothing needs attention/i)).toBeInTheDocument();
+
+    expect(await screen.findByTestId("inbox-empty")).toBeInTheDocument();
+    expect(screen.getByText("Nothing needs attention")).toBeInTheDocument();
   });
 
-  it("renders one row per active health issue, sorted by severity", () => {
-    const status: HealthStatus = {
-      overallSeverity: "CRITICAL",
-      issueCounts: { CRITICAL: 1, WARNING: 1, ERROR: 1 },
-      issues: [
-        makeIssue({ id: "w", severity: "WARNING", title: "Stale prices" }),
-        makeIssue({ id: "c", severity: "CRITICAL", title: "Missing FX" }),
-        makeIssue({ id: "e", severity: "ERROR", title: "Bad classification" }),
-      ],
-      checkedAt: "2026-05-01T00:00:00Z",
-      isStale: false,
-    };
-    mockUseHealthStatus.mockReturnValue({
-      data: status,
-      isLoading: false,
-    });
+  it("renders alerts and stale valuation tasks from the normalized inbox model", async () => {
+    listWealthInboxItemsMock.mockResolvedValue([
+      item({ id: "alert:1", itemType: "security", title: "Missing FX rate" }),
+      item({
+        id: "valuation:asset-1",
+        itemType: "valuation",
+        title: "Update value for Primary residence",
+        actionRoute: "/holdings/update-values",
+      }),
+    ]);
+
     renderInbox();
-    const rows = screen.getAllByTestId("inbox-item");
-    expect(rows).toHaveLength(3);
-    // CRITICAL first, then ERROR, then WARNING.
-    expect(rows[0]).toHaveAttribute("data-severity", "CRITICAL");
-    expect(rows[1]).toHaveAttribute("data-severity", "ERROR");
-    expect(rows[2]).toHaveAttribute("data-severity", "WARNING");
+
+    expect(await screen.findByText("Missing FX rate")).toBeInTheDocument();
+    expect(screen.getByText("Update value for Primary residence")).toBeInTheDocument();
   });
 
-  it("renders a loading skeleton while the health query is pending", () => {
-    mockUseHealthStatus.mockReturnValue({
-      data: undefined,
-      isLoading: true,
-    });
+  it("sorts critical first by default and can switch to newest", async () => {
+    const user = userEvent.setup();
+    listWealthInboxItemsMock.mockResolvedValue([
+      item({
+        id: "warning",
+        title: "Older warning",
+        severity: "warning",
+        createdAt: "2026-05-01T00:00:00Z",
+      }),
+      item({
+        id: "critical",
+        title: "Older critical",
+        severity: "critical",
+        createdAt: "2026-04-01T00:00:00Z",
+      }),
+      item({
+        id: "newest",
+        title: "Newest info",
+        severity: "info",
+        createdAt: "2026-05-14T00:00:00Z",
+      }),
+    ]);
+
     renderInbox();
-    expect(screen.getByTestId("inbox-loading")).toBeInTheDocument();
+
+    let rows = await screen.findAllByTestId("inbox-item");
+    expect(rows[0]).toHaveTextContent("Older critical");
+
+    await user.selectOptions(screen.getByLabelText(/Sort/i), "newest");
+    rows = await screen.findAllByTestId("inbox-item");
+    expect(rows[0]).toHaveTextContent("Newest info");
+  });
+
+  it("filters by item type", async () => {
+    const user = userEvent.setup();
+    listWealthInboxItemsMock.mockResolvedValue([
+      item({ id: "security", itemType: "security", title: "Security alert" }),
+      item({ id: "valuation", itemType: "valuation", title: "Valuation task" }),
+    ]);
+
+    renderInbox();
+
+    expect(await screen.findByText("Security alert")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText(/Filter/i), "valuation");
+
+    expect(screen.queryByText("Security alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Valuation task")).toBeInTheDocument();
+  });
+
+  it("uses backend-provided action routes", async () => {
+    listWealthInboxItemsMock.mockResolvedValue([
+      item({
+        id: "valuation",
+        itemType: "valuation",
+        title: "Valuation task",
+        actionRoute: "/holdings/update-values",
+      }),
+    ]);
+
+    renderInbox();
+
+    await waitFor(() =>
+      expect(screen.getByTestId("inbox-action")).toHaveAttribute(
+        "href",
+        "/holdings/update-values",
+      ),
+    );
   });
 });

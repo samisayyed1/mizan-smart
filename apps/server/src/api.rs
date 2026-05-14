@@ -36,6 +36,7 @@ mod exchange_rates;
 mod goals;
 mod health;
 mod holdings;
+mod inbox;
 mod limits;
 mod manual_valuations;
 mod market_data;
@@ -110,6 +111,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(ai_providers::router())
         .merge(ai_chat::router())
         .merge(health::router())
+        .merge(inbox::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

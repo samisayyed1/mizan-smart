@@ -6,7 +6,7 @@
 - [x] p6  phase-1/p6   Manual valuations / bulk update (b9501cc)
 - [x] p7  phase-1/p7   Data Quality Score (e6e5de9)
 - [x] p8  phase-1/p8   Smart alerts (71786b3)
-- [ ] p9  phase-1/p9   Wealth Inbox
+- [x] p9  phase-1/p9   Wealth Inbox (d7cc298)
 - [ ] p10 phase-2/p10  Document Vault storage
 - [ ] p11 phase-2/p11  Document job system
 - [ ] p12 phase-2/p12  PDF/text/layout extraction adapter

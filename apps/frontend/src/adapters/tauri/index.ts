@@ -97,6 +97,9 @@ export * from "../shared/universal-assets";
 // Manual valuation grid (mizan-smart Phase 1 P6)
 export * from "../shared/manual-valuations";
 
+// Wealth Inbox (mizan-smart Phase 1 P9)
+export * from "../shared/inbox";
+
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";
 

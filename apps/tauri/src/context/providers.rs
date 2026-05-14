@@ -33,6 +33,7 @@ use mizan_storage_sqlite::{
     accounts::AccountRepository,
     activities::ActivityRepository,
     ai_chat::AiChatRepository,
+    alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
     db::{self, write_actor},
     fx::FxRepository,
@@ -92,6 +93,7 @@ pub async fn initialize_context(
     let valuation_repository = Arc::new(ValuationRepository::new(pool.clone(), writer.clone()));
     let manual_valuation_repository =
         Arc::new(ManualValuationRepository::new(pool.clone(), writer.clone()));
+    let smart_alert_repository = Arc::new(SmartAlertRepository::new(pool.clone(), writer.clone()));
     let platform_repository = Arc::new(PlatformRepository::new(pool.clone(), writer.clone()));
     let broker_sync_state_repository =
         Arc::new(BrokerSyncStateRepository::new(pool.clone(), writer.clone()));
@@ -389,6 +391,7 @@ pub async fn initialize_context(
             alternative_asset_service,
             universal_asset_create_repository,
             manual_valuation_repository,
+            smart_alert_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

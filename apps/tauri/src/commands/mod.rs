@@ -16,6 +16,7 @@ pub mod error;
 pub mod fire;
 pub mod goal;
 pub mod health;
+pub mod inbox;
 pub mod limits;
 pub mod manual_valuations;
 pub mod market_data;

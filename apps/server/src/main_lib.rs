@@ -56,6 +56,7 @@ use mizan_storage_sqlite::{
         jobs::DocumentJobRepository,
         DocumentVaultRepository,
     },
+    fixed_income::FixedIncomeRepository,
     fx::FxRepository,
     goals::GoalRepository,
     health::HealthDismissalRepository,
@@ -121,6 +122,8 @@ pub struct AppState {
     pub reconciliation_repository: Arc<ReconciliationRepository>,
     /// mizan-smart Phase 3 P17 — private investments foundation.
     pub private_investment_repository: Arc<PrivateInvestmentRepository>,
+    /// mizan-smart Phase 3 P19 — fixed income / Sukuk / FD engine.
+    pub fixed_income_repository: Arc<FixedIncomeRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -333,6 +336,8 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         pool.clone(),
         writer.clone(),
     ));
+    let fixed_income_repository =
+        Arc::new(FixedIncomeRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,
@@ -602,6 +607,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         data_lineage_repository,
         reconciliation_repository,
         private_investment_repository,
+        fixed_income_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

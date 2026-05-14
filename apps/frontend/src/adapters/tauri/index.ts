@@ -107,6 +107,7 @@ export * from "../shared/extracted-facts";
 export * from "../shared/data-lineage";
 export * from "../shared/reconciliation";
 export * from "../shared/private-investments";
+export * from "../shared/fixed-income";
 
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";

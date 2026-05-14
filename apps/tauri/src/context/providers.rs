@@ -37,6 +37,7 @@ use mizan_storage_sqlite::{
     assets::{AlternativeAssetRepository, AssetRepository},
     data_lineage::DataLineageRepository,
     db::{self, write_actor},
+    fixed_income::FixedIncomeRepository,
     fx::FxRepository,
     goals::GoalRepository,
     health::HealthDismissalRepository,
@@ -153,6 +154,8 @@ pub async fn initialize_context(
         pool.clone(),
         writer.clone(),
     ));
+    let fixed_income_repository =
+        Arc::new(FixedIncomeRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -451,6 +454,7 @@ pub async fn initialize_context(
             data_lineage_repository,
             reconciliation_repository,
             private_investment_repository,
+            fixed_income_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

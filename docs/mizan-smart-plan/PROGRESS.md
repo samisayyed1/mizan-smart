@@ -16,7 +16,7 @@
 - [x] p16 phase-2/p16  Reconciliation Center (fe2b5f0)
 - [x] p17 phase-3/p17  Private investments foundation (893137e)
 - [x] p18 phase-3/p18  Private investment UI / J-curve (baa3248)
-- [ ] p19 phase-3/p19  Fixed income / Sukuk / FD engine
+- [x] p19 phase-3/p19  Fixed income / Sukuk / FD engine (7000f00)
 - [ ] p20 phase-3/p20  Liquidity Ladder
 - [ ] p21 phase-3/p21  Corporate actions
 - [ ] p22 phase-3/p22  Accuracy invariants

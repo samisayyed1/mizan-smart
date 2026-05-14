@@ -648,6 +648,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    fixed_income_cashflows (id) {
+        id -> Text,
+        asset_id -> Text,
+        expected_date -> Text,
+        cashflow_type -> Text,
+        expected_amount -> Text,
+        actual_amount -> Nullable<Text>,
+        currency -> Text,
+        status -> Text,
+        source_citation_id -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     private_investments (asset_id) {
         asset_id -> Text,
         manager -> Text,
@@ -951,6 +967,8 @@ diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
 diesel::joinable!(asset_private_investment_details -> assets (asset_id));
+diesel::joinable!(fixed_income_cashflows -> assets (asset_id));
+diesel::joinable!(fixed_income_cashflows -> source_citations (source_citation_id));
 diesel::joinable!(private_investments -> assets (asset_id));
 diesel::joinable!(private_investment_valuations -> assets (asset_id));
 diesel::joinable!(private_investment_valuations -> source_citations (source_citation_id));
@@ -1044,6 +1062,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     asset_fixed_income_details,
     asset_real_estate_details,
     asset_private_investment_details,
+    fixed_income_cashflows,
     asset_insurance_details,
     asset_commodity_details,
     asset_business_details,

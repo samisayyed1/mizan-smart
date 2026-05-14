@@ -16,6 +16,7 @@ pub mod data_quality;
 pub mod documents;
 pub mod errors;
 pub mod events;
+pub mod fixed_income;
 pub mod fx;
 pub mod goals;
 pub mod health;

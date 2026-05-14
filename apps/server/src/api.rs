@@ -37,6 +37,7 @@ mod document_jobs;
 mod documents;
 mod exchange_rates;
 mod extracted_facts;
+mod fixed_income;
 mod goals;
 mod health;
 mod holdings;
@@ -124,6 +125,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(data_lineage::router())
         .merge(reconciliation::router())
         .merge(private_investments::router())
+        .merge(fixed_income::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

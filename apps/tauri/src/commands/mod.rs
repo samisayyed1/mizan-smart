@@ -18,6 +18,7 @@ pub mod documents;
 pub mod error;
 pub mod extracted_facts;
 pub mod fire;
+pub mod fixed_income;
 pub mod goal;
 pub mod health;
 pub mod inbox;

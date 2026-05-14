@@ -38,6 +38,7 @@ pub mod assets;
 pub mod custom_provider;
 pub mod data_lineage;
 pub mod documents;
+pub mod fixed_income;
 pub mod fx;
 pub mod goals;
 pub mod health;

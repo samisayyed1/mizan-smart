@@ -344,6 +344,7 @@ export {
   updateCapitalCallStatus,
   upsertPrivateInvestment,
 } from "../shared/private-investments";
+export { getFixedIncomeProjection, upsertFixedIncomeDetails } from "../shared/fixed-income";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -389,6 +390,17 @@ export type {
   UpdateCapitalCallStatusRequest,
   UpsertPrivateInvestmentRequest,
 } from "../shared/private-investments";
+export type {
+  FixedIncomeCashflow,
+  FixedIncomeCashflowStatus,
+  FixedIncomeCashflowType,
+  FixedIncomeDayCountConvention,
+  FixedIncomeDetails,
+  FixedIncomeInstrumentType,
+  FixedIncomePaymentFrequency,
+  FixedIncomeProjection,
+  UpsertFixedIncomeDetailsRequest,
+} from "../shared/fixed-income";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

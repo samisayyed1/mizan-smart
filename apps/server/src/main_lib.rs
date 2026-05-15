@@ -46,6 +46,7 @@ use mizan_storage_sqlite::{
     ai_chat::AiChatRepository,
     alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
+    corporate_actions::CorporateActionsRepository,
     data_lineage::DataLineageRepository,
     db::{self, write_actor},
     documents::{
@@ -127,6 +128,8 @@ pub struct AppState {
     pub fixed_income_repository: Arc<FixedIncomeRepository>,
     /// mizan-smart Phase 3 P20 — Liquidity Ladder read model.
     pub liquidity_ladder_repository: Arc<LiquidityLadderRepository>,
+    /// mizan-smart Phase 3 P21 — reviewed corporate actions engine.
+    pub corporate_actions_repository: Arc<CorporateActionsRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -342,6 +345,10 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
     let fixed_income_repository =
         Arc::new(FixedIncomeRepository::new(pool.clone(), writer.clone()));
     let liquidity_ladder_repository = Arc::new(LiquidityLadderRepository::new(pool.clone()));
+    let corporate_actions_repository = Arc::new(CorporateActionsRepository::new(
+        pool.clone(),
+        writer.clone(),
+    ));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,
@@ -613,6 +620,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         private_investment_repository,
         fixed_income_repository,
         liquidity_ladder_repository,
+        corporate_actions_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

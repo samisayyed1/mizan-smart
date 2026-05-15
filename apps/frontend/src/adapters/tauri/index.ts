@@ -109,6 +109,7 @@ export * from "../shared/reconciliation";
 export * from "../shared/private-investments";
 export * from "../shared/fixed-income";
 export * from "../shared/liquidity-ladder";
+export * from "../shared/corporate-actions";
 
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";

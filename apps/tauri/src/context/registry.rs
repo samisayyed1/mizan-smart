@@ -9,6 +9,7 @@ use mizan_core::{
 use mizan_device_sync::{engine::DeviceSyncRuntimeState, DeviceEnrollService};
 use mizan_storage_sqlite::{
     alerts::SmartAlertRepository,
+    corporate_actions::CorporateActionsRepository,
     data_lineage::DataLineageRepository,
     documents::{
         extraction::DocumentExtractionRepository, facts::ExtractedFactRepository,
@@ -84,6 +85,8 @@ pub struct ServiceContext {
     pub fixed_income_repository: Arc<FixedIncomeRepository>,
     /// mizan-smart Phase 3 P20 — Liquidity Ladder read model.
     pub liquidity_ladder_repository: Arc<LiquidityLadderRepository>,
+    /// mizan-smart Phase 3 P21 — reviewed corporate actions engine.
+    pub corporate_actions_repository: Arc<CorporateActionsRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -233,6 +236,10 @@ impl ServiceContext {
 
     pub fn liquidity_ladder_repository(&self) -> Arc<LiquidityLadderRepository> {
         Arc::clone(&self.liquidity_ladder_repository)
+    }
+
+    pub fn corporate_actions_repository(&self) -> Arc<CorporateActionsRepository> {
+        Arc::clone(&self.corporate_actions_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

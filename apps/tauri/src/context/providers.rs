@@ -35,6 +35,7 @@ use mizan_storage_sqlite::{
     ai_chat::AiChatRepository,
     alerts::SmartAlertRepository,
     assets::{AlternativeAssetRepository, AssetRepository},
+    corporate_actions::CorporateActionsRepository,
     data_lineage::DataLineageRepository,
     db::{self, write_actor},
     fixed_income::FixedIncomeRepository,
@@ -158,6 +159,10 @@ pub async fn initialize_context(
     let fixed_income_repository =
         Arc::new(FixedIncomeRepository::new(pool.clone(), writer.clone()));
     let liquidity_ladder_repository = Arc::new(LiquidityLadderRepository::new(pool.clone()));
+    let corporate_actions_repository = Arc::new(CorporateActionsRepository::new(
+        pool.clone(),
+        writer.clone(),
+    ));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -458,6 +463,7 @@ pub async fn initialize_context(
             private_investment_repository,
             fixed_income_repository,
             liquidity_ladder_repository,
+            corporate_actions_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

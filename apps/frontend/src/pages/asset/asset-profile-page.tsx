@@ -35,6 +35,7 @@ import { toast } from "sonner";
 import { AlternativeAssetContent, useAlternativeAssetActions } from "./alternative-asset-content";
 import { ValueHistoryDataGrid } from "./alternative-assets";
 import AssetDetailCard from "./asset-detail-card";
+import { CorporateActionsPanel } from "./corporate-actions-panel";
 import { AssetEditSheet } from "./asset-edit-sheet";
 import AssetHistoryCard from "./asset-history-card";
 import {
@@ -618,6 +619,8 @@ export const AssetProfilePage = () => {
             {overviewSubTab === "snapshots" && (
               <AssetSnapshotHistory assetId={assetId} baseCurrency={baseCurrency} />
             )}
+
+            <CorporateActionsPanel assetId={assetId} />
           </div>
         ),
       });
@@ -1242,6 +1245,8 @@ export const AssetProfilePage = () => {
                 {overviewSubTab === "snapshots" && (
                   <AssetSnapshotHistory assetId={assetId} baseCurrency={baseCurrency} />
                 )}
+
+                <CorporateActionsPanel assetId={assetId} />
               </TabsContent>
             )}
 

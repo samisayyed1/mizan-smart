@@ -346,6 +346,7 @@ export {
 } from "../shared/private-investments";
 export { getFixedIncomeProjection, upsertFixedIncomeDetails } from "../shared/fixed-income";
 export { getLiquidityLadder } from "../shared/liquidity-ladder";
+export { applyCorporateAction, listCorporateActions, previewCorporateAction } from "../shared/corporate-actions";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -412,6 +413,14 @@ export type {
   LiquidityLadderView,
   LiquidityLadderWindow,
 } from "../shared/liquidity-ladder";
+export type {
+  AppliedCorporateAction,
+  ApplyCorporateActionRequest,
+  CorporateAction,
+  CorporateActionPositionPreview,
+  CorporateActionPreview,
+  CorporateActionType,
+} from "../shared/corporate-actions";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

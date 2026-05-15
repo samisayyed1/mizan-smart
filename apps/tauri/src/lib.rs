@@ -538,6 +538,9 @@ pub fn run() {
             commands::fixed_income::upsert_fixed_income_details,
             commands::fixed_income::get_fixed_income_projection,
             commands::liquidity_ladder::get_liquidity_ladder,
+            commands::corporate_actions::preview_corporate_action,
+            commands::corporate_actions::apply_corporate_action,
+            commands::corporate_actions::list_corporate_actions,
             // Market data commands
             commands::market_data::search_symbol,
             commands::market_data::resolve_symbol_quote,

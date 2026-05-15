@@ -35,6 +35,7 @@ pub mod activities;
 pub mod ai_chat;
 pub mod alerts;
 pub mod assets;
+pub mod corporate_actions;
 pub mod custom_provider;
 pub mod data_lineage;
 pub mod documents;

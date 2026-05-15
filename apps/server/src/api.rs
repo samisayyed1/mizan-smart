@@ -27,6 +27,7 @@ mod alternative_assets;
 mod assets;
 #[cfg(any(feature = "connect-sync", feature = "device-sync"))]
 pub mod connect;
+mod corporate_actions;
 mod custom_providers;
 mod data_lineage;
 #[cfg(feature = "device-sync")]
@@ -128,6 +129,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(private_investments::router())
         .merge(fixed_income::router())
         .merge(liquidity_ladder::router())
+        .merge(corporate_actions::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

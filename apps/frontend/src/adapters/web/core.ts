@@ -229,6 +229,9 @@ export const COMMANDS: CommandMap = {
   upsert_fixed_income_details: { method: "POST", path: "/fixed-income" },
   get_fixed_income_projection: { method: "GET", path: "/fixed-income" },
   get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
+  preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
+  apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
+  list_corporate_actions: { method: "GET", path: "/corporate-actions" },
   // Addons
   list_installed_addons: { method: "GET", path: "/addons/installed" },
   install_addon_zip: { method: "POST", path: "/addons/install-zip" },
@@ -973,6 +976,17 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "upsert_fixed_income_details": {
       const { request } = payload as { request: Record<string, unknown> };
       body = JSON.stringify(request);
+      break;
+    }
+    case "preview_corporate_action":
+    case "apply_corporate_action": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "list_corporate_actions": {
+      const { assetId } = payload as { assetId: string };
+      url += `/${encodeURIComponent(assetId)}`;
       break;
     }
     case "get_fixed_income_projection": {

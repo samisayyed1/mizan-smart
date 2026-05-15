@@ -7,6 +7,7 @@ pub mod alternative_assets;
 pub mod asset;
 #[cfg(feature = "connect-sync")]
 pub mod brokers_sync;
+pub mod corporate_actions;
 pub mod custom_provider;
 pub mod data_lineage;
 #[cfg(feature = "device-sync")]

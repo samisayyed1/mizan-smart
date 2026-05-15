@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { generateTaxPack, getTaxPack } from "./tax-packs";
+import { generateTaxPack, generateTaxPackExport, getTaxPack } from "./tax-packs";
 import { invoke } from "./platform";
 
 vi.mock("./platform", () => ({
@@ -25,5 +25,15 @@ describe("tax pack adapter", () => {
     await getTaxPack("pack-1");
 
     expect(invokeMock).toHaveBeenCalledWith("get_tax_pack", { taxPackId: "pack-1" });
+  });
+
+  it("requests tax pack export bundles by id", async () => {
+    invokeMock.mockResolvedValueOnce({ fileName: "tax-pack.zip", bytes: [] });
+
+    await generateTaxPackExport("pack-1");
+
+    expect(invokeMock).toHaveBeenCalledWith("generate_tax_pack_export", {
+      taxPackId: "pack-1",
+    });
   });
 });

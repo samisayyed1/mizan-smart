@@ -5,7 +5,9 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use mizan_core::tax_packs::{GenerateTaxPackRequest, TaxPack, TaxPackRepositoryTrait};
+use mizan_core::tax_packs::{
+    GenerateTaxPackRequest, TaxPack, TaxPackExportBundle, TaxPackRepositoryTrait,
+};
 
 use crate::error::{ApiError, ApiResult};
 use crate::main_lib::AppState;
@@ -33,8 +35,23 @@ async fn get_tax_pack(
         .map_err(ApiError::from)
 }
 
+async fn generate_tax_pack_export(
+    State(state): State<Arc<AppState>>,
+    Path(tax_pack_id): Path<String>,
+) -> ApiResult<Json<TaxPackExportBundle>> {
+    state
+        .tax_pack_repository
+        .generate_tax_pack_export(&tax_pack_id)
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/tax-packs", post(generate_tax_pack))
         .route("/tax-packs/{tax_pack_id}", get(get_tax_pack))
+        .route(
+            "/tax-packs/{tax_pack_id}/export",
+            post(generate_tax_pack_export),
+        )
 }

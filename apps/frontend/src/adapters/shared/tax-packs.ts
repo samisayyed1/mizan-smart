@@ -53,10 +53,36 @@ export interface TaxPack {
   disclaimer: string;
 }
 
+export interface TaxPackSourceDocumentManifestEntry {
+  lineId: string;
+  sourceCitationId: string | null;
+  included: boolean;
+  status: string;
+}
+
+export interface TaxPackExportManifest {
+  taxPackId: string;
+  files: string[];
+  sourceDocuments: TaxPackSourceDocumentManifestEntry[];
+  missingSources: string[];
+  disclaimer: string;
+}
+
+export interface TaxPackExportBundle {
+  fileName: string;
+  mimeType: string;
+  bytes: number[];
+  manifest: TaxPackExportManifest;
+}
+
 export function generateTaxPack(request: GenerateTaxPackRequest): Promise<TaxPack> {
   return invoke<TaxPack>("generate_tax_pack", { request });
 }
 
 export function getTaxPack(taxPackId: string): Promise<TaxPack | null> {
   return invoke<TaxPack | null>("get_tax_pack", { taxPackId });
+}
+
+export function generateTaxPackExport(taxPackId: string): Promise<TaxPackExportBundle> {
+  return invoke<TaxPackExportBundle>("generate_tax_pack_export", { taxPackId });
 }

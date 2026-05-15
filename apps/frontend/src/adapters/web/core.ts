@@ -241,6 +241,7 @@ export const COMMANDS: CommandMap = {
   get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
   generate_tax_pack: { method: "POST", path: "/tax-packs" },
   get_tax_pack: { method: "GET", path: "/tax-packs" },
+  generate_tax_pack_export: { method: "POST", path: "/tax-packs" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
   list_corporate_actions: { method: "GET", path: "/corporate-actions" },
@@ -1068,6 +1069,11 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "get_tax_pack": {
       const { taxPackId } = payload as { taxPackId: string };
       url += `/${encodeURIComponent(taxPackId)}`;
+      break;
+    }
+    case "generate_tax_pack_export": {
+      const { taxPackId } = payload as { taxPackId: string };
+      url += `/${encodeURIComponent(taxPackId)}/export`;
       break;
     }
     case "create_asset": {

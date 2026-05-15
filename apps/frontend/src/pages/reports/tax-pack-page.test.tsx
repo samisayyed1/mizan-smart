@@ -3,14 +3,16 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { generateTaxPack } from "@/adapters";
+import { generateTaxPack, generateTaxPackExport } from "@/adapters";
 import TaxPackPage from "./tax-pack-page";
 
 vi.mock("@/adapters", () => ({
   generateTaxPack: vi.fn(),
+  generateTaxPackExport: vi.fn(),
 }));
 
 const mockGenerateTaxPack = vi.mocked(generateTaxPack);
+const mockGenerateTaxPackExport = vi.mocked(generateTaxPackExport);
 
 function renderPage() {
   const queryClient = new QueryClient({
@@ -28,6 +30,9 @@ function renderPage() {
 describe("TaxPackPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    URL.createObjectURL = vi.fn(() => "blob:tax-pack");
+    URL.revokeObjectURL = vi.fn();
+    HTMLAnchorElement.prototype.click = vi.fn();
   });
 
   it("submits draft generation inputs and displays generated lines", async () => {
@@ -82,6 +87,44 @@ describe("TaxPackPage", () => {
     expect(await screen.findByText("Draft Summary")).toBeVisible();
     expect(screen.getByText("25 USD")).toBeVisible();
     expect(screen.getByText("Tax pack line has no source citation.")).toBeVisible();
+  });
+
+  it("downloads the generated export bundle", async () => {
+    mockGenerateTaxPack.mockResolvedValue({
+      id: "pack-1",
+      taxYear: 2026,
+      jurisdiction: "General",
+      baseCurrency: "USD",
+      status: "draft",
+      createdAt: "2026-05-16T00:00:00Z",
+      finalizedAt: null,
+      disclaimer: "Data preparation only. Mizan does not provide tax advice.",
+      missingDataChecklist: [],
+      lines: [],
+    });
+    mockGenerateTaxPackExport.mockResolvedValue({
+      fileName: "tax-pack-2026-general-pack-1.zip",
+      mimeType: "application/zip",
+      bytes: [80, 75, 3, 4],
+      manifest: {
+        taxPackId: "pack-1",
+        files: ["DISCLAIMER.txt"],
+        sourceDocuments: [],
+        missingSources: ["Line has no source citation"],
+        disclaimer: "Data preparation only. Mizan does not provide tax advice.",
+      },
+    });
+
+    renderPage();
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate Tax Pack" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Export ZIP" }));
+
+    await waitFor(() => {
+      expect(mockGenerateTaxPackExport).toHaveBeenCalledWith("pack-1");
+    });
+    expect(URL.createObjectURL).toHaveBeenCalled();
+    expect(await screen.findByText(/Export manifest prepared 1 files/)).toBeVisible();
   });
 
   it("renders an honest empty draft state", async () => {

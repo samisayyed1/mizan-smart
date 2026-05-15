@@ -4,7 +4,13 @@ import type { ReactNode } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { generateTaxPack, type TaxJurisdiction, type TaxPack, type TaxPackLine } from "@/adapters";
+import {
+  generateTaxPack,
+  generateTaxPackExport,
+  type TaxJurisdiction,
+  type TaxPack,
+  type TaxPackLine,
+} from "@/adapters";
 import { Button, Page, PageContent, PageHeader } from "@mizan/ui";
 import { Card, CardContent, CardHeader, CardTitle } from "@mizan/ui/components/ui/card";
 import { Input } from "@mizan/ui/components/ui/input";
@@ -107,6 +113,12 @@ export default function TaxPackPage() {
 }
 
 function TaxPackResult({ pack }: { pack: TaxPack }) {
+  const exportMutation = useMutation({
+    mutationFn: () => generateTaxPackExport(pack.id),
+    onSuccess: (bundle) => {
+      downloadBundle(bundle.fileName, bundle.mimeType, bundle.bytes);
+    },
+  });
   const totals = pack.lines.reduce<Record<string, string>>((acc, line) => {
     const key = `${formatCategory(line.category)} ${line.currency}`;
     const next = Number(acc[key] ?? 0) + Number(line.amount);
@@ -118,10 +130,29 @@ function TaxPackResult({ pack }: { pack: TaxPack }) {
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Draft Summary</CardTitle>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <CardTitle className="text-lg">Draft Summary</CardTitle>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => exportMutation.mutate()}
+              disabled={exportMutation.isPending}
+            >
+              Export ZIP
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <p className="text-muted-foreground">{pack.disclaimer}</p>
+          {exportMutation.data ? (
+            <p className="text-muted-foreground text-sm">
+              Export manifest prepared {exportMutation.data.manifest.files.length} files and{" "}
+              {exportMutation.data.manifest.missingSources.length} missing source notes.
+            </p>
+          ) : null}
+          {exportMutation.error ? (
+            <p className="text-destructive text-sm">{exportMutation.error.message}</p>
+          ) : null}
           <div className="grid gap-2 sm:grid-cols-3">
             <Metric label="Status" value={pack.status} />
             <Metric label="Lines" value={String(pack.lines.length)} />
@@ -235,6 +266,16 @@ function Metric({ label, value }: { label: string; value: string }) {
 
 function formatCategory(category: TaxPackLine["category"]): string {
   return category.replace(/_/g, " ");
+}
+
+function downloadBundle(fileName: string, mimeType: string, bytes: number[]) {
+  const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }
 
 export type { TaxJurisdiction };

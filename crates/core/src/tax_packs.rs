@@ -3,7 +3,9 @@ use chrono::{Datelike, NaiveDate};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, VecDeque};
+use std::io::{Cursor, Write};
 use std::str::FromStr;
+use zip::write::SimpleFileOptions;
 
 use crate::activities::{
     Activity, ACTIVITY_TYPE_BUY, ACTIVITY_TYPE_DIVIDEND, ACTIVITY_TYPE_FEE, ACTIVITY_TYPE_INTEREST,
@@ -192,10 +194,39 @@ pub struct TaxPack {
     pub disclaimer: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaxPackExportBundle {
+    pub file_name: String,
+    pub mime_type: String,
+    pub bytes: Vec<u8>,
+    pub manifest: TaxPackExportManifest,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaxPackExportManifest {
+    pub tax_pack_id: String,
+    pub files: Vec<String>,
+    pub source_documents: Vec<TaxPackSourceDocumentManifestEntry>,
+    pub missing_sources: Vec<String>,
+    pub disclaimer: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TaxPackSourceDocumentManifestEntry {
+    pub line_id: String,
+    pub source_citation_id: Option<String>,
+    pub included: bool,
+    pub status: String,
+}
+
 #[async_trait]
 pub trait TaxPackRepositoryTrait: Send + Sync {
     async fn generate_tax_pack(&self, request: GenerateTaxPackRequest) -> Result<TaxPack>;
     fn get_tax_pack(&self, tax_pack_id: &str) -> Result<Option<TaxPack>>;
+    fn generate_tax_pack_export(&self, tax_pack_id: &str) -> Result<TaxPackExportBundle>;
 }
 
 pub fn build_tax_pack_draft(
@@ -243,6 +274,168 @@ pub fn build_tax_pack_draft(
         missing_data_checklist: generator.missing,
         disclaimer: TAX_PACK_DISCLAIMER.to_string(),
     })
+}
+
+pub fn build_tax_pack_export(pack: &TaxPack) -> Result<TaxPackExportBundle> {
+    let slug = tax_pack_slug(pack);
+    let summary_path = format!("summary/{slug}.html");
+    let csv_path = format!("line-items/{slug}-lines.csv");
+    let manifest_path = "manifest/source-document-manifest.json".to_string();
+    let disclaimer_path = "DISCLAIMER.txt".to_string();
+    let source_documents_path = "source_documents/".to_string();
+    let manifest = build_export_manifest(
+        pack,
+        vec![
+            summary_path.clone(),
+            csv_path.clone(),
+            manifest_path.clone(),
+            disclaimer_path.clone(),
+            source_documents_path.clone(),
+        ],
+    );
+
+    let mut cursor = Cursor::new(Vec::new());
+    {
+        let mut zip = zip::ZipWriter::new(&mut cursor);
+        let options = SimpleFileOptions::default();
+        zip.start_file(&summary_path, options).map_err(zip_error)?;
+        zip.write_all(render_summary_html(pack).as_bytes())?;
+        zip.start_file(&csv_path, options).map_err(zip_error)?;
+        zip.write_all(render_lines_csv(pack).as_bytes())?;
+        zip.start_file(&manifest_path, options).map_err(zip_error)?;
+        zip.write_all(serde_json::to_string_pretty(&manifest)?.as_bytes())?;
+        zip.start_file(&disclaimer_path, options)
+            .map_err(zip_error)?;
+        zip.write_all(pack.disclaimer.as_bytes())?;
+        zip.add_directory(&source_documents_path, options)
+            .map_err(zip_error)?;
+        zip.finish().map_err(zip_error)?;
+    }
+
+    Ok(TaxPackExportBundle {
+        file_name: format!("{slug}.zip"),
+        mime_type: "application/zip".to_string(),
+        bytes: cursor.into_inner(),
+        manifest,
+    })
+}
+
+fn build_export_manifest(pack: &TaxPack, files: Vec<String>) -> TaxPackExportManifest {
+    let source_documents = pack
+        .lines
+        .iter()
+        .filter(|line| line.source_citation_id.is_some())
+        .map(|line| TaxPackSourceDocumentManifestEntry {
+            line_id: line.id.clone(),
+            source_citation_id: line.source_citation_id.clone(),
+            included: false,
+            status: "not_included_user_approval_required".to_string(),
+        })
+        .collect::<Vec<_>>();
+    let missing_sources = pack
+        .lines
+        .iter()
+        .filter(|line| line.source_citation_id.is_none())
+        .map(|line| {
+            format!(
+                "Line {} has no source citation; no source document was included.",
+                line.id
+            )
+        })
+        .collect::<Vec<_>>();
+
+    TaxPackExportManifest {
+        tax_pack_id: pack.id.clone(),
+        files,
+        source_documents,
+        missing_sources,
+        disclaimer: pack.disclaimer.clone(),
+    }
+}
+
+fn render_summary_html(pack: &TaxPack) -> String {
+    let mut rows = String::new();
+    for line in &pack.lines {
+        rows.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            escape_html(&line.taxable_date.to_string()),
+            escape_html(line.category.as_str()),
+            escape_html(line.asset_id.as_deref().unwrap_or("")),
+            escape_html(&line.amount.normalize().to_string()),
+            escape_html(&line.currency)
+        ));
+    }
+    let checklist = pack
+        .missing_data_checklist
+        .iter()
+        .map(|item| format!("<li>{}</li>", escape_html(&item.message)))
+        .collect::<String>();
+    format!(
+        "<!doctype html><html><head><meta charset=\"utf-8\"><title>Tax Pack {}</title></head><body><h1>Tax Pack {}</h1><p>{}</p><dl><dt>Tax year</dt><dd>{}</dd><dt>Jurisdiction</dt><dd>{}</dd><dt>Base currency</dt><dd>{}</dd></dl><h2>Lines</h2><table><thead><tr><th>Date</th><th>Category</th><th>Asset</th><th>Amount</th><th>Currency</th></tr></thead><tbody>{}</tbody></table><h2>Missing Data Checklist</h2><ul>{}</ul></body></html>",
+        escape_html(&pack.id),
+        escape_html(&pack.id),
+        escape_html(&pack.disclaimer),
+        pack.tax_year,
+        escape_html(pack.jurisdiction.as_str()),
+        escape_html(&pack.base_currency),
+        rows,
+        checklist
+    )
+}
+
+fn render_lines_csv(pack: &TaxPack) -> String {
+    let mut csv = String::from(
+        "tax_pack_id,line_id,category,asset_id,activity_id,amount,currency,taxable_date,source_citation_id,notes\n",
+    );
+    for line in &pack.lines {
+        csv.push_str(
+            &[
+                csv_cell(&line.tax_pack_id),
+                csv_cell(&line.id),
+                csv_cell(line.category.as_str()),
+                csv_cell(line.asset_id.as_deref().unwrap_or("")),
+                csv_cell(line.activity_id.as_deref().unwrap_or("")),
+                csv_cell(&line.amount.normalize().to_string()),
+                csv_cell(&line.currency),
+                csv_cell(&line.taxable_date.to_string()),
+                csv_cell(line.source_citation_id.as_deref().unwrap_or("")),
+                csv_cell(line.notes.as_deref().unwrap_or("")),
+            ]
+            .join(","),
+        );
+        csv.push('\n');
+    }
+    csv
+}
+
+fn tax_pack_slug(pack: &TaxPack) -> String {
+    format!(
+        "tax-pack-{}-{}-{}",
+        pack.tax_year,
+        pack.jurisdiction.as_str().to_ascii_lowercase(),
+        pack.id
+    )
+}
+
+fn csv_cell(value: &str) -> String {
+    if value.contains(',') || value.contains('"') || value.contains('\n') {
+        format!("\"{}\"", value.replace('"', "\"\""))
+    } else {
+        value.to_string()
+    }
+}
+
+fn escape_html(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('<', "&lt;")
+        .replace('>', "&gt;")
+        .replace('"', "&quot;")
+        .replace('\'', "&#39;")
+}
+
+fn zip_error(err: zip::result::ZipError) -> Error {
+    Error::Unexpected(format!("tax pack zip export failed: {err}"))
 }
 
 struct Lot {
@@ -557,6 +750,8 @@ mod tests {
     use crate::activities::ActivityStatus;
     use chrono::{TimeZone, Utc};
     use rust_decimal_macros::dec;
+    use std::io::Read;
+    use zip::ZipArchive;
 
     #[test]
     fn tax_year_filtering_excludes_other_year_income() {
@@ -630,6 +825,85 @@ mod tests {
             .missing_data_checklist
             .iter()
             .any(|item| item.message.contains("No taxable ledger activity")));
+    }
+
+    #[test]
+    fn export_zip_contains_expected_files_and_disclaimer() {
+        let pack = draft(vec![activity(
+            "div-1",
+            ACTIVITY_TYPE_DIVIDEND,
+            "2026-01-01",
+            dec!(10),
+        )]);
+
+        let export = build_tax_pack_export(&pack).expect("export");
+        let mut zip = ZipArchive::new(Cursor::new(export.bytes)).expect("zip");
+
+        assert!(zip.by_name("DISCLAIMER.txt").is_ok());
+        assert!(zip
+            .by_name("manifest/source-document-manifest.json")
+            .is_ok());
+        assert!(zip
+            .by_name(&format!("line-items/{}-lines.csv", tax_pack_slug(&pack)))
+            .is_ok());
+        let mut disclaimer = String::new();
+        zip.by_name("DISCLAIMER.txt")
+            .expect("disclaimer")
+            .read_to_string(&mut disclaimer)
+            .expect("read");
+        assert!(disclaimer.contains("does not provide tax advice"));
+    }
+
+    #[test]
+    fn export_csv_preserves_exact_decimal_values() {
+        let pack = draft(vec![activity(
+            "div-1",
+            ACTIVITY_TYPE_DIVIDEND,
+            "2026-01-01",
+            dec!(10.123456789),
+        )]);
+        let export = build_tax_pack_export(&pack).expect("export");
+        let mut zip = ZipArchive::new(Cursor::new(export.bytes)).expect("zip");
+        let mut csv = String::new();
+        zip.by_name(&format!("line-items/{}-lines.csv", tax_pack_slug(&pack)))
+            .expect("csv")
+            .read_to_string(&mut csv)
+            .expect("read");
+
+        assert!(csv.contains("10.123456789"));
+    }
+
+    #[test]
+    fn export_manifest_flags_missing_and_unapproved_sources() {
+        let mut pack = draft(vec![activity(
+            "div-1",
+            ACTIVITY_TYPE_DIVIDEND,
+            "2026-01-01",
+            dec!(10),
+        )]);
+        pack.lines[0].source_citation_id = Some("citation-1".to_string());
+        pack.lines.push(TaxPackLine {
+            id: "pack-1:manual:missing".to_string(),
+            tax_pack_id: "pack-1".to_string(),
+            category: TaxPackLineCategory::Other,
+            asset_id: None,
+            activity_id: None,
+            amount: dec!(1),
+            currency: "USD".to_string(),
+            taxable_date: NaiveDate::from_ymd_opt(2026, 1, 2).unwrap(),
+            source_citation_id: None,
+            notes: None,
+        });
+
+        let export = build_tax_pack_export(&pack).expect("export");
+
+        assert_eq!(export.manifest.source_documents.len(), 1);
+        assert!(!export.manifest.source_documents[0].included);
+        assert!(export
+            .manifest
+            .missing_sources
+            .iter()
+            .any(|item| item.contains("no source citation")));
     }
 
     fn draft(activities: Vec<Activity>) -> TaxPack {

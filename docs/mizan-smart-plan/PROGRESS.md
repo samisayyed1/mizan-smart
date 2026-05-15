@@ -26,7 +26,7 @@
 - [x] p26 phase-4/p26  Zakat calculator (55b5790)
 - [x] p27 phase-4/p27  Dividend purification calculator (4628282)
 - [x] p28 phase-4/p28  Tax pack foundation (6474569)
-- [ ] p29 phase-4/p29  CPA export bundle
+- [x] p29 phase-4/p29  CPA export bundle (5bd686e)
 - [ ] p30 phase-4/p30  Report Builder foundation
 - [ ] p31 phase-4/p31  Monthly Wealth Letter (deterministic)
 - [ ] p32 phase-4/p32  Estate / Legacy Binder

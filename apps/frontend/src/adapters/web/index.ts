@@ -359,7 +359,7 @@ export {
 } from "../shared/islamic-mode";
 export { getLiquidityLadder } from "../shared/liquidity-ladder";
 export { applyCorporateAction, listCorporateActions, previewCorporateAction } from "../shared/corporate-actions";
-export { generateTaxPack, getTaxPack } from "../shared/tax-packs";
+export { generateTaxPack, generateTaxPackExport, getTaxPack } from "../shared/tax-packs";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -456,9 +456,12 @@ export type {
   GenerateTaxPackRequest,
   TaxJurisdiction,
   TaxPack,
+  TaxPackExportBundle,
+  TaxPackExportManifest,
   TaxPackLine,
   TaxPackLineCategory,
   TaxPackMissingItem,
+  TaxPackSourceDocumentManifestEntry,
   TaxPackStatus,
 } from "../shared/tax-packs";
 

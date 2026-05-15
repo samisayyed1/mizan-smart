@@ -11,9 +11,9 @@ use uuid::Uuid;
 use mizan_core::activities::Activity;
 use mizan_core::private_investments::PrivateDistribution;
 use mizan_core::tax_packs::{
-    build_tax_pack_draft, GenerateTaxPackRequest, TaxJurisdiction, TaxPack, TaxPackLine,
-    TaxPackLineCategory, TaxPackMissingItem, TaxPackRepositoryTrait, TaxPackStatus,
-    TAX_PACK_DISCLAIMER,
+    build_tax_pack_draft, build_tax_pack_export, GenerateTaxPackRequest, TaxJurisdiction, TaxPack,
+    TaxPackExportBundle, TaxPackLine, TaxPackLineCategory, TaxPackMissingItem,
+    TaxPackRepositoryTrait, TaxPackStatus, TAX_PACK_DISCLAIMER,
 };
 use mizan_core::{Error, Result};
 
@@ -127,6 +127,15 @@ impl TaxPackRepositoryTrait for TaxPackRepository {
             .map_err(StorageError::from)?;
 
         Ok(Some(row_to_pack(row, line_rows, missing_rows)?))
+    }
+
+    fn generate_tax_pack_export(&self, tax_pack_id: &str) -> Result<TaxPackExportBundle> {
+        let pack = self.get_tax_pack(tax_pack_id)?.ok_or_else(|| {
+            Error::Database(mizan_core::errors::DatabaseError::NotFound(format!(
+                "Tax pack {tax_pack_id} not found"
+            )))
+        })?;
+        build_tax_pack_export(&pack)
     }
 }
 
@@ -474,6 +483,34 @@ mod tests {
             .missing_data_checklist
             .iter()
             .any(|item| item.message.contains("No taxable ledger activity")));
+    }
+
+    #[tokio::test]
+    async fn export_bundle_contains_zip_csv_and_manifest() {
+        let (pool, writer) = setup();
+        seed_activity(
+            &pool,
+            "div-new",
+            "DIVIDEND",
+            "2026-01-01",
+            None,
+            None,
+            Some(dec!(20.25)),
+            None,
+        );
+        let repo = TaxPackRepository::new(pool, writer);
+        let pack = repo.generate_tax_pack(request()).await.expect("generate");
+
+        let export = repo.generate_tax_pack_export(&pack.id).expect("export");
+
+        assert_eq!(export.mime_type, "application/zip");
+        assert!(export.file_name.starts_with("tax-pack-2026-general-"));
+        assert!(export
+            .manifest
+            .missing_sources
+            .iter()
+            .any(|item| item.contains("no source citation")));
+        assert!(!export.bytes.is_empty());
     }
 
     fn request() -> GenerateTaxPackRequest {

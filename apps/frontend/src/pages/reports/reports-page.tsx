@@ -4,6 +4,7 @@ import { useState } from "react";
 import {
   exportReport,
   generateReport,
+  type EstateBinderSection,
   type ReportRun,
   type ReportType,
 } from "@/adapters";
@@ -20,6 +21,12 @@ interface ReportOption {
 }
 
 const REPORT_OPTIONS: ReportOption[] = [
+  {
+    type: "estate_binder",
+    title: "Estate Binder",
+    description: "Organized legacy binder with selected sections and no legal advice.",
+    icon: "FileText",
+  },
   {
     type: "monthly_wealth_letter",
     title: "Monthly Wealth Letter",
@@ -58,10 +65,33 @@ const REPORT_OPTIONS: ReportOption[] = [
   },
 ];
 
+const ESTATE_BINDER_OPTIONS: { section: EstateBinderSection; label: string }[] = [
+  { section: "accounts", label: "Accounts" },
+  { section: "assets", label: "Assets" },
+  { section: "liabilities", label: "Liabilities" },
+  { section: "property", label: "Property" },
+  { section: "insurance", label: "Insurance / ULIP" },
+  { section: "pensions", label: "Pensions" },
+  { section: "private_investments", label: "Private investments" },
+  { section: "documents_manifest", label: "Documents manifest" },
+  { section: "entity_ownership", label: "Entity ownership summary" },
+  { section: "islamic_notes", label: "Zakat / waqf / charity notes" },
+];
+
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>("tax_pack");
   const [baseCurrency, setBaseCurrency] = useState("USD");
   const [periodMonth, setPeriodMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [estateSections, setEstateSections] = useState<EstateBinderSection[]>([
+    "accounts",
+    "assets",
+    "liabilities",
+    "property",
+    "insurance",
+    "pensions",
+    "private_investments",
+    "documents_manifest",
+  ]);
 
   const generateMutation = useMutation({
     mutationFn: () => {
@@ -69,11 +99,13 @@ export default function ReportsPage() {
         reportType,
         baseCurrency: baseCurrency.toUpperCase(),
       };
-      return generateReport(
-        reportType === "monthly_wealth_letter"
-          ? { ...request, periodMonth }
-          : request,
-      );
+      if (reportType === "monthly_wealth_letter") {
+        return generateReport({ ...request, periodMonth });
+      }
+      if (reportType === "estate_binder") {
+        return generateReport({ ...request, includedSections: estateSections });
+      }
+      return generateReport(request);
     },
   });
 
@@ -134,6 +166,29 @@ export default function ReportsPage() {
                   />
                 </div>
               ) : null}
+              {reportType === "estate_binder" ? (
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">Included sections</p>
+                  <div className="grid gap-2">
+                    {ESTATE_BINDER_OPTIONS.map((option) => (
+                      <label key={option.section} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={estateSections.includes(option.section)}
+                          onChange={(event) =>
+                            setEstateSections((current) =>
+                              event.target.checked
+                                ? [...current, option.section]
+                                : current.filter((section) => section !== option.section),
+                            )
+                          }
+                        />
+                        <span>{option.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <Button
                 type="button"
                 className="w-full"
@@ -141,7 +196,8 @@ export default function ReportsPage() {
                 disabled={
                   generateMutation.isPending ||
                   baseCurrency.length !== 3 ||
-                  (reportType === "monthly_wealth_letter" && periodMonth.length !== 7)
+                  (reportType === "monthly_wealth_letter" && periodMonth.length !== 7) ||
+                  (reportType === "estate_binder" && estateSections.length === 0)
                 }
               >
                 Generate Preview

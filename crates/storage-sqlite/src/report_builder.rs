@@ -11,18 +11,19 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use mizan_core::report_builder::{
-    build_empty_report, build_report_export, GenerateReportRequest, ReportBuilderRepositoryTrait,
-    ReportExportBundle, ReportLine, ReportRun, ReportRunStatus, ReportSection, ReportType,
-    REPORT_BUILDER_DISCLAIMER,
+    build_empty_report, build_report_export, EstateBinderSection, GenerateReportRequest,
+    ReportBuilderRepositoryTrait, ReportExportBundle, ReportLine, ReportRun, ReportRunStatus,
+    ReportSection, ReportType, ESTATE_BINDER_DISCLAIMER, REPORT_BUILDER_DISCLAIMER,
 };
 use mizan_core::{Error, Result};
 
 use crate::db::{get_connection, WriteHandle};
 use crate::errors::StorageError;
 use crate::schema::{
-    activities, app_settings, capital_calls, extracted_facts, fixed_income_cashflows, report_lines,
-    report_runs, report_sections, tax_pack_lines, tax_pack_missing_items, tax_packs,
-    zakat_snapshots,
+    accounts, activities, app_settings, asset_insurance_details, asset_liability_details,
+    asset_private_investment_details, asset_real_estate_details, assets, capital_calls, documents,
+    extracted_facts, fixed_income_cashflows, report_lines, report_runs, report_sections,
+    tax_pack_lines, tax_pack_missing_items, tax_packs, zakat_snapshots,
 };
 
 pub struct ReportBuilderRepository {
@@ -133,6 +134,63 @@ struct LatestZakatSnapshotRow {
     base_currency: String,
 }
 
+#[derive(Debug, Clone, Queryable)]
+struct EstateAccountRow {
+    id: String,
+    name: String,
+    account_type: String,
+    currency: String,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct EstateAssetRow {
+    id: String,
+    kind: String,
+    name: Option<String>,
+    display_code: Option<String>,
+    classification: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct EstatePropertyRow {
+    asset_id: String,
+    property_type: Option<String>,
+    address_approximate: Option<String>,
+    source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct EstateLiabilityRow {
+    asset_id: String,
+    liability_type: String,
+    lender: Option<String>,
+    source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct EstateInsuranceRow {
+    asset_id: String,
+    policy_type: String,
+    provider: Option<String>,
+    source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct EstatePrivateInvestmentRow {
+    asset_id: String,
+    instrument_subtype: String,
+    manager: Option<String>,
+    source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct EstateDocumentRow {
+    id: String,
+    original_name: String,
+    mime_type: String,
+    status: String,
+}
+
 #[async_trait]
 impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
     async fn generate_report(&self, request: GenerateReportRequest) -> Result<ReportRun> {
@@ -143,6 +201,7 @@ impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
             ReportType::MonthlyWealthLetter => {
                 self.build_monthly_wealth_letter(request, created_at)?
             }
+            ReportType::EstateBinder => self.build_estate_binder(request, created_at)?,
             _ => build_empty_report(
                 Uuid::new_v4().to_string(),
                 Uuid::new_v4().to_string(),
@@ -698,6 +757,94 @@ impl ReportBuilderRepository {
         })
     }
 
+    fn build_estate_binder(
+        &self,
+        request: GenerateReportRequest,
+        created_at: String,
+    ) -> Result<ReportRun> {
+        let selected = request
+            .included_sections
+            .clone()
+            .filter(|sections| !sections.is_empty())
+            .unwrap_or_else(|| {
+                vec![
+                    EstateBinderSection::Accounts,
+                    EstateBinderSection::Assets,
+                    EstateBinderSection::Liabilities,
+                    EstateBinderSection::Property,
+                    EstateBinderSection::Insurance,
+                    EstateBinderSection::Pensions,
+                    EstateBinderSection::PrivateInvestments,
+                    EstateBinderSection::DocumentsManifest,
+                    EstateBinderSection::EntityOwnership,
+                    EstateBinderSection::IslamicNotes,
+                ]
+            });
+        let mut conn = get_connection(&self.pool)?;
+        let run_id = Uuid::new_v4().to_string();
+        let mut sections = Vec::new();
+
+        for selected_section in selected {
+            let lines = match selected_section {
+                EstateBinderSection::Accounts => estate_account_lines(&mut conn)?,
+                EstateBinderSection::Assets => estate_asset_lines(&mut conn, false)?,
+                EstateBinderSection::Liabilities => estate_liability_lines(&mut conn)?,
+                EstateBinderSection::Property => estate_property_lines(&mut conn)?,
+                EstateBinderSection::Insurance => estate_insurance_lines(&mut conn)?,
+                EstateBinderSection::Pensions => estate_pension_lines(&mut conn)?,
+                EstateBinderSection::PrivateInvestments => {
+                    estate_private_investment_lines(&mut conn)?
+                }
+                EstateBinderSection::DocumentsManifest => estate_document_lines(&mut conn)?,
+                EstateBinderSection::EntityOwnership => Vec::new(),
+                EstateBinderSection::IslamicNotes => {
+                    if shariah_mode_enabled(&mut conn)? {
+                        estate_islamic_lines(&mut conn)?
+                    } else {
+                        Vec::new()
+                    }
+                }
+            };
+            if lines.is_empty() {
+                continue;
+            }
+            let section_id = Uuid::new_v4().to_string();
+            let mut section_lines = lines;
+            for line in &mut section_lines {
+                line.section_id = section_id.clone();
+            }
+            sections.push(section(
+                &run_id,
+                section_id,
+                selected_section.title(),
+                sections.len() as i32,
+                json!({"estateBinderSection":selected_section.title()}),
+                section_lines,
+            ));
+        }
+
+        if sections.is_empty() {
+            return build_empty_report(
+                run_id,
+                Uuid::new_v4().to_string(),
+                Uuid::new_v4().to_string(),
+                request,
+                created_at,
+            );
+        }
+
+        Ok(ReportRun {
+            id: run_id,
+            report_type: request.report_type,
+            base_currency: request.base_currency,
+            status: ReportRunStatus::Generated,
+            created_at: created_at.clone(),
+            completed_at: Some(created_at),
+            disclaimer: ESTATE_BINDER_DISCLAIMER.to_string(),
+            sections,
+        })
+    }
+
     async fn persist_report(&self, report: ReportRun) -> Result<()> {
         let run_row = ReportRunRow::from(&report);
         let section_rows = report
@@ -830,6 +977,268 @@ fn shariah_mode_enabled(conn: &mut SqliteConnection) -> Result<bool> {
     Ok(value.as_deref() == Some("true"))
 }
 
+fn estate_account_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    let rows = accounts::table
+        .filter(accounts::is_archived.eq(false))
+        .select((
+            accounts::id,
+            accounts::name,
+            accounts::account_type,
+            accounts::currency,
+        ))
+        .order(accounts::name.asc())
+        .load::<EstateAccountRow>(conn)
+        .map_err(StorageError::from)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            text_line(
+                "",
+                row.name,
+                format!("{} account in {}", row.account_type, row.currency),
+                json!({"sourceTable":"accounts","sourceId":row.id,"citationStatus":"missing"}),
+            )
+        })
+        .collect())
+}
+
+fn estate_asset_lines(
+    conn: &mut SqliteConnection,
+    liabilities_only: bool,
+) -> Result<Vec<ReportLine>> {
+    let rows = assets::table
+        .filter(assets::is_active.eq(1))
+        .select((
+            assets::id,
+            assets::kind,
+            assets::name,
+            assets::display_code,
+            assets::classification,
+        ))
+        .order((assets::kind.asc(), assets::id.asc()))
+        .load::<EstateAssetRow>(conn)
+        .map_err(StorageError::from)?;
+    Ok(rows
+        .into_iter()
+        .filter(|row| {
+            let is_liability = row.kind.eq_ignore_ascii_case("LIABILITY")
+                || row
+                    .classification
+                    .as_deref()
+                    .is_some_and(|value| value.eq_ignore_ascii_case("liability"));
+            is_liability == liabilities_only
+        })
+        .map(|row| {
+            let label = row
+                .name
+                .or(row.display_code)
+                .unwrap_or_else(|| row.id.clone());
+            text_line(
+                "",
+                label,
+                format!(
+                    "{}{}",
+                    row.kind,
+                    row.classification
+                        .map(|classification| format!("; {classification}"))
+                        .unwrap_or_default()
+                ),
+                json!({"sourceTable":"assets","sourceId":row.id,"citationStatus":"missing"}),
+            )
+        })
+        .collect())
+}
+
+fn estate_liability_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    let detail_rows = asset_liability_details::table
+        .select((
+            asset_liability_details::asset_id,
+            asset_liability_details::liability_type,
+            asset_liability_details::lender,
+            asset_liability_details::source_citation_id,
+        ))
+        .order(asset_liability_details::asset_id.asc())
+        .load::<EstateLiabilityRow>(conn)
+        .map_err(StorageError::from)?;
+    if !detail_rows.is_empty() {
+        return Ok(detail_rows
+            .into_iter()
+            .map(|row| ReportLine {
+                id: Uuid::new_v4().to_string(),
+                section_id: String::new(),
+                label: row.lender.unwrap_or_else(|| row.asset_id.clone()),
+                amount: None,
+                currency: None,
+                value_text: Some(row.liability_type),
+                source_citation_id: row.source_citation_id,
+                metadata_json: Some(
+                    json!({"sourceTable":"asset_liability_details","sourceId":row.asset_id})
+                        .to_string(),
+                ),
+            })
+            .collect());
+    }
+    estate_asset_lines(conn, true)
+}
+
+fn estate_property_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    let rows = asset_real_estate_details::table
+        .select((
+            asset_real_estate_details::asset_id,
+            asset_real_estate_details::property_type,
+            asset_real_estate_details::address_approximate,
+            asset_real_estate_details::source_citation_id,
+        ))
+        .order(asset_real_estate_details::asset_id.asc())
+        .load::<EstatePropertyRow>(conn)
+        .map_err(StorageError::from)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| ReportLine {
+            id: Uuid::new_v4().to_string(),
+            section_id: String::new(),
+            label: row
+                .address_approximate
+                .clone()
+                .unwrap_or_else(|| row.asset_id.clone()),
+            amount: None,
+            currency: None,
+            value_text: Some(
+                row.property_type
+                    .unwrap_or_else(|| "Real estate".to_string()),
+            ),
+            source_citation_id: row.source_citation_id,
+            metadata_json: Some(
+                json!({"sourceTable":"asset_real_estate_details","sourceId":row.asset_id})
+                    .to_string(),
+            ),
+        })
+        .collect())
+}
+
+fn estate_insurance_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    let rows = asset_insurance_details::table
+        .select((
+            asset_insurance_details::asset_id,
+            asset_insurance_details::policy_type,
+            asset_insurance_details::provider,
+            asset_insurance_details::source_citation_id,
+        ))
+        .order(asset_insurance_details::asset_id.asc())
+        .load::<EstateInsuranceRow>(conn)
+        .map_err(StorageError::from)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| ReportLine {
+            id: Uuid::new_v4().to_string(),
+            section_id: String::new(),
+            label: row.provider.unwrap_or_else(|| row.asset_id.clone()),
+            amount: None,
+            currency: None,
+            value_text: Some(row.policy_type),
+            source_citation_id: row.source_citation_id,
+            metadata_json: Some(
+                json!({"sourceTable":"asset_insurance_details","sourceId":row.asset_id})
+                    .to_string(),
+            ),
+        })
+        .collect())
+}
+
+fn estate_pension_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    Ok(estate_account_lines(conn)?
+        .into_iter()
+        .filter(|line| {
+            line.value_text.as_deref().is_some_and(|value| {
+                let lower = value.to_ascii_lowercase();
+                lower.contains("pension") || lower.contains("retirement")
+            })
+        })
+        .collect())
+}
+
+fn estate_private_investment_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    let rows = asset_private_investment_details::table
+        .select((
+            asset_private_investment_details::asset_id,
+            asset_private_investment_details::instrument_subtype,
+            asset_private_investment_details::manager,
+            asset_private_investment_details::source_citation_id,
+        ))
+        .order(asset_private_investment_details::asset_id.asc())
+        .load::<EstatePrivateInvestmentRow>(conn)
+        .map_err(StorageError::from)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| ReportLine {
+            id: Uuid::new_v4().to_string(),
+            section_id: String::new(),
+            label: row.manager.unwrap_or_else(|| row.asset_id.clone()),
+            amount: None,
+            currency: None,
+            value_text: Some(row.instrument_subtype),
+            source_citation_id: row.source_citation_id,
+            metadata_json: Some(
+                json!({"sourceTable":"asset_private_investment_details","sourceId":row.asset_id})
+                    .to_string(),
+            ),
+        })
+        .collect())
+}
+
+fn estate_document_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    let rows = documents::table
+        .select((
+            documents::id,
+            documents::original_name,
+            documents::mime_type,
+            documents::status,
+        ))
+        .order(documents::original_name.asc())
+        .load::<EstateDocumentRow>(conn)
+        .map_err(StorageError::from)?;
+    Ok(rows
+        .into_iter()
+        .map(|row| {
+            text_line(
+                "",
+                row.original_name,
+                format!("{}; {}", row.mime_type, row.status),
+                json!({"sourceTable":"documents","sourceId":row.id,"citationStatus":"missing"}),
+            )
+        })
+        .collect())
+}
+
+fn estate_islamic_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
+    let latest = zakat_snapshots::table
+        .select((
+            zakat_snapshots::id,
+            zakat_snapshots::snapshot_date,
+            zakat_snapshots::zakat_due,
+            zakat_snapshots::base_currency,
+        ))
+        .order((
+            zakat_snapshots::snapshot_date.desc(),
+            zakat_snapshots::id.desc(),
+        ))
+        .first::<LatestZakatSnapshotRow>(conn)
+        .optional()
+        .map_err(StorageError::from)?;
+    let Some(snapshot) = latest else {
+        return Ok(Vec::new());
+    };
+    let zakat_due = parse_decimal("zakat due", &snapshot.zakat_due)?;
+    Ok(vec![amount_line(
+        "",
+        format!("Zakat snapshot {}", snapshot.snapshot_date),
+        zakat_due,
+        snapshot.base_currency,
+        None,
+        json!({"sourceTable":"zakat_snapshots","sourceId":snapshot.id,"citationStatus":"missing"}),
+    )])
+}
+
 impl From<&ReportRun> for ReportRunRow {
     fn from(report: &ReportRun) -> Self {
         Self {
@@ -871,15 +1280,20 @@ impl From<&ReportLine> for ReportLineRow {
 }
 
 fn run_row_to_domain(row: ReportRunRow, sections: Vec<ReportSection>) -> Result<ReportRun> {
+    let report_type = ReportType::from_str(&row.report_type)?;
+    let disclaimer = match report_type {
+        ReportType::EstateBinder => ESTATE_BINDER_DISCLAIMER,
+        _ => REPORT_BUILDER_DISCLAIMER,
+    };
     Ok(ReportRun {
         id: row.id,
-        report_type: ReportType::from_str(&row.report_type)?,
+        report_type,
         base_currency: row.base_currency,
         status: ReportRunStatus::from_str(&row.status)?,
         created_at: row.created_at,
         completed_at: row.completed_at,
         sections,
-        disclaimer: REPORT_BUILDER_DISCLAIMER.to_string(),
+        disclaimer: disclaimer.to_string(),
     })
 }
 
@@ -927,7 +1341,9 @@ mod tests {
     use super::*;
     use crate::db::write_actor::spawn_writer;
     use crate::db::{create_pool, init, run_migrations};
-    use crate::schema::{accounts, activities, source_citations, tax_pack_lines, tax_packs};
+    use crate::schema::{
+        accounts, activities, assets, documents, source_citations, tax_pack_lines, tax_packs,
+    };
     use tempfile::tempdir;
 
     fn setup() -> (
@@ -1128,11 +1544,58 @@ mod tests {
         assert!(html.contains("1234.567890123456789"));
     }
 
+    #[tokio::test]
+    async fn estate_binder_respects_section_selection() {
+        let (pool, writer) = setup();
+        seed_account(&pool);
+        seed_asset(&pool, "asset-1", "INVESTMENT");
+        seed_document_manifest_row(&pool, "doc-1", "statement.pdf");
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let report = repo
+            .generate_report(estate_request(vec![
+                EstateBinderSection::Accounts,
+                EstateBinderSection::DocumentsManifest,
+            ]))
+            .await
+            .expect("estate binder");
+        let titles = report
+            .sections
+            .iter()
+            .map(|section| section.title.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(report.report_type, ReportType::EstateBinder);
+        assert!(titles.contains(&"Accounts"));
+        assert!(titles.contains(&"Documents manifest"));
+        assert!(!titles.contains(&"Assets"));
+    }
+
+    #[tokio::test]
+    async fn estate_binder_export_contains_selected_sections_only_and_disclaimer() {
+        let (pool, writer) = setup();
+        seed_account(&pool);
+        seed_asset(&pool, "asset-1", "INVESTMENT");
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let report = repo
+            .generate_report(estate_request(vec![EstateBinderSection::Accounts]))
+            .await
+            .expect("estate binder");
+        let export = repo.export_report(&report.id).expect("export");
+        let html = String::from_utf8(export.bytes).expect("html");
+
+        assert!(html.contains(ESTATE_BINDER_DISCLAIMER));
+        assert!(html.contains("Accounts"));
+        assert!(!html.contains("Assets"));
+    }
+
     fn request(report_type: ReportType) -> GenerateReportRequest {
         GenerateReportRequest {
             report_type,
             base_currency: "USD".to_string(),
             period_month: None,
+            included_sections: None,
         }
     }
 
@@ -1141,6 +1604,16 @@ mod tests {
             report_type: ReportType::MonthlyWealthLetter,
             base_currency: "USD".to_string(),
             period_month: Some(period_month.to_string()),
+            included_sections: None,
+        }
+    }
+
+    fn estate_request(included_sections: Vec<EstateBinderSection>) -> GenerateReportRequest {
+        GenerateReportRequest {
+            report_type: ReportType::EstateBinder,
+            base_currency: "USD".to_string(),
+            period_month: None,
+            included_sections: Some(included_sections),
         }
     }
 
@@ -1241,5 +1714,50 @@ mod tests {
             ))
             .execute(&mut conn)
             .expect("seed activity");
+    }
+
+    fn seed_asset(
+        pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
+        asset_id: &str,
+        kind: &str,
+    ) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::insert_into(assets::table)
+            .values((
+                assets::id.eq(asset_id),
+                assets::kind.eq(kind),
+                assets::name.eq(Some("Estate asset")),
+                assets::display_code.eq(Some("EST")),
+                assets::is_active.eq(1),
+                assets::quote_mode.eq("MANUAL"),
+                assets::quote_ccy.eq("USD"),
+                assets::classification.eq(Some("public_equity")),
+                assets::created_at.eq("2026-05-01T00:00:00Z"),
+                assets::updated_at.eq("2026-05-01T00:00:00Z"),
+            ))
+            .execute(&mut conn)
+            .expect("seed asset");
+    }
+
+    fn seed_document_manifest_row(
+        pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
+        document_id: &str,
+        original_name: &str,
+    ) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::insert_into(documents::table)
+            .values((
+                documents::id.eq(document_id),
+                documents::file_hash.eq(format!("hash-{document_id}")),
+                documents::original_name.eq(original_name),
+                documents::mime_type.eq("application/pdf"),
+                documents::file_size_bytes.eq(128_i64),
+                documents::encrypted_storage_path.eq(format!("{document_id}.mizdoc")),
+                documents::status.eq("processed"),
+                documents::created_at.eq("2026-05-01T00:00:00Z"),
+                documents::updated_at.eq("2026-05-01T00:00:00Z"),
+            ))
+            .execute(&mut conn)
+            .expect("seed document");
     }
 }

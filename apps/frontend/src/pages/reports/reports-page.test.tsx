@@ -152,6 +152,54 @@ describe("ReportsPage", () => {
     });
     expect(await screen.findByText("Dividend and interest received")).toBeInTheDocument();
   });
+
+  it("generates an estate binder with selected sections only", async () => {
+    generateReportMock.mockResolvedValueOnce({
+      ...reportRun(),
+      reportType: "estate_binder",
+      disclaimer: "Estate Binder is an organizational checklist only.",
+      sections: [
+        {
+          id: "section-estate",
+          reportRunId: "run-1",
+          title: "Accounts",
+          sectionOrder: 0,
+          metadataJson: null,
+          lines: [
+            {
+              id: "line-estate",
+              sectionId: "section-estate",
+              label: "Taxable",
+              amount: null,
+              currency: null,
+              valueText: "brokerage account in USD",
+              sourceCitationId: null,
+              metadataJson: null,
+            },
+          ],
+        },
+      ],
+    });
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText("Report type"), {
+      target: { value: "estate_binder" },
+    });
+    fireEvent.click(screen.getByLabelText("Assets"));
+    fireEvent.click(screen.getByRole("button", { name: /Generate Preview/i }));
+
+    await waitFor(() => {
+      expect(generateReportMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reportType: "estate_binder",
+          baseCurrency: "USD",
+          includedSections: expect.not.arrayContaining(["assets"]),
+        }),
+      );
+    });
+    expect(await screen.findByText("Taxable")).toBeInTheDocument();
+    expect(screen.getByText(/organizational checklist/i)).toBeInTheDocument();
+  });
 });
 
 function renderPage() {

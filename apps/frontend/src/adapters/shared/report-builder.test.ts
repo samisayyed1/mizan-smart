@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { exportReport, generateReport, getReportRun } from "./report-builder";
+import {
+  exportReport,
+  generateReport,
+  getReportRun,
+  type GenerateReportRequest,
+} from "./report-builder";
 import { invoke } from "./platform";
 
 vi.mock("./platform", () => ({
@@ -26,6 +31,19 @@ describe("report builder adapter", () => {
       periodMonth: "2026-05",
     };
     invokeMock.mockResolvedValueOnce({ id: "run-monthly", sections: [] });
+
+    await generateReport(request);
+
+    expect(invokeMock).toHaveBeenCalledWith("generate_report", { request });
+  });
+
+  it("passes selected sections for estate binders", async () => {
+    const request: GenerateReportRequest = {
+      reportType: "estate_binder" as const,
+      baseCurrency: "USD",
+      includedSections: ["accounts", "documents_manifest"],
+    };
+    invokeMock.mockResolvedValueOnce({ id: "run-estate", sections: [] });
 
     await generateReport(request);
 

@@ -466,6 +466,7 @@ export type {
   TaxPackStatus,
 } from "../shared/tax-packs";
 export type {
+  EstateBinderSection,
   GenerateReportRequest,
   ReportExportBundle,
   ReportLine,

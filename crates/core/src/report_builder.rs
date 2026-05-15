@@ -8,6 +8,8 @@ use crate::{Error, Result};
 
 pub const REPORT_BUILDER_DISCLAIMER: &str =
     "Deterministic report preview only. Mizan does not provide investment, tax, or legal advice.";
+pub const ESTATE_BINDER_DISCLAIMER: &str =
+    "Estate Binder is an organizational checklist only. It is not legal advice and does not generate wills, trusts, or estate documents.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -18,6 +20,7 @@ pub enum ReportType {
     DataQuality,
     TaxPack,
     MonthlyWealthLetter,
+    EstateBinder,
 }
 
 impl ReportType {
@@ -29,6 +32,7 @@ impl ReportType {
             Self::DataQuality => "data_quality",
             Self::TaxPack => "tax_pack",
             Self::MonthlyWealthLetter => "monthly_wealth_letter",
+            Self::EstateBinder => "estate_binder",
         }
     }
 
@@ -40,6 +44,7 @@ impl ReportType {
             Self::DataQuality => "Data Quality Report",
             Self::TaxPack => "Tax Pack Report",
             Self::MonthlyWealthLetter => "Monthly Wealth Letter",
+            Self::EstateBinder => "Estate Binder",
         }
     }
 }
@@ -55,7 +60,40 @@ impl FromStr for ReportType {
             "data_quality" => Ok(Self::DataQuality),
             "tax_pack" => Ok(Self::TaxPack),
             "monthly_wealth_letter" => Ok(Self::MonthlyWealthLetter),
+            "estate_binder" => Ok(Self::EstateBinder),
             _ => Err(invalid(format!("Unsupported report type: {value}"))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EstateBinderSection {
+    Accounts,
+    Assets,
+    Liabilities,
+    Property,
+    Insurance,
+    Pensions,
+    PrivateInvestments,
+    DocumentsManifest,
+    EntityOwnership,
+    IslamicNotes,
+}
+
+impl EstateBinderSection {
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::Accounts => "Accounts",
+            Self::Assets => "Assets",
+            Self::Liabilities => "Liabilities",
+            Self::Property => "Property",
+            Self::Insurance => "Insurance / ULIP",
+            Self::Pensions => "Pensions",
+            Self::PrivateInvestments => "Private investments",
+            Self::DocumentsManifest => "Documents manifest",
+            Self::EntityOwnership => "Entity ownership summary",
+            Self::IslamicNotes => "Zakat / waqf / charity notes",
         }
     }
 }
@@ -94,6 +132,7 @@ pub struct GenerateReportRequest {
     pub report_type: ReportType,
     pub base_currency: String,
     pub period_month: Option<String>,
+    pub included_sections: Option<Vec<EstateBinderSection>>,
 }
 
 impl GenerateReportRequest {
@@ -330,6 +369,7 @@ mod tests {
                 report_type: ReportType::DataQuality,
                 base_currency: "USD".to_string(),
                 period_month: None,
+                included_sections: None,
             },
             "2026-05-16T00:00:00Z".to_string(),
         )
@@ -387,6 +427,7 @@ mod tests {
             report_type: ReportType::MonthlyWealthLetter,
             base_currency: "USD".to_string(),
             period_month: Some("2026-13".to_string()),
+            included_sections: None,
         };
 
         assert!(request.validate().is_err());

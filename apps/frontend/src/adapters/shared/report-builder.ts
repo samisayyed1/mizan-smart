@@ -6,13 +6,26 @@ export type ReportType =
   | "income"
   | "data_quality"
   | "tax_pack"
-  | "monthly_wealth_letter";
+  | "monthly_wealth_letter"
+  | "estate_binder";
 export type ReportRunStatus = "generated" | "exported";
+export type EstateBinderSection =
+  | "accounts"
+  | "assets"
+  | "liabilities"
+  | "property"
+  | "insurance"
+  | "pensions"
+  | "private_investments"
+  | "documents_manifest"
+  | "entity_ownership"
+  | "islamic_notes";
 
 export interface GenerateReportRequest {
   reportType: ReportType;
   baseCurrency: string;
   periodMonth?: string | null;
+  includedSections?: EstateBinderSection[] | null;
 }
 
 export interface ReportLine {

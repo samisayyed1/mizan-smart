@@ -170,6 +170,12 @@ pub async fn initialize_context(
         writer.clone(),
     ));
     let tax_pack_repository = Arc::new(TaxPackRepository::new(pool.clone(), writer.clone()));
+    let report_builder_repository = Arc::new(
+        mizan_storage_sqlite::report_builder::ReportBuilderRepository::new(
+            pool.clone(),
+            writer.clone(),
+        ),
+    );
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -473,6 +479,7 @@ pub async fn initialize_context(
             corporate_actions_repository,
             shariah_screening_repository,
             tax_pack_repository,
+            report_builder_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

@@ -21,6 +21,7 @@ use mizan_storage_sqlite::{
     portfolio::snapshot::SnapshotRepository,
     private_investments::PrivateInvestmentRepository,
     reconciliation::ReconciliationRepository,
+    report_builder::ReportBuilderRepository,
     sync::AppSyncRepository,
     tax_packs::TaxPackRepository,
     universal_assets::{ManualValuationRepository, UniversalAssetCreateRepository},
@@ -93,6 +94,8 @@ pub struct ServiceContext {
     pub shariah_screening_repository: Arc<ShariahScreeningRepository>,
     /// mizan-smart Phase 4 P28 — CPA-ready tax pack data preparation.
     pub tax_pack_repository: Arc<TaxPackRepository>,
+    /// mizan-smart Phase 4 P30 — deterministic Report Builder foundation.
+    pub report_builder_repository: Arc<ReportBuilderRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -254,6 +257,10 @@ impl ServiceContext {
 
     pub fn tax_pack_repository(&self) -> Arc<TaxPackRepository> {
         Arc::clone(&self.tax_pack_repository)
+    }
+
+    pub fn report_builder_repository(&self) -> Arc<ReportBuilderRepository> {
+        Arc::clone(&self.report_builder_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

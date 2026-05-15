@@ -360,6 +360,7 @@ export {
 export { getLiquidityLadder } from "../shared/liquidity-ladder";
 export { applyCorporateAction, listCorporateActions, previewCorporateAction } from "../shared/corporate-actions";
 export { generateTaxPack, generateTaxPackExport, getTaxPack } from "../shared/tax-packs";
+export { exportReport, generateReport, getReportRun } from "../shared/report-builder";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -464,6 +465,15 @@ export type {
   TaxPackSourceDocumentManifestEntry,
   TaxPackStatus,
 } from "../shared/tax-packs";
+export type {
+  GenerateReportRequest,
+  ReportExportBundle,
+  ReportLine,
+  ReportRun,
+  ReportRunStatus,
+  ReportSection,
+  ReportType,
+} from "../shared/report-builder";
 
 // Connect Commands (Broker + Device Sync + Auth)
 export {

@@ -112,6 +112,7 @@ export * from "../shared/islamic-mode";
 export * from "../shared/liquidity-ladder";
 export * from "../shared/corporate-actions";
 export * from "../shared/tax-packs";
+export * from "../shared/report-builder";
 
 // Contribution Limits Commands
 export * from "../shared/contribution-limits";

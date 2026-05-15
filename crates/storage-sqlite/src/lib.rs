@@ -50,6 +50,7 @@ pub mod market_data;
 pub mod portfolio;
 pub mod private_investments;
 pub mod reconciliation;
+pub mod report_builder;
 pub mod settings;
 pub mod sync;
 pub mod tax_packs;

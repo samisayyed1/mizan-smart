@@ -35,6 +35,7 @@ pub mod portfolio;
 pub mod private_investments;
 pub mod providers_settings;
 pub mod reconciliation;
+pub mod report_builder;
 pub mod secrets;
 pub mod settings;
 #[cfg(feature = "device-sync")]

@@ -68,6 +68,7 @@ use mizan_storage_sqlite::{
     portfolio::{snapshot::SnapshotRepository, valuation::ValuationRepository},
     private_investments::PrivateInvestmentRepository,
     reconciliation::ReconciliationRepository,
+    report_builder::ReportBuilderRepository,
     settings::SettingsRepository,
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
     tax_packs::TaxPackRepository,
@@ -136,6 +137,8 @@ pub struct AppState {
     pub shariah_screening_repository: Arc<ShariahScreeningRepository>,
     /// mizan-smart Phase 4 P28 — CPA-ready tax pack data preparation.
     pub tax_pack_repository: Arc<TaxPackRepository>,
+    /// mizan-smart Phase 4 P30 — deterministic Report Builder foundation.
+    pub report_builder_repository: Arc<ReportBuilderRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -360,6 +363,8 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         writer.clone(),
     ));
     let tax_pack_repository = Arc::new(TaxPackRepository::new(pool.clone(), writer.clone()));
+    let report_builder_repository =
+        Arc::new(ReportBuilderRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,
@@ -634,6 +639,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         corporate_actions_repository,
         shariah_screening_repository,
         tax_pack_repository,
+        report_builder_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

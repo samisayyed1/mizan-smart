@@ -53,6 +53,7 @@ mod performance;
 mod portfolio;
 mod private_investments;
 mod reconciliation;
+mod report_builder;
 mod secrets;
 mod settings;
 pub mod shared;
@@ -129,6 +130,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(extracted_facts::router())
         .merge(data_lineage::router())
         .merge(reconciliation::router())
+        .merge(report_builder::router())
         .merge(private_investments::router())
         .merge(fixed_income::router())
         .merge(liquidity_ladder::router())

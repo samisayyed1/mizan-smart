@@ -1,101 +1,238 @@
+import { useMutation } from "@tanstack/react-query";
+import { useState } from "react";
+
+import {
+  exportReport,
+  generateReport,
+  type ReportRun,
+  type ReportType,
+} from "@/adapters";
 import { Button, Icons, Page, PageContent, PageHeader } from "@mizan/ui";
-import { Link } from "react-router-dom";
+import { Card, CardContent, CardHeader, CardTitle } from "@mizan/ui/components/ui/card";
+import { Input } from "@mizan/ui/components/ui/input";
+import { Label } from "@mizan/ui/components/ui/label";
 
-// Reports page — landing surface for the deterministic Report Builder
-// (Phase 4, prompts 30–32 of docs/mizan-smart-plan/PLAN.md). The full
-// Report Builder, Monthly Wealth Letter, and Estate Binder are
-// implemented later.
-//
-// For now this page links to the real, existing report-like screens so
-// users have a direct path to performance, income, breakdowns, and data
-// health. No fake report rows are rendered.
-
-type ReportIconName = "TrendingUp" | "HandCoins" | "PieChart" | "ShieldCheck";
-
-interface ReportLink {
+interface ReportOption {
+  type: ReportType;
   title: string;
   description: string;
-  href: string;
-  icon: ReportIconName;
+  icon: keyof typeof Icons;
 }
 
-const EXISTING_REPORTS: ReportLink[] = [
+const REPORT_OPTIONS: ReportOption[] = [
   {
-    title: "Performance",
-    description: "Time-weighted return, drawdowns, and account-level performance.",
-    href: "/performance",
+    type: "net_worth",
+    title: "Net Worth Report",
+    description: "Deterministic net worth lines when source rows are available.",
     icon: "TrendingUp",
   },
   {
-    title: "Income",
-    description: "Dividends, interest, and other distributions by period.",
-    href: "/income",
-    icon: "HandCoins",
-  },
-  {
-    title: "Holdings breakdown",
-    description: "Allocation by sector, country, currency, and account.",
-    href: "/insights",
+    type: "portfolio_summary",
+    title: "Portfolio Summary",
+    description: "Portfolio summary foundation with honest empty-state handling.",
     icon: "PieChart",
   },
   {
-    title: "Data health",
-    description: "Stale quotes, missing FX, classification gaps.",
-    href: "/health",
+    type: "income",
+    title: "Income Report",
+    description: "Income report foundation for deterministic future sections.",
+    icon: "HandCoins",
+  },
+  {
+    type: "data_quality",
+    title: "Data Quality Report",
+    description: "Data quality report foundation without invented rows.",
     icon: "ShieldCheck",
   },
   {
-    title: "Tax Pack",
-    description: "CPA-ready ledger summaries with missing-data checks.",
-    href: "/reports/tax-pack",
+    type: "tax_pack",
+    title: "Tax Pack Report",
+    description: "Preview latest tax pack lines with source citation status.",
     icon: "ShieldCheck",
   },
 ];
 
 export default function ReportsPage() {
+  const [reportType, setReportType] = useState<ReportType>("tax_pack");
+  const [baseCurrency, setBaseCurrency] = useState("USD");
+
+  const generateMutation = useMutation({
+    mutationFn: () => generateReport({ reportType, baseCurrency: baseCurrency.toUpperCase() }),
+  });
+
+  const exportMutation = useMutation({
+    mutationFn: (reportRunId: string) => exportReport(reportRunId),
+    onSuccess: (bundle) => {
+      downloadBundle(bundle.fileName, bundle.mimeType, bundle.bytes);
+    },
+  });
+
+  const selected = REPORT_OPTIONS.find((option) => option.type === reportType) ?? REPORT_OPTIONS[0];
+
   return (
     <Page>
       <PageHeader
         heading="Reports"
-        text="Performance, income, breakdowns, and data health."
+        text="Build deterministic report previews from local source data."
       />
       <PageContent>
-        <div
-          data-testid="reports-builder-notice"
-          className="rounded-lg border border-dashed bg-muted/30 px-6 py-6"
-        >
-          <p className="text-base font-medium">Deterministic Report Builder coming in Phase 4</p>
-          <p className="text-muted-foreground mt-1 text-sm">
-            The full Report Builder, Monthly Wealth Letter, and Estate Binder
-            are implemented in Phase 4 of this branch. The reports below are real and
-            available today.
-          </p>
-        </div>
-
-        <div className="mt-6 grid gap-3 md:grid-cols-2" data-testid="reports-existing-grid">
-          {EXISTING_REPORTS.map((report) => {
-            const Icon = Icons[report.icon];
-            return (
+        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Report Builder</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="report-type">Report type</Label>
+                <select
+                  id="report-type"
+                  className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+                  value={reportType}
+                  onChange={(event) => setReportType(event.target.value as ReportType)}
+                >
+                  {REPORT_OPTIONS.map((option) => (
+                    <option key={option.type} value={option.type}>
+                      {option.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="base-currency">Base currency</Label>
+                <Input
+                  id="base-currency"
+                  value={baseCurrency}
+                  maxLength={3}
+                  onChange={(event) => setBaseCurrency(event.target.value.toUpperCase())}
+                />
+              </div>
               <Button
-                key={report.href}
-                asChild
-                variant="outline"
-                className="h-auto justify-start gap-3 px-4 py-4 text-left"
+                type="button"
+                className="w-full"
+                onClick={() => generateMutation.mutate()}
+                disabled={generateMutation.isPending || baseCurrency.length !== 3}
               >
-                <Link to={report.href}>
-                  <Icon className="text-foreground/80 size-5 shrink-0" aria-hidden="true" />
-                  <span className="flex min-w-0 flex-1 flex-col items-start gap-1">
-                    <span className="text-base font-semibold">{report.title}</span>
-                    <span className="text-muted-foreground text-sm leading-snug">
-                      {report.description}
-                    </span>
-                  </span>
-                </Link>
+                Generate Preview
               </Button>
-            );
-          })}
+              {generateMutation.error ? (
+                <p className="text-destructive text-sm">{generateMutation.error.message}</p>
+              ) : null}
+            </CardContent>
+          </Card>
+
+          <div className="space-y-4">
+            <ReportOptionSummary option={selected} />
+            {generateMutation.data ? (
+              <ReportPreview
+                report={generateMutation.data}
+                isExporting={exportMutation.isPending}
+                onExport={() => exportMutation.mutate(generateMutation.data.id)}
+              />
+            ) : (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Preview</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-muted-foreground text-sm">
+                    Generate a report to preview deterministic sections and citation status.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+            {exportMutation.error ? (
+              <p className="text-destructive text-sm">{exportMutation.error.message}</p>
+            ) : null}
+          </div>
         </div>
       </PageContent>
     </Page>
   );
+}
+
+function ReportOptionSummary({ option }: { option: ReportOption }) {
+  const Icon = Icons[option.icon];
+  return (
+    <Card>
+      <CardContent className="flex items-start gap-3 p-4">
+        <Icon className="text-foreground/80 mt-0.5 size-5 shrink-0" aria-hidden="true" />
+        <div>
+          <p className="font-medium">{option.title}</p>
+          <p className="text-muted-foreground text-sm">{option.description}</p>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReportPreview({
+  report,
+  isExporting,
+  onExport,
+}: {
+  report: ReportRun;
+  isExporting: boolean;
+  onExport: () => void;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <CardTitle className="text-lg">Preview</CardTitle>
+          <Button type="button" variant="outline" onClick={onExport} disabled={isExporting}>
+            Export HTML
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-muted-foreground text-sm">{report.disclaimer}</p>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <Metric label="Status" value={report.status} />
+          <Metric label="Sections" value={String(report.sections.length)} />
+          <Metric label="Base" value={report.baseCurrency} />
+        </div>
+        {report.sections.map((section) => (
+          <div key={section.id} className="rounded-md border">
+            <div className="border-b px-3 py-2 text-sm font-medium">{section.title}</div>
+            <div className="divide-y">
+              {section.lines.map((line) => (
+                <div
+                  key={line.id}
+                  className="grid gap-2 px-3 py-2 text-sm md:grid-cols-[minmax(0,1fr)_140px_160px]"
+                >
+                  <span>{line.label}</span>
+                  <span>
+                    {line.amount ?? line.valueText}
+                    {line.currency ? ` ${line.currency}` : ""}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {line.sourceCitationId ?? "Missing citation"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border px-3 py-2">
+      <p className="text-muted-foreground text-xs uppercase">{label}</p>
+      <p className="font-medium">{value}</p>
+    </div>
+  );
+}
+
+function downloadBundle(fileName: string, mimeType: string, bytes: number[]) {
+  const blob = new Blob([new Uint8Array(bytes)], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
 }

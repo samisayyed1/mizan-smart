@@ -27,7 +27,7 @@
 - [x] p27 phase-4/p27  Dividend purification calculator (4628282)
 - [x] p28 phase-4/p28  Tax pack foundation (6474569)
 - [x] p29 phase-4/p29  CPA export bundle (5bd686e)
-- [ ] p30 phase-4/p30  Report Builder foundation
+- [x] p30 phase-4/p30  Report Builder foundation (ddd144a)
 - [ ] p31 phase-4/p31  Monthly Wealth Letter (deterministic)
 - [ ] p32 phase-4/p32  Estate / Legacy Binder
 - [ ] p33 phase-4/p33  Fee Intelligence

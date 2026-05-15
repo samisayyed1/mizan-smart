@@ -31,6 +31,7 @@ pub mod portfolio;
 pub mod private_investments;
 pub mod quotes;
 pub mod reconciliation;
+pub mod report_builder;
 pub mod secrets;
 pub mod settings;
 pub mod sync;

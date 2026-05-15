@@ -235,6 +235,40 @@ diesel::table! {
 }
 
 diesel::table! {
+    report_runs (id) {
+        id -> Text,
+        report_type -> Text,
+        base_currency -> Text,
+        status -> Text,
+        created_at -> Text,
+        completed_at -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    report_sections (id) {
+        id -> Text,
+        report_run_id -> Text,
+        title -> Text,
+        section_order -> Integer,
+        metadata_json -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    report_lines (id) {
+        id -> Text,
+        section_id -> Text,
+        label -> Text,
+        amount -> Nullable<Text>,
+        currency -> Nullable<Text>,
+        value_text -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        metadata_json -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     asset_taxonomy_assignments (id) {
         id -> Text,
         asset_id -> Text,
@@ -1114,6 +1148,9 @@ diesel::joinable!(tax_pack_lines -> source_citations (source_citation_id));
 diesel::joinable!(tax_pack_missing_items -> tax_packs (tax_pack_id));
 diesel::joinable!(tax_pack_missing_items -> activities (related_activity_id));
 diesel::joinable!(tax_pack_missing_items -> assets (related_asset_id));
+diesel::joinable!(report_sections -> report_runs (report_run_id));
+diesel::joinable!(report_lines -> report_sections (section_id));
+diesel::joinable!(report_lines -> source_citations (source_citation_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -1233,6 +1270,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     tax_packs,
     tax_pack_lines,
     tax_pack_missing_items,
+    report_runs,
+    report_sections,
+    report_lines,
     valuations,
     asset_public_market_details,
     asset_fixed_income_details,

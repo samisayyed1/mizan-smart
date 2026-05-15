@@ -242,6 +242,9 @@ export const COMMANDS: CommandMap = {
   generate_tax_pack: { method: "POST", path: "/tax-packs" },
   get_tax_pack: { method: "GET", path: "/tax-packs" },
   generate_tax_pack_export: { method: "POST", path: "/tax-packs" },
+  generate_report: { method: "POST", path: "/report-runs" },
+  get_report_run: { method: "GET", path: "/report-runs" },
+  export_report: { method: "POST", path: "/report-runs" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
   list_corporate_actions: { method: "GET", path: "/corporate-actions" },
@@ -1074,6 +1077,21 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "generate_tax_pack_export": {
       const { taxPackId } = payload as { taxPackId: string };
       url += `/${encodeURIComponent(taxPackId)}/export`;
+      break;
+    }
+    case "generate_report": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "get_report_run": {
+      const { reportRunId } = payload as { reportRunId: string };
+      url += `/${encodeURIComponent(reportRunId)}`;
+      break;
+    }
+    case "export_report": {
+      const { reportRunId } = payload as { reportRunId: string };
+      url += `/${encodeURIComponent(reportRunId)}/export`;
       break;
     }
     case "create_asset": {

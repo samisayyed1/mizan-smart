@@ -436,6 +436,9 @@ pub fn run() {
             commands::tax_packs::generate_tax_pack,
             commands::tax_packs::generate_tax_pack_export,
             commands::tax_packs::get_tax_pack,
+            commands::report_builder::export_report,
+            commands::report_builder::generate_report,
+            commands::report_builder::get_report_run,
             // Goal commands
             commands::goal::create_goal,
             commands::goal::update_goal,

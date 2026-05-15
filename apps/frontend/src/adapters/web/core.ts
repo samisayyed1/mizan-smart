@@ -230,6 +230,10 @@ export const COMMANDS: CommandMap = {
   get_fixed_income_projection: { method: "GET", path: "/fixed-income" },
   list_shariah_screening_profiles: { method: "GET", path: "/shariah-screening/profiles" },
   evaluate_shariah_screening_ratios: { method: "POST", path: "/shariah-screening/evaluate" },
+  evaluate_shariah_compliance: { method: "GET", path: "/shariah-screening/assets" },
+  upsert_asset_shariah_screening: { method: "POST", path: "/shariah-screening/assets" },
+  get_asset_shariah_screening: { method: "GET", path: "/shariah-screening/assets" },
+  list_shariah_screening_audit: { method: "GET", path: "/shariah-screening/assets" },
   get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
@@ -983,6 +987,26 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "evaluate_shariah_screening_ratios": {
       const { ratios } = payload as { ratios: Record<string, unknown> };
       body = JSON.stringify(ratios);
+      break;
+    }
+    case "upsert_asset_shariah_screening": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "evaluate_shariah_compliance": {
+      const { assetId, profileId } = payload as { assetId: string; profileId: string };
+      url += `/${encodeURIComponent(assetId)}/profiles/${encodeURIComponent(profileId)}/evaluate`;
+      break;
+    }
+    case "get_asset_shariah_screening": {
+      const { assetId, profileId } = payload as { assetId: string; profileId: string };
+      url += `/${encodeURIComponent(assetId)}/profiles/${encodeURIComponent(profileId)}`;
+      break;
+    }
+    case "list_shariah_screening_audit": {
+      const { assetId, profileId } = payload as { assetId: string; profileId: string };
+      url += `/${encodeURIComponent(assetId)}/profiles/${encodeURIComponent(profileId)}/audit`;
       break;
     }
     case "preview_corporate_action":

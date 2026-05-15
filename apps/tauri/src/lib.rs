@@ -425,6 +425,10 @@ pub fn run() {
             commands::settings::delete_exchange_rate,
             commands::islamic_mode::list_shariah_screening_profiles,
             commands::islamic_mode::evaluate_shariah_screening_ratios,
+            commands::islamic_mode::evaluate_shariah_compliance,
+            commands::islamic_mode::upsert_asset_shariah_screening,
+            commands::islamic_mode::get_asset_shariah_screening,
+            commands::islamic_mode::list_shariah_screening_audit,
             // Goal commands
             commands::goal::create_goal,
             commands::goal::update_goal,

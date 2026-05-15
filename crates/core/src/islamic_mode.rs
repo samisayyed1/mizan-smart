@@ -1,3 +1,4 @@
+use crate::errors::ValidationError;
 use async_trait::async_trait;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -65,6 +66,7 @@ pub struct AssetShariahScreening {
     pub source_citation_id: Option<String>,
     pub manual_override_reason: Option<String>,
     pub reviewed_at: Option<String>,
+    pub notes: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -84,13 +86,57 @@ pub struct ShariahScreeningEvaluation {
     pub missing_fields: Vec<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertAssetShariahScreeningRequest {
+    pub asset_id: String,
+    pub profile_id: String,
+    pub ratios: ShariahScreeningRatios,
+    pub source_citation_id: Option<String>,
+    pub notes: Option<String>,
+    pub manual_override_status: Option<ShariahScreeningStatus>,
+    pub manual_override_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ShariahScreeningAuditEntry {
+    pub id: String,
+    pub screening_id: String,
+    pub asset_id: String,
+    pub profile_id: String,
+    pub previous_status: Option<ShariahScreeningStatus>,
+    pub new_status: ShariahScreeningStatus,
+    pub notes: Option<String>,
+    pub created_at: String,
+}
+
 #[async_trait]
 pub trait ShariahScreeningRepositoryTrait: Send + Sync {
     fn list_profiles(&self) -> Result<Vec<ShariahScreeningProfile>>;
 
     fn get_default_profile(&self) -> Result<ShariahScreeningProfile>;
 
+    fn get_profile(&self, profile_id: &str) -> Result<ShariahScreeningProfile>;
+
     fn get_asset_screening(&self, asset_id: &str) -> Result<Option<AssetShariahScreening>>;
+
+    fn get_asset_screening_for_profile(
+        &self,
+        asset_id: &str,
+        profile_id: &str,
+    ) -> Result<Option<AssetShariahScreening>>;
+
+    async fn upsert_asset_screening(
+        &self,
+        request: UpsertAssetShariahScreeningRequest,
+    ) -> Result<AssetShariahScreening>;
+
+    fn list_screening_audit(
+        &self,
+        asset_id: &str,
+        profile_id: &str,
+    ) -> Result<Vec<ShariahScreeningAuditEntry>>;
 }
 
 pub fn evaluate_shariah_screening(
@@ -140,6 +186,53 @@ pub fn evaluate_shariah_screening(
     }
 }
 
+pub fn validate_shariah_mode_enabled(enabled: bool) -> Result<()> {
+    if enabled {
+        Ok(())
+    } else {
+        Err(ValidationError::InvalidInput(
+            "Islamic finance tools are disabled for this profile".to_string(),
+        )
+        .into())
+    }
+}
+
+pub fn evaluate_screening_request(
+    profile: &ShariahScreeningProfile,
+    request: &UpsertAssetShariahScreeningRequest,
+) -> Result<ShariahScreeningEvaluation> {
+    validate_screening_request(request)?;
+    if let Some(status) = request.manual_override_status {
+        return Ok(ShariahScreeningEvaluation {
+            status,
+            missing_fields: Vec::new(),
+        });
+    }
+    Ok(evaluate_shariah_screening(profile, &request.ratios))
+}
+
+pub fn validate_screening_request(request: &UpsertAssetShariahScreeningRequest) -> Result<()> {
+    if request.asset_id.trim().is_empty() {
+        return Err(ValidationError::InvalidInput("asset_id is required".to_string()).into());
+    }
+    if request.profile_id.trim().is_empty() {
+        return Err(ValidationError::InvalidInput("profile_id is required".to_string()).into());
+    }
+    if request.manual_override_status.is_some()
+        && request
+            .manual_override_reason
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or_default()
+            .is_empty()
+    {
+        return Err(
+            ValidationError::InvalidInput("manual override requires a reason".to_string()).into(),
+        );
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use rust_decimal_macros::dec;
@@ -156,6 +249,22 @@ mod tests {
             is_default: true,
             created_at: "2026-05-15T00:00:00Z".to_string(),
             updated_at: "2026-05-15T00:00:00Z".to_string(),
+        }
+    }
+
+    fn upsert_request() -> UpsertAssetShariahScreeningRequest {
+        UpsertAssetShariahScreeningRequest {
+            asset_id: "asset-1".to_string(),
+            profile_id: DEFAULT_SHARIAH_PROFILE_ID.to_string(),
+            ratios: ShariahScreeningRatios {
+                debt_ratio: Some(dec!(0.10)),
+                liquid_assets_ratio: Some(dec!(0.10)),
+                impure_income_ratio: Some(dec!(0.01)),
+            },
+            source_citation_id: None,
+            notes: None,
+            manual_override_status: None,
+            manual_override_reason: None,
         }
     }
 
@@ -194,5 +303,44 @@ mod tests {
         );
         assert_eq!(evaluation.status, ShariahScreeningStatus::Unknown);
         assert_eq!(evaluation.missing_fields, vec!["liquidAssetsRatio"]);
+    }
+
+    #[test]
+    fn manual_override_without_reason_is_rejected() {
+        let request = UpsertAssetShariahScreeningRequest {
+            manual_override_status: Some(ShariahScreeningStatus::Compliant),
+            ..upsert_request()
+        };
+        assert!(validate_screening_request(&request).is_err());
+    }
+
+    #[test]
+    fn disabled_mode_is_rejected() {
+        assert!(validate_shariah_mode_enabled(false).is_err());
+        assert!(validate_shariah_mode_enabled(true).is_ok());
+    }
+
+    #[test]
+    fn all_threshold_failures_are_non_compliant() {
+        for ratios in [
+            ShariahScreeningRatios {
+                debt_ratio: Some(dec!(0.31)),
+                liquid_assets_ratio: Some(dec!(0.10)),
+                impure_income_ratio: Some(dec!(0.01)),
+            },
+            ShariahScreeningRatios {
+                debt_ratio: Some(dec!(0.10)),
+                liquid_assets_ratio: Some(dec!(0.31)),
+                impure_income_ratio: Some(dec!(0.01)),
+            },
+            ShariahScreeningRatios {
+                debt_ratio: Some(dec!(0.10)),
+                liquid_assets_ratio: Some(dec!(0.10)),
+                impure_income_ratio: Some(dec!(0.06)),
+            },
+        ] {
+            let evaluation = evaluate_shariah_screening(&profile(), &ratios);
+            assert_eq!(evaluation.status, ShariahScreeningStatus::NonCompliant);
+        }
     }
 }

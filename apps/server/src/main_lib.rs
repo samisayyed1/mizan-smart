@@ -352,7 +352,10 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         pool.clone(),
         writer.clone(),
     ));
-    let shariah_screening_repository = Arc::new(ShariahScreeningRepository::new(pool.clone()));
+    let shariah_screening_repository = Arc::new(ShariahScreeningRepository::new(
+        pool.clone(),
+        writer.clone(),
+    ));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,

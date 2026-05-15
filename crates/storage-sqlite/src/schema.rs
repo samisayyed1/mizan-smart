@@ -130,6 +130,20 @@ diesel::table! {
         reviewed_at -> Nullable<Text>,
         created_at -> Text,
         updated_at -> Text,
+        notes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    shariah_screening_audit_log (id) {
+        id -> Text,
+        screening_id -> Text,
+        asset_id -> Text,
+        profile_id -> Text,
+        previous_status -> Nullable<Text>,
+        new_status -> Text,
+        notes -> Nullable<Text>,
+        created_at -> Text,
     }
 }
 
@@ -998,6 +1012,9 @@ diesel::joinable!(valuations -> source_citations (source_citation_id));
 diesel::joinable!(asset_shariah_screening -> assets (asset_id));
 diesel::joinable!(asset_shariah_screening -> shariah_screening_profiles (profile_id));
 diesel::joinable!(asset_shariah_screening -> source_citations (source_citation_id));
+diesel::joinable!(shariah_screening_audit_log -> asset_shariah_screening (screening_id));
+diesel::joinable!(shariah_screening_audit_log -> assets (asset_id));
+diesel::joinable!(shariah_screening_audit_log -> shariah_screening_profiles (profile_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -1110,6 +1127,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     document_links,
     smart_alerts,
     shariah_screening_profiles,
+    shariah_screening_audit_log,
     valuations,
     asset_public_market_details,
     asset_fixed_income_details,

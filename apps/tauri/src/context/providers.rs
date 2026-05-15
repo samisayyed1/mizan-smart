@@ -164,7 +164,10 @@ pub async fn initialize_context(
         pool.clone(),
         writer.clone(),
     ));
-    let shariah_screening_repository = Arc::new(ShariahScreeningRepository::new(pool.clone()));
+    let shariah_screening_repository = Arc::new(ShariahScreeningRepository::new(
+        pool.clone(),
+        writer.clone(),
+    ));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),

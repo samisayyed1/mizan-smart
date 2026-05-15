@@ -345,7 +345,14 @@ export {
   upsertPrivateInvestment,
 } from "../shared/private-investments";
 export { getFixedIncomeProjection, upsertFixedIncomeDetails } from "../shared/fixed-income";
-export { evaluateShariahScreeningRatios, listShariahScreeningProfiles } from "../shared/islamic-mode";
+export {
+  evaluateShariahCompliance,
+  evaluateShariahScreeningRatios,
+  getAssetShariahScreening,
+  listShariahScreeningAudit,
+  listShariahScreeningProfiles,
+  upsertAssetShariahScreening,
+} from "../shared/islamic-mode";
 export { getLiquidityLadder } from "../shared/liquidity-ladder";
 export { applyCorporateAction, listCorporateActions, previewCorporateAction } from "../shared/corporate-actions";
 export type {
@@ -406,9 +413,12 @@ export type {
 } from "../shared/fixed-income";
 export type {
   ShariahScreeningEvaluation,
+  ShariahScreeningAuditEntry,
   ShariahScreeningProfile,
   ShariahScreeningRatios,
   ShariahScreeningStatus,
+  AssetShariahScreening,
+  UpsertAssetShariahScreeningRequest,
 } from "../shared/islamic-mode";
 export type {
   LiquidityConfidence,

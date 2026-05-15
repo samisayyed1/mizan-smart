@@ -21,6 +21,12 @@ interface ReportOption {
 
 const REPORT_OPTIONS: ReportOption[] = [
   {
+    type: "monthly_wealth_letter",
+    title: "Monthly Wealth Letter",
+    description: "Premium deterministic monthly summary without AI commentary.",
+    icon: "FileText",
+  },
+  {
     type: "net_worth",
     title: "Net Worth Report",
     description: "Deterministic net worth lines when source rows are available.",
@@ -55,9 +61,20 @@ const REPORT_OPTIONS: ReportOption[] = [
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>("tax_pack");
   const [baseCurrency, setBaseCurrency] = useState("USD");
+  const [periodMonth, setPeriodMonth] = useState(() => new Date().toISOString().slice(0, 7));
 
   const generateMutation = useMutation({
-    mutationFn: () => generateReport({ reportType, baseCurrency: baseCurrency.toUpperCase() }),
+    mutationFn: () => {
+      const request = {
+        reportType,
+        baseCurrency: baseCurrency.toUpperCase(),
+      };
+      return generateReport(
+        reportType === "monthly_wealth_letter"
+          ? { ...request, periodMonth }
+          : request,
+      );
+    },
   });
 
   const exportMutation = useMutation({
@@ -106,11 +123,26 @@ export default function ReportsPage() {
                   onChange={(event) => setBaseCurrency(event.target.value.toUpperCase())}
                 />
               </div>
+              {reportType === "monthly_wealth_letter" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="period-month">Month</Label>
+                  <Input
+                    id="period-month"
+                    type="month"
+                    value={periodMonth}
+                    onChange={(event) => setPeriodMonth(event.target.value)}
+                  />
+                </div>
+              ) : null}
               <Button
                 type="button"
                 className="w-full"
                 onClick={() => generateMutation.mutate()}
-                disabled={generateMutation.isPending || baseCurrency.length !== 3}
+                disabled={
+                  generateMutation.isPending ||
+                  baseCurrency.length !== 3 ||
+                  (reportType === "monthly_wealth_letter" && periodMonth.length !== 7)
+                }
               >
                 Generate Preview
               </Button>

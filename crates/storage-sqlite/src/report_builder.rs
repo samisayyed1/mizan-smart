@@ -1,10 +1,11 @@
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{Datelike, NaiveDate, Utc};
 use diesel::prelude::*;
 use diesel::r2d2::{self, Pool};
 use diesel::SqliteConnection;
 use rust_decimal::Decimal;
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -18,7 +19,11 @@ use mizan_core::{Error, Result};
 
 use crate::db::{get_connection, WriteHandle};
 use crate::errors::StorageError;
-use crate::schema::{report_lines, report_runs, report_sections, tax_pack_lines, tax_packs};
+use crate::schema::{
+    activities, app_settings, capital_calls, extracted_facts, fixed_income_cashflows, report_lines,
+    report_runs, report_sections, tax_pack_lines, tax_pack_missing_items, tax_packs,
+    zakat_snapshots,
+};
 
 pub struct ReportBuilderRepository {
     pool: Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
@@ -85,6 +90,49 @@ struct TaxPackReportLineRow {
     source_citation_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Queryable)]
+struct MonthlyActivityRow {
+    id: String,
+    activity_type: String,
+    amount: Option<String>,
+    fee: Option<String>,
+    currency: String,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct UpcomingCapitalCallRow {
+    id: String,
+    due_date: String,
+    amount: String,
+    currency: String,
+    source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct UpcomingFixedIncomeCashflowRow {
+    id: String,
+    expected_date: String,
+    cashflow_type: String,
+    expected_amount: String,
+    currency: String,
+    source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct LatestTaxReadinessRow {
+    id: String,
+    tax_year: i32,
+    status: String,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct LatestZakatSnapshotRow {
+    id: String,
+    snapshot_date: String,
+    zakat_due: String,
+    base_currency: String,
+}
+
 #[async_trait]
 impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
     async fn generate_report(&self, request: GenerateReportRequest) -> Result<ReportRun> {
@@ -92,6 +140,9 @@ impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
         let created_at = Utc::now().to_rfc3339();
         let report = match request.report_type {
             ReportType::TaxPack => self.build_tax_pack_report(request, created_at)?,
+            ReportType::MonthlyWealthLetter => {
+                self.build_monthly_wealth_letter(request, created_at)?
+            }
             _ => build_empty_report(
                 Uuid::new_v4().to_string(),
                 Uuid::new_v4().to_string(),
@@ -260,6 +311,393 @@ impl ReportBuilderRepository {
         })
     }
 
+    fn build_monthly_wealth_letter(
+        &self,
+        request: GenerateReportRequest,
+        created_at: String,
+    ) -> Result<ReportRun> {
+        let period_month = request
+            .period_month
+            .clone()
+            .unwrap_or_else(|| created_at.chars().take(7).collect::<String>());
+        let next_month = next_month_start(&period_month)?;
+        let start_date = format!("{period_month}-01");
+        let year = period_month[0..4].parse::<i32>().map_err(|err| {
+            Error::Validation(mizan_core::errors::ValidationError::InvalidInput(format!(
+                "period_month year is invalid: {err}"
+            )))
+        })?;
+
+        let mut conn = get_connection(&self.pool)?;
+        let run_id = Uuid::new_v4().to_string();
+        let mut sections = Vec::new();
+        let mut missing_lines = Vec::new();
+
+        let activity_rows = activities::table
+            .filter(activities::activity_date.ge(&start_date))
+            .filter(activities::activity_date.lt(&next_month))
+            .select((
+                activities::id,
+                activities::activity_type,
+                activities::amount,
+                activities::fee,
+                activities::currency,
+            ))
+            .load::<MonthlyActivityRow>(&mut conn)
+            .map_err(StorageError::from)?;
+        let income_rows = activity_rows
+            .iter()
+            .filter(|row| is_income_activity(&row.activity_type))
+            .collect::<Vec<_>>();
+
+        let income_section_id = Uuid::new_v4().to_string();
+        let mut income_by_currency = BTreeMap::<String, Decimal>::new();
+        let mut largest_income: Option<(&MonthlyActivityRow, Decimal)> = None;
+        for row in &income_rows {
+            let Some(amount_text) = row.amount.as_deref() else {
+                missing_lines.push(text_line(
+                    &income_section_id,
+                    format!("Income activity {} missing amount", row.id),
+                    "Activity has no amount, so it was omitted from income totals.".to_string(),
+                    json!({"sourceTable":"activities","sourceId":row.id,"citationStatus":"missing"}),
+                ));
+                continue;
+            };
+            let amount = parse_decimal("activity amount", amount_text)?;
+            *income_by_currency.entry(row.currency.clone()).or_default() += amount;
+            if largest_income
+                .as_ref()
+                .is_none_or(|(_, current)| amount.abs() > current.abs())
+            {
+                largest_income = Some((row, amount));
+            }
+        }
+        if !income_by_currency.is_empty() {
+            let mut lines = income_by_currency
+                .into_iter()
+                .map(|(currency, amount)| {
+                    amount_line(
+                        &income_section_id,
+                        "Dividend and interest received".to_string(),
+                        amount,
+                        currency,
+                        None,
+                        json!({"sourceTable":"activities","periodMonth":period_month,"citationStatus":"missing"}),
+                    )
+                })
+                .collect::<Vec<_>>();
+            sections.push(section(
+                &run_id,
+                income_section_id,
+                "Income received",
+                sections.len() as i32 + 1,
+                json!({"periodMonth":period_month}),
+                lines.split_off(0),
+            ));
+        }
+
+        if let Some((row, amount)) = largest_income {
+            let section_id = Uuid::new_v4().to_string();
+            sections.push(section(
+                &run_id,
+                section_id.clone(),
+                "Largest contributors",
+                sections.len() as i32 + 1,
+                json!({"periodMonth":period_month}),
+                vec![amount_line(
+                    &section_id,
+                    format!("Largest income contributor: {}", row.activity_type),
+                    amount,
+                    row.currency.clone(),
+                    None,
+                    json!({"sourceTable":"activities","sourceId":row.id,"citationStatus":"missing"}),
+                )],
+            ));
+        }
+
+        let fees_section_id = Uuid::new_v4().to_string();
+        let mut fees_by_currency = BTreeMap::<String, Decimal>::new();
+        for row in &activity_rows {
+            if let Some(fee_text) = row.fee.as_deref() {
+                let fee = parse_decimal("activity fee", fee_text)?;
+                if fee != Decimal::ZERO {
+                    *fees_by_currency.entry(row.currency.clone()).or_default() += fee;
+                }
+            }
+        }
+        if !fees_by_currency.is_empty() {
+            let lines = fees_by_currency
+                .into_iter()
+                .map(|(currency, fee)| {
+                    amount_line(
+                        &fees_section_id,
+                        "Fees recorded".to_string(),
+                        fee,
+                        currency,
+                        None,
+                        json!({"sourceTable":"activities","periodMonth":period_month,"citationStatus":"missing"}),
+                    )
+                })
+                .collect::<Vec<_>>();
+            sections.push(section(
+                &run_id,
+                fees_section_id,
+                "Fees",
+                sections.len() as i32 + 1,
+                json!({"periodMonth":period_month}),
+                lines,
+            ));
+        }
+
+        let pending_fact_count = extracted_facts::table
+            .filter(extracted_facts::status.eq("pending"))
+            .count()
+            .get_result::<i64>(&mut conn)
+            .map_err(StorageError::from)?;
+        if pending_fact_count > 0 {
+            let section_id = Uuid::new_v4().to_string();
+            sections.push(section(
+                &run_id,
+                section_id.clone(),
+                "Pending document reviews",
+                sections.len() as i32 + 1,
+                json!({"sourceTable":"extracted_facts"}),
+                vec![text_line(
+                    &section_id,
+                    "Facts awaiting review".to_string(),
+                    pending_fact_count.to_string(),
+                    json!({"sourceTable":"extracted_facts","status":"pending","citationStatus":"missing"}),
+                )],
+            ));
+        }
+
+        let capital_call_rows = capital_calls::table
+            .filter(capital_calls::status.eq("due"))
+            .filter(capital_calls::due_date.ge(&start_date))
+            .filter(capital_calls::due_date.lt(&next_month))
+            .select((
+                capital_calls::id,
+                capital_calls::due_date,
+                capital_calls::amount,
+                capital_calls::currency,
+                capital_calls::source_citation_id,
+            ))
+            .order((capital_calls::due_date.asc(), capital_calls::id.asc()))
+            .load::<UpcomingCapitalCallRow>(&mut conn)
+            .map_err(StorageError::from)?;
+        if !capital_call_rows.is_empty() {
+            let section_id = Uuid::new_v4().to_string();
+            let lines = capital_call_rows
+                .into_iter()
+                .map(|row| {
+                    let amount = parse_decimal("capital call amount", &row.amount)?;
+                    Ok(amount_line(
+                        &section_id,
+                        format!("Capital call due {}", row.due_date),
+                        amount,
+                        row.currency,
+                        row.source_citation_id,
+                        json!({"sourceTable":"capital_calls","sourceId":row.id}),
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            sections.push(section(
+                &run_id,
+                section_id,
+                "Upcoming capital calls",
+                sections.len() as i32 + 1,
+                json!({"periodMonth":period_month}),
+                lines,
+            ));
+        }
+
+        let fixed_income_rows = fixed_income_cashflows::table
+            .filter(fixed_income_cashflows::status.eq("expected"))
+            .filter(fixed_income_cashflows::expected_date.ge(&start_date))
+            .filter(fixed_income_cashflows::expected_date.lt(&next_month))
+            .select((
+                fixed_income_cashflows::id,
+                fixed_income_cashflows::expected_date,
+                fixed_income_cashflows::cashflow_type,
+                fixed_income_cashflows::expected_amount,
+                fixed_income_cashflows::currency,
+                fixed_income_cashflows::source_citation_id,
+            ))
+            .order((
+                fixed_income_cashflows::expected_date.asc(),
+                fixed_income_cashflows::id.asc(),
+            ))
+            .load::<UpcomingFixedIncomeCashflowRow>(&mut conn)
+            .map_err(StorageError::from)?;
+        if !fixed_income_rows.is_empty() {
+            let section_id = Uuid::new_v4().to_string();
+            let lines = fixed_income_rows
+                .into_iter()
+                .map(|row| {
+                    let amount =
+                        parse_decimal("fixed income cashflow amount", &row.expected_amount)?;
+                    Ok(amount_line(
+                        &section_id,
+                        format!("{} expected {}", row.cashflow_type, row.expected_date),
+                        amount,
+                        row.currency,
+                        row.source_citation_id,
+                        json!({"sourceTable":"fixed_income_cashflows","sourceId":row.id}),
+                    ))
+                })
+                .collect::<Result<Vec<_>>>()?;
+            sections.push(section(
+                &run_id,
+                section_id,
+                "Upcoming coupons and maturities",
+                sections.len() as i32 + 1,
+                json!({"periodMonth":period_month}),
+                lines,
+            ));
+        }
+
+        if let Some(tax_pack) = tax_packs::table
+            .filter(tax_packs::tax_year.eq(year))
+            .select((tax_packs::id, tax_packs::tax_year, tax_packs::status))
+            .order((tax_packs::created_at.desc(), tax_packs::id.desc()))
+            .first::<LatestTaxReadinessRow>(&mut conn)
+            .optional()
+            .map_err(StorageError::from)?
+        {
+            let line_count = tax_pack_lines::table
+                .filter(tax_pack_lines::tax_pack_id.eq(&tax_pack.id))
+                .count()
+                .get_result::<i64>(&mut conn)
+                .map_err(StorageError::from)?;
+            let missing_count = tax_pack_missing_items::table
+                .filter(tax_pack_missing_items::tax_pack_id.eq(&tax_pack.id))
+                .count()
+                .get_result::<i64>(&mut conn)
+                .map_err(StorageError::from)?;
+            let section_id = Uuid::new_v4().to_string();
+            sections.push(section(
+                &run_id,
+                section_id.clone(),
+                "Tax readiness",
+                sections.len() as i32 + 1,
+                json!({"taxPackId":tax_pack.id,"taxYear":tax_pack.tax_year}),
+                vec![text_line(
+                    &section_id,
+                    "Latest tax pack status".to_string(),
+                    format!(
+                        "{} with {} lines and {} missing source items",
+                        tax_pack.status, line_count, missing_count
+                    ),
+                    json!({"sourceTable":"tax_packs","sourceId":tax_pack.id,"citationStatus":"missing"}),
+                )],
+            ));
+            if missing_count > 0 {
+                missing_lines.push(text_line(
+                    &section_id,
+                    "Tax pack missing source items".to_string(),
+                    missing_count.to_string(),
+                    json!({"sourceTable":"tax_pack_missing_items","taxPackId":tax_pack.id,"citationStatus":"missing"}),
+                ));
+            }
+        }
+
+        if shariah_mode_enabled(&mut conn)? {
+            if let Some(snapshot) = zakat_snapshots::table
+                .filter(zakat_snapshots::snapshot_date.lt(&next_month))
+                .select((
+                    zakat_snapshots::id,
+                    zakat_snapshots::snapshot_date,
+                    zakat_snapshots::zakat_due,
+                    zakat_snapshots::base_currency,
+                ))
+                .order((
+                    zakat_snapshots::snapshot_date.desc(),
+                    zakat_snapshots::id.desc(),
+                ))
+                .first::<LatestZakatSnapshotRow>(&mut conn)
+                .optional()
+                .map_err(StorageError::from)?
+            {
+                let section_id = Uuid::new_v4().to_string();
+                let zakat_due = parse_decimal("zakat due", &snapshot.zakat_due)?;
+                sections.push(section(
+                    &run_id,
+                    section_id.clone(),
+                    "Zakat readiness",
+                    sections.len() as i32 + 1,
+                    json!({"zakatSnapshotId":snapshot.id,"snapshotDate":snapshot.snapshot_date}),
+                    vec![amount_line(
+                        &section_id,
+                        format!("Zakat snapshot {}", snapshot.snapshot_date),
+                        zakat_due,
+                        snapshot.base_currency,
+                        None,
+                        json!({"sourceTable":"zakat_snapshots","sourceId":snapshot.id,"citationStatus":"missing"}),
+                    )],
+                ));
+            }
+        }
+
+        if !missing_lines.is_empty() {
+            let section_id = Uuid::new_v4().to_string();
+            for line in &mut missing_lines {
+                line.section_id = section_id.clone();
+            }
+            sections.push(section(
+                &run_id,
+                section_id,
+                "Stale or missing data",
+                sections.len() as i32 + 1,
+                json!({"periodMonth":period_month}),
+                missing_lines,
+            ));
+        }
+
+        if sections.is_empty() {
+            return build_empty_report(
+                run_id,
+                Uuid::new_v4().to_string(),
+                Uuid::new_v4().to_string(),
+                request,
+                created_at,
+            );
+        }
+
+        let opening_section_id = Uuid::new_v4().to_string();
+        sections.insert(
+            0,
+            section(
+                &run_id,
+                opening_section_id.clone(),
+                "Opening summary",
+                0,
+                json!({"periodMonth":period_month}),
+                vec![text_line(
+                    &opening_section_id,
+                    "Monthly summary period".to_string(),
+                    format!(
+                        "Deterministic monthly wealth letter for {period_month}, generated only from supported local source rows."
+                    ),
+                    json!({"periodMonth":period_month,"citationStatus":"missing"}),
+                )],
+            ),
+        );
+        for (index, section) in sections.iter_mut().enumerate() {
+            section.section_order = index as i32;
+        }
+
+        Ok(ReportRun {
+            id: run_id,
+            report_type: request.report_type,
+            base_currency: request.base_currency,
+            status: ReportRunStatus::Generated,
+            created_at: created_at.clone(),
+            completed_at: Some(created_at),
+            disclaimer: REPORT_BUILDER_DISCLAIMER.to_string(),
+            sections,
+        })
+    }
+
     async fn persist_report(&self, report: ReportRun) -> Result<()> {
         let run_row = ReportRunRow::from(&report);
         let section_rows = report
@@ -292,6 +730,104 @@ impl ReportBuilderRepository {
             })
             .await
     }
+}
+
+fn section(
+    run_id: &str,
+    section_id: String,
+    title: &str,
+    section_order: i32,
+    metadata: serde_json::Value,
+    lines: Vec<ReportLine>,
+) -> ReportSection {
+    ReportSection {
+        id: section_id,
+        report_run_id: run_id.to_string(),
+        title: title.to_string(),
+        section_order,
+        metadata_json: Some(metadata.to_string()),
+        lines,
+    }
+}
+
+fn amount_line(
+    section_id: &str,
+    label: String,
+    amount: Decimal,
+    currency: String,
+    source_citation_id: Option<String>,
+    metadata: serde_json::Value,
+) -> ReportLine {
+    ReportLine {
+        id: Uuid::new_v4().to_string(),
+        section_id: section_id.to_string(),
+        label,
+        amount: Some(amount),
+        currency: Some(currency),
+        value_text: source_citation_id
+            .is_none()
+            .then(|| "Missing source citation".to_string()),
+        source_citation_id,
+        metadata_json: Some(metadata.to_string()),
+    }
+}
+
+fn text_line(
+    section_id: &str,
+    label: String,
+    value_text: String,
+    metadata: serde_json::Value,
+) -> ReportLine {
+    ReportLine {
+        id: Uuid::new_v4().to_string(),
+        section_id: section_id.to_string(),
+        label,
+        amount: None,
+        currency: None,
+        value_text: Some(value_text),
+        source_citation_id: None,
+        metadata_json: Some(metadata.to_string()),
+    }
+}
+
+fn is_income_activity(activity_type: &str) -> bool {
+    matches!(
+        activity_type.to_ascii_lowercase().as_str(),
+        "dividend" | "interest"
+    )
+}
+
+fn parse_decimal(label: &str, value: &str) -> Result<Decimal> {
+    Decimal::from_str(value).map_err(|err| {
+        Error::Validation(mizan_core::errors::ValidationError::InvalidInput(format!(
+            "{label} {value:?} is not a valid decimal: {err}"
+        )))
+    })
+}
+
+fn next_month_start(period_month: &str) -> Result<String> {
+    let date =
+        NaiveDate::parse_from_str(&format!("{period_month}-01"), "%Y-%m-%d").map_err(|err| {
+            Error::Validation(mizan_core::errors::ValidationError::InvalidInput(format!(
+                "period_month {period_month:?} is not valid: {err}"
+            )))
+        })?;
+    let (year, month) = if date.month() == 12 {
+        (date.year() + 1, 1)
+    } else {
+        (date.year(), date.month() + 1)
+    };
+    Ok(format!("{year:04}-{month:02}-01"))
+}
+
+fn shariah_mode_enabled(conn: &mut SqliteConnection) -> Result<bool> {
+    let value = app_settings::table
+        .find("shariah_mode_enabled")
+        .select(app_settings::setting_value)
+        .first::<String>(conn)
+        .optional()
+        .map_err(StorageError::from)?;
+    Ok(value.as_deref() == Some("true"))
 }
 
 impl From<&ReportRun> for ReportRunRow {
@@ -391,7 +927,7 @@ mod tests {
     use super::*;
     use crate::db::write_actor::spawn_writer;
     use crate::db::{create_pool, init, run_migrations};
-    use crate::schema::{source_citations, tax_pack_lines, tax_packs};
+    use crate::schema::{accounts, activities, source_citations, tax_pack_lines, tax_packs};
     use tempfile::tempdir;
 
     fn setup() -> (
@@ -475,10 +1011,136 @@ mod tests {
         assert!(html.contains(REPORT_BUILDER_DISCLAIMER));
     }
 
+    #[tokio::test]
+    async fn monthly_wealth_letter_generates_month_with_data() {
+        let (pool, writer) = setup();
+        seed_account(&pool);
+        seed_activity(
+            &pool,
+            "income-1",
+            "DIVIDEND",
+            "2026-05-10",
+            Some("12.3400"),
+            Some("0.10"),
+        );
+        seed_activity(&pool, "income-2", "INTEREST", "2026-05-11", Some("2"), None);
+        seed_activity(
+            &pool,
+            "old-income",
+            "DIVIDEND",
+            "2026-04-10",
+            Some("99"),
+            None,
+        );
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let report = repo
+            .generate_report(monthly_request("2026-05"))
+            .await
+            .expect("monthly report");
+
+        assert_eq!(report.report_type, ReportType::MonthlyWealthLetter);
+        assert!(report
+            .sections
+            .iter()
+            .any(|section| section.title == "Opening summary"));
+        let income_line = report
+            .sections
+            .iter()
+            .find(|section| section.title == "Income received")
+            .expect("income section")
+            .lines
+            .first()
+            .expect("income line");
+        assert_eq!(
+            income_line.amount,
+            Some(Decimal::from_str("14.3400").expect("decimal"))
+        );
+        assert_eq!(income_line.currency.as_deref(), Some("USD"));
+        assert!(report
+            .sections
+            .iter()
+            .any(|section| section.title == "Fees"));
+    }
+
+    #[tokio::test]
+    async fn monthly_wealth_letter_empty_month_is_honest() {
+        let (pool, writer) = setup();
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let report = repo
+            .generate_report(monthly_request("2026-05"))
+            .await
+            .expect("monthly report");
+
+        assert_eq!(report.sections.len(), 1);
+        assert_eq!(report.sections[0].lines[0].label, "No report data");
+        assert!(!report
+            .sections
+            .iter()
+            .any(|section| section.title == "Income received"));
+    }
+
+    #[tokio::test]
+    async fn monthly_wealth_letter_omits_unsupported_sections() {
+        let (pool, writer) = setup();
+        seed_account(&pool);
+        seed_activity(&pool, "income-1", "DIVIDEND", "2026-05-10", Some("1"), None);
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let report = repo
+            .generate_report(monthly_request("2026-05"))
+            .await
+            .expect("monthly report");
+        let titles = report
+            .sections
+            .iter()
+            .map(|section| section.title.as_str())
+            .collect::<Vec<_>>();
+
+        assert!(titles.contains(&"Income received"));
+        assert!(!titles.contains(&"Tax readiness"));
+        assert!(!titles.contains(&"Upcoming capital calls"));
+        assert!(!titles.contains(&"Upcoming coupons and maturities"));
+    }
+
+    #[tokio::test]
+    async fn monthly_wealth_letter_preserves_high_precision_values() {
+        let (pool, writer) = setup();
+        seed_account(&pool);
+        seed_activity(
+            &pool,
+            "income-1",
+            "DIVIDEND",
+            "2026-05-10",
+            Some("1234.567890123456789"),
+            None,
+        );
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let report = repo
+            .generate_report(monthly_request("2026-05"))
+            .await
+            .expect("monthly report");
+        let export = repo.export_report(&report.id).expect("export");
+        let html = String::from_utf8(export.bytes).expect("html");
+
+        assert!(html.contains("1234.567890123456789"));
+    }
+
     fn request(report_type: ReportType) -> GenerateReportRequest {
         GenerateReportRequest {
             report_type,
             base_currency: "USD".to_string(),
+            period_month: None,
+        }
+    }
+
+    fn monthly_request(period_month: &str) -> GenerateReportRequest {
+        GenerateReportRequest {
+            report_type: ReportType::MonthlyWealthLetter,
+            base_currency: "USD".to_string(),
+            period_month: Some(period_month.to_string()),
         }
     }
 
@@ -532,5 +1194,52 @@ mod tests {
             ])
             .execute(&mut conn)
             .expect("seed tax lines");
+    }
+
+    fn seed_account(pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::insert_into(accounts::table)
+            .values((
+                accounts::id.eq("acc-1"),
+                accounts::name.eq("Taxable"),
+                accounts::account_type.eq("brokerage"),
+                accounts::currency.eq("USD"),
+                accounts::is_default.eq(false),
+                accounts::is_active.eq(true),
+                accounts::created_at.eq("2026-05-01T00:00:00Z"),
+                accounts::updated_at.eq("2026-05-01T00:00:00Z"),
+                accounts::is_archived.eq(false),
+                accounts::tracking_mode.eq("portfolio"),
+            ))
+            .execute(&mut conn)
+            .expect("seed account");
+    }
+
+    fn seed_activity(
+        pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
+        id: &str,
+        activity_type: &str,
+        date: &str,
+        amount: Option<&str>,
+        fee: Option<&str>,
+    ) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::insert_into(activities::table)
+            .values((
+                activities::id.eq(id),
+                activities::account_id.eq("acc-1"),
+                activities::activity_type.eq(activity_type),
+                activities::status.eq("POSTED"),
+                activities::activity_date.eq(format!("{date}T00:00:00Z")),
+                activities::amount.eq(amount),
+                activities::fee.eq(fee),
+                activities::currency.eq("USD"),
+                activities::is_user_modified.eq(0),
+                activities::needs_review.eq(0),
+                activities::created_at.eq(format!("{date}T00:00:00Z")),
+                activities::updated_at.eq(format!("{date}T00:00:00Z")),
+            ))
+            .execute(&mut conn)
+            .expect("seed activity");
     }
 }

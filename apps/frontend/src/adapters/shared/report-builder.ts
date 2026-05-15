@@ -5,12 +5,14 @@ export type ReportType =
   | "portfolio_summary"
   | "income"
   | "data_quality"
-  | "tax_pack";
+  | "tax_pack"
+  | "monthly_wealth_letter";
 export type ReportRunStatus = "generated" | "exported";
 
 export interface GenerateReportRequest {
   reportType: ReportType;
   baseCurrency: string;
+  periodMonth?: string | null;
 }
 
 export interface ReportLine {

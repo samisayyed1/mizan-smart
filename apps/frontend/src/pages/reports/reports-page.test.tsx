@@ -27,6 +27,7 @@ vi.mock("@mizan/ui", () => ({
     HandCoins: (props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props}>HandCoins</span>,
     PieChart: (props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props}>PieChart</span>,
     ShieldCheck: (props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props}>ShieldCheck</span>,
+    FileText: (props: React.HTMLAttributes<HTMLSpanElement>) => <span {...props}>FileText</span>,
   },
   Page: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   PageContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -106,6 +107,50 @@ describe("ReportsPage", () => {
     });
     expect(URL.createObjectURL).toHaveBeenCalled();
     expect(HTMLAnchorElement.prototype.click).toHaveBeenCalled();
+  });
+
+  it("generates a monthly wealth letter for the selected month", async () => {
+    generateReportMock.mockResolvedValueOnce({
+      ...reportRun(),
+      reportType: "monthly_wealth_letter",
+      sections: [
+        {
+          id: "section-monthly",
+          reportRunId: "run-1",
+          title: "Income received",
+          sectionOrder: 0,
+          metadataJson: null,
+          lines: [
+            {
+              id: "line-monthly",
+              sectionId: "section-monthly",
+              label: "Dividend and interest received",
+              amount: "14.34",
+              currency: "USD",
+              valueText: null,
+              sourceCitationId: null,
+              metadataJson: null,
+            },
+          ],
+        },
+      ],
+    });
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText("Report type"), {
+      target: { value: "monthly_wealth_letter" },
+    });
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2026-05" } });
+    fireEvent.click(screen.getByRole("button", { name: /Generate Preview/i }));
+
+    await waitFor(() => {
+      expect(generateReportMock).toHaveBeenCalledWith({
+        reportType: "monthly_wealth_letter",
+        baseCurrency: "USD",
+        periodMonth: "2026-05",
+      });
+    });
+    expect(await screen.findByText("Dividend and interest received")).toBeInTheDocument();
   });
 });
 

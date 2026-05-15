@@ -19,6 +19,19 @@ describe("report builder adapter", () => {
     expect(invokeMock).toHaveBeenCalledWith("generate_report", { request });
   });
 
+  it("passes the selected month for monthly wealth letters", async () => {
+    const request = {
+      reportType: "monthly_wealth_letter" as const,
+      baseCurrency: "USD",
+      periodMonth: "2026-05",
+    };
+    invokeMock.mockResolvedValueOnce({ id: "run-monthly", sections: [] });
+
+    await generateReport(request);
+
+    expect(invokeMock).toHaveBeenCalledWith("generate_report", { request });
+  });
+
   it("loads report runs by id", async () => {
     invokeMock.mockResolvedValueOnce(null);
 

@@ -17,6 +17,7 @@ pub enum ReportType {
     Income,
     DataQuality,
     TaxPack,
+    MonthlyWealthLetter,
 }
 
 impl ReportType {
@@ -27,6 +28,7 @@ impl ReportType {
             Self::Income => "income",
             Self::DataQuality => "data_quality",
             Self::TaxPack => "tax_pack",
+            Self::MonthlyWealthLetter => "monthly_wealth_letter",
         }
     }
 
@@ -37,6 +39,7 @@ impl ReportType {
             Self::Income => "Income Report",
             Self::DataQuality => "Data Quality Report",
             Self::TaxPack => "Tax Pack Report",
+            Self::MonthlyWealthLetter => "Monthly Wealth Letter",
         }
     }
 }
@@ -51,6 +54,7 @@ impl FromStr for ReportType {
             "income" => Ok(Self::Income),
             "data_quality" => Ok(Self::DataQuality),
             "tax_pack" => Ok(Self::TaxPack),
+            "monthly_wealth_letter" => Ok(Self::MonthlyWealthLetter),
             _ => Err(invalid(format!("Unsupported report type: {value}"))),
         }
     }
@@ -89,11 +93,16 @@ impl FromStr for ReportRunStatus {
 pub struct GenerateReportRequest {
     pub report_type: ReportType,
     pub base_currency: String,
+    pub period_month: Option<String>,
 }
 
 impl GenerateReportRequest {
     pub fn validate(&self) -> Result<()> {
-        validate_currency(&self.base_currency)
+        validate_currency(&self.base_currency)?;
+        if let Some(period_month) = &self.period_month {
+            validate_period_month(period_month)?;
+        }
+        Ok(())
     }
 }
 
@@ -273,6 +282,26 @@ fn validate_currency(value: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_period_month(value: &str) -> Result<()> {
+    if value.len() != 7 {
+        return Err(invalid("period_month must use YYYY-MM format"));
+    }
+    let (year, suffix) = value.split_at(4);
+    if suffix.as_bytes().first() != Some(&b'-')
+        || !year.chars().all(|ch| ch.is_ascii_digit())
+        || !suffix[1..].chars().all(|ch| ch.is_ascii_digit())
+    {
+        return Err(invalid("period_month must use YYYY-MM format"));
+    }
+    let month = suffix[1..]
+        .parse::<u32>()
+        .map_err(|_| invalid("period_month must use YYYY-MM format"))?;
+    if !(1..=12).contains(&month) {
+        return Err(invalid("period_month month must be 01 through 12"));
+    }
+    Ok(())
+}
+
 fn escape_html(value: &str) -> String {
     value
         .replace('&', "&amp;")
@@ -300,6 +329,7 @@ mod tests {
             GenerateReportRequest {
                 report_type: ReportType::DataQuality,
                 base_currency: "USD".to_string(),
+                period_month: None,
             },
             "2026-05-16T00:00:00Z".to_string(),
         )
@@ -349,5 +379,16 @@ mod tests {
         assert!(html.contains(REPORT_BUILDER_DISCLAIMER));
         assert!(html.contains("12.34"));
         assert!(html.contains("citation-1"));
+    }
+
+    #[test]
+    fn monthly_letter_request_rejects_invalid_period_month() {
+        let request = GenerateReportRequest {
+            report_type: ReportType::MonthlyWealthLetter,
+            base_currency: "USD".to_string(),
+            period_month: Some("2026-13".to_string()),
+        };
+
+        assert!(request.validate().is_err());
     }
 }

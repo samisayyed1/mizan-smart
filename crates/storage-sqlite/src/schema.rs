@@ -117,6 +117,23 @@ diesel::table! {
 }
 
 diesel::table! {
+    asset_shariah_screening (id) {
+        id -> Text,
+        asset_id -> Text,
+        profile_id -> Text,
+        status -> Text,
+        debt_ratio -> Nullable<Text>,
+        liquid_assets_ratio -> Nullable<Text>,
+        impure_income_ratio -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        manual_override_reason -> Nullable<Text>,
+        reviewed_at -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     asset_taxonomy_assignments (id) {
         id -> Text,
         asset_id -> Text,
@@ -978,6 +995,9 @@ diesel::table! {
 
 diesel::joinable!(valuations -> assets (asset_id));
 diesel::joinable!(valuations -> source_citations (source_citation_id));
+diesel::joinable!(asset_shariah_screening -> assets (asset_id));
+diesel::joinable!(asset_shariah_screening -> shariah_screening_profiles (profile_id));
+diesel::joinable!(asset_shariah_screening -> source_citations (source_citation_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -1024,6 +1044,19 @@ diesel::table! {
     }
 }
 
+diesel::table! {
+    shariah_screening_profiles (id) {
+        id -> Text,
+        name -> Text,
+        debt_threshold -> Text,
+        liquid_assets_threshold -> Text,
+        impure_income_threshold -> Text,
+        is_default -> Integer,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
 diesel::allow_tables_to_appear_in_same_query!(
     import_account_templates,
     accounts,
@@ -1032,6 +1065,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     ai_thread_tags,
     ai_threads,
     app_settings,
+    asset_shariah_screening,
     asset_taxonomy_assignments,
     assets,
     brokers_sync_state,
@@ -1075,6 +1109,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     document_files,
     document_links,
     smart_alerts,
+    shariah_screening_profiles,
     valuations,
     asset_public_market_details,
     asset_fixed_income_details,

@@ -96,6 +96,7 @@ const mockSettings: Settings = {
   autoUpdateCheckEnabled: true,
   menuBarVisible: true,
   syncEnabled: false,
+  shariahModeEnabled: false,
 };
 
 function createAccount(overrides: Partial<Account>): Account {

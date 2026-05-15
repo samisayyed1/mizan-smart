@@ -423,6 +423,8 @@ pub fn run() {
             commands::settings::update_exchange_rate,
             commands::settings::add_exchange_rate,
             commands::settings::delete_exchange_rate,
+            commands::islamic_mode::list_shariah_screening_profiles,
+            commands::islamic_mode::evaluate_shariah_screening_ratios,
             // Goal commands
             commands::goal::create_goal,
             commands::goal::update_goal,

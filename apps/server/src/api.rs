@@ -43,6 +43,7 @@ mod goals;
 mod health;
 mod holdings;
 mod inbox;
+mod islamic_mode;
 mod limits;
 mod liquidity_ladder;
 mod manual_valuations;
@@ -121,6 +122,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(ai_chat::router())
         .merge(health::router())
         .merge(inbox::router())
+        .merge(islamic_mode::router())
         .merge(documents::router())
         .merge(document_jobs::router())
         .merge(extracted_facts::router())

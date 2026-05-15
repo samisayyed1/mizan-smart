@@ -42,6 +42,7 @@ use mizan_storage_sqlite::{
     fx::FxRepository,
     goals::GoalRepository,
     health::HealthDismissalRepository,
+    islamic_mode::ShariahScreeningRepository,
     limits::ContributionLimitRepository,
     liquidity_ladder::LiquidityLadderRepository,
     market_data::{MarketDataRepository, QuoteSyncStateRepository},
@@ -163,6 +164,7 @@ pub async fn initialize_context(
         pool.clone(),
         writer.clone(),
     ));
+    let shariah_screening_repository = Arc::new(ShariahScreeningRepository::new(pool.clone()));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -464,6 +466,7 @@ pub async fn initialize_context(
             fixed_income_repository,
             liquidity_ladder_repository,
             corporate_actions_repository,
+            shariah_screening_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

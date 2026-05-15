@@ -21,7 +21,7 @@
 - [x] p21 phase-3/p21  Corporate actions (af6d286)
 - [x] p22 phase-3/p22  Accuracy invariants (9d6a814)
 - [x] p23 phase-3/p23  Golden import templates (6d01eb0)
-- [ ] p24 phase-4/p24  Optional Islamic mode foundation
+- [x] p24 phase-4/p24  Optional Islamic mode foundation (a7201db)
 - [ ] p25 phase-4/p25  Shariah screening workflow
 - [ ] p26 phase-4/p26  Zakat calculator
 - [ ] p27 phase-4/p27  Dividend purification calculator

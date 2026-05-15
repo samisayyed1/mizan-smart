@@ -797,6 +797,7 @@ export interface Settings {
   autoUpdateCheckEnabled: boolean;
   menuBarVisible: boolean;
   syncEnabled: boolean;
+  shariahModeEnabled: boolean;
 }
 
 export interface SettingsContextType {

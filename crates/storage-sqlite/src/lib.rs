@@ -43,6 +43,7 @@ pub mod fixed_income;
 pub mod fx;
 pub mod goals;
 pub mod health;
+pub mod islamic_mode;
 pub mod limits;
 pub mod liquidity_ladder;
 pub mod market_data;

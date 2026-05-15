@@ -19,6 +19,7 @@ import HoldingsPage from "@/pages/holdings/holdings-page";
 import UniversalAddAssetPage from "@/pages/holdings/new/universal-add-asset-page";
 import ManualValuationsPage from "@/pages/holdings/update-values/manual-valuations-page";
 import InboxPage from "@/pages/inbox/inbox-page";
+import ShariahScreeningPage from "@/pages/islamic-mode/shariah-screening-page";
 import ReportsPage from "@/pages/reports/reports-page";
 import IncomePage from "@/pages/income/income-page";
 import PortfolioInsightsPage from "@/pages/insights/portfolio-insights";
@@ -110,6 +111,7 @@ export function AppRoutes() {
           <Route path="reports" element={<ReportsPage />} />
           <Route path="reconciliation" element={<ReconciliationCenterPage />} />
           <Route path="inbox" element={<InboxPage />} />
+          <Route path="shariah-screening" element={<ShariahScreeningPage />} />
           <Route path="assistant" element={<AiAssistantPage />} />
           <Route path="connect" element={<ConnectPage />} />
           <Route path="goals" element={<GoalsDashboardPage />} />

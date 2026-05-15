@@ -23,6 +23,7 @@ pub mod fx;
 pub mod goals;
 pub mod health;
 pub mod inbox;
+pub mod islamic_mode;
 pub mod limits;
 pub mod liquidity_ladder;
 pub mod planning;

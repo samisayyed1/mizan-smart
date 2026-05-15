@@ -1,5 +1,6 @@
 import { createActivity, getAssetHoldings, getHolding } from "@/adapters";
 import { ActionPalette, type ActionPaletteGroup } from "@/components/action-palette";
+import { ShariahStatusBadge } from "@/components/shariah-status-badge";
 import { TickerAvatar } from "@/components/ticker-avatar";
 import { useHapticFeedback } from "@/hooks";
 import { useAlternativeAssetHolding, useAlternativeHoldings } from "@/hooks/use-alternative-assets";
@@ -1036,9 +1037,12 @@ export const AssetProfilePage = () => {
             )
           )}
           <div className="flex min-w-0 flex-col justify-center">
-            <h1 className="truncate text-base font-semibold leading-tight md:text-lg">
-              {assetProfile?.name ?? holding?.instrument?.name ?? assetId ?? "-"}
-            </h1>
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-base font-semibold leading-tight md:text-lg">
+                {assetProfile?.name ?? holding?.instrument?.name ?? assetId ?? "-"}
+              </h1>
+              {settings?.shariahModeEnabled && <ShariahStatusBadge status="unknown" />}
+            </div>
             <p className="text-muted-foreground flex items-center gap-1.5 text-xs leading-tight md:text-sm">
               {isAltAsset && altHolding ? (
                 getAlternativeAssetKindLabel(altHolding.kind)

@@ -4,6 +4,7 @@ import { SettingsHeader } from "../settings-header";
 import { AutoUpdateSettings } from "./auto-update-settings";
 import { BaseCurrencySettings } from "./currency-settings";
 import { ExchangeRatesSettings } from "./exchange-rates/exchange-rates-settings";
+import { IslamicModeSettings } from "./islamic-mode-settings";
 import { TimezoneSettings } from "./timezone-settings";
 
 export default function GeneralSettingsPage() {
@@ -18,6 +19,7 @@ export default function GeneralSettingsPage() {
       <Separator />
       <BaseCurrencySettings />
       <TimezoneSettings />
+      <IslamicModeSettings />
       <div className="pt-6">
         <ExchangeRatesSettings />
       </div>

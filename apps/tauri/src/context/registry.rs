@@ -16,6 +16,7 @@ use mizan_storage_sqlite::{
         jobs::DocumentJobRepository, DocumentVaultRepository,
     },
     fixed_income::FixedIncomeRepository,
+    islamic_mode::ShariahScreeningRepository,
     liquidity_ladder::LiquidityLadderRepository,
     portfolio::snapshot::SnapshotRepository,
     private_investments::PrivateInvestmentRepository,
@@ -87,6 +88,8 @@ pub struct ServiceContext {
     pub liquidity_ladder_repository: Arc<LiquidityLadderRepository>,
     /// mizan-smart Phase 3 P21 — reviewed corporate actions engine.
     pub corporate_actions_repository: Arc<CorporateActionsRepository>,
+    /// mizan-smart Phase 4 P24 — optional Islamic finance overlay.
+    pub shariah_screening_repository: Arc<ShariahScreeningRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -240,6 +243,10 @@ impl ServiceContext {
 
     pub fn corporate_actions_repository(&self) -> Arc<CorporateActionsRepository> {
         Arc::clone(&self.corporate_actions_repository)
+    }
+
+    pub fn shariah_screening_repository(&self) -> Arc<ShariahScreeningRepository> {
+        Arc::clone(&self.shariah_screening_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

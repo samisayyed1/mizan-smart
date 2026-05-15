@@ -228,6 +228,8 @@ export const COMMANDS: CommandMap = {
   get_private_investment_detail: { method: "GET", path: "/private-investments" },
   upsert_fixed_income_details: { method: "POST", path: "/fixed-income" },
   get_fixed_income_projection: { method: "GET", path: "/fixed-income" },
+  list_shariah_screening_profiles: { method: "GET", path: "/shariah-screening/profiles" },
+  evaluate_shariah_screening_ratios: { method: "POST", path: "/shariah-screening/evaluate" },
   get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
@@ -976,6 +978,11 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "upsert_fixed_income_details": {
       const { request } = payload as { request: Record<string, unknown> };
       body = JSON.stringify(request);
+      break;
+    }
+    case "evaluate_shariah_screening_ratios": {
+      const { ratios } = payload as { ratios: Record<string, unknown> };
+      body = JSON.stringify(ratios);
       break;
     }
     case "preview_corporate_action":

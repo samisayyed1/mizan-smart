@@ -14,6 +14,7 @@ pub struct Settings {
     pub auto_update_check_enabled: bool,
     pub menu_bar_visible: bool,
     pub sync_enabled: bool,
+    pub shariah_mode_enabled: bool,
 }
 
 impl Default for Settings {
@@ -28,6 +29,7 @@ impl Default for Settings {
             auto_update_check_enabled: true,
             menu_bar_visible: true,
             sync_enabled: true,
+            shariah_mode_enabled: false,
         }
     }
 }
@@ -43,6 +45,7 @@ pub struct SettingsUpdate {
     pub auto_update_check_enabled: Option<bool>,
     pub menu_bar_visible: Option<bool>,
     pub sync_enabled: Option<bool>,
+    pub shariah_mode_enabled: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

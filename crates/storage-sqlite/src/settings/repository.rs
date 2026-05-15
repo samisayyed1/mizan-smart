@@ -53,6 +53,9 @@ impl SettingsRepositoryTrait for SettingsRepository {
                 "sync_enabled" => {
                     settings.sync_enabled = value.parse().unwrap_or(true);
                 }
+                "shariah_mode_enabled" => {
+                    settings.shariah_mode_enabled = value.parse().unwrap_or(false);
+                }
                 _ => {} // Ignore unknown settings
             }
         }
@@ -144,6 +147,16 @@ impl SettingsRepositoryTrait for SettingsRepository {
                         .map_err(StorageError::from)?;
                 }
 
+                if let Some(shariah_mode_enabled) = settings.shariah_mode_enabled {
+                    diesel::replace_into(app_settings)
+                        .values(&AppSettingDB {
+                            setting_key: "shariah_mode_enabled".to_string(),
+                            setting_value: shariah_mode_enabled.to_string(),
+                        })
+                        .execute(conn)
+                        .map_err(StorageError::from)?;
+                }
+
                 Ok(())
             })
             .await
@@ -168,6 +181,7 @@ impl SettingsRepositoryTrait for SettingsRepository {
                     "auto_update_check_enabled" => "true",
                     "menu_bar_visible" => "true",
                     "sync_enabled" => "true",
+                    "shariah_mode_enabled" => "false",
                     _ => return Err(StorageError::from(diesel::result::Error::NotFound).into()),
                 };
                 Ok(default_value.to_string())

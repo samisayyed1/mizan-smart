@@ -1,0 +1,24 @@
+{
+  "realizedGain": {
+    "proceeds": "1250.00",
+    "costBasis": "900.00",
+    "fees": "12.50",
+    "expectedGain": "337.50"
+  },
+  "report": {
+    "name": "net-worth",
+    "lineAmounts": ["125.10", "374.90", "500.00"],
+    "reportedTotal": "1000.00"
+  },
+  "cashLedger": {
+    "deltas": [
+      ["USD", "1000.00"],
+      ["USD", "-125.25"],
+      ["EUR", "50.00"]
+    ],
+    "balances": {
+      "USD": "874.75",
+      "EUR": "50.00"
+    }
+  }
+}

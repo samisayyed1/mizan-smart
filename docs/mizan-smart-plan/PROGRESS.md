@@ -19,7 +19,7 @@
 - [x] p19 phase-3/p19  Fixed income / Sukuk / FD engine (7000f00)
 - [x] p20 phase-3/p20  Liquidity Ladder (afce9e9)
 - [x] p21 phase-3/p21  Corporate actions (af6d286)
-- [ ] p22 phase-3/p22  Accuracy invariants
+- [x] p22 phase-3/p22  Accuracy invariants (9d6a814)
 - [ ] p23 phase-3/p23  Golden import templates
 - [ ] p24 phase-4/p24  Optional Islamic mode foundation
 - [ ] p25 phase-4/p25  Shariah screening workflow

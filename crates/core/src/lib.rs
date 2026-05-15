@@ -5,6 +5,7 @@
 //! by the `storage-sqlite` crate.
 
 pub mod accounts;
+pub mod accuracy_invariants;
 pub mod activities;
 pub mod addons;
 pub mod alerts;

@@ -1,5 +1,6 @@
 use crate::errors::ValidationError;
 use async_trait::async_trait;
+use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -111,6 +112,56 @@ pub struct ShariahScreeningAuditEntry {
     pub created_at: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZakatInputLine {
+    pub asset_id: Option<String>,
+    pub category: String,
+    pub amount: Option<Decimal>,
+    pub included: bool,
+    pub explanation: Option<String>,
+    pub source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CalculateZakatSnapshotRequest {
+    pub snapshot_date: NaiveDate,
+    pub base_currency: String,
+    pub nisab_value: Decimal,
+    pub notes: Option<String>,
+    pub lines: Vec<ZakatInputLine>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZakatLine {
+    pub id: String,
+    pub snapshot_id: String,
+    pub asset_id: Option<String>,
+    pub category: String,
+    pub amount: Decimal,
+    pub included: bool,
+    pub explanation: String,
+    pub source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ZakatSnapshot {
+    pub id: String,
+    pub snapshot_date: NaiveDate,
+    pub base_currency: String,
+    pub total_zakatable_assets: Decimal,
+    pub deductible_liabilities: Decimal,
+    pub net_zakatable_wealth: Decimal,
+    pub nisab_value: Decimal,
+    pub zakat_due: Decimal,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub lines: Vec<ZakatLine>,
+}
+
 #[async_trait]
 pub trait ShariahScreeningRepositoryTrait: Send + Sync {
     fn list_profiles(&self) -> Result<Vec<ShariahScreeningProfile>>;
@@ -137,6 +188,11 @@ pub trait ShariahScreeningRepositoryTrait: Send + Sync {
         asset_id: &str,
         profile_id: &str,
     ) -> Result<Vec<ShariahScreeningAuditEntry>>;
+
+    async fn calculate_zakat_snapshot(
+        &self,
+        request: CalculateZakatSnapshotRequest,
+    ) -> Result<ZakatSnapshot>;
 }
 
 pub fn evaluate_shariah_screening(
@@ -231,6 +287,96 @@ pub fn validate_screening_request(request: &UpsertAssetShariahScreeningRequest) 
         );
     }
     Ok(())
+}
+
+pub fn validate_zakat_request(request: &CalculateZakatSnapshotRequest) -> Result<()> {
+    let currency = request.base_currency.trim();
+    if currency.len() != 3 || !currency.chars().all(|c| c.is_ascii_uppercase()) {
+        return Err(ValidationError::InvalidInput(
+            "base_currency must be a 3-letter ISO code".to_string(),
+        )
+        .into());
+    }
+    if request.nisab_value <= Decimal::ZERO {
+        return Err(ValidationError::InvalidInput(
+            "manual nisab value must be greater than zero".to_string(),
+        )
+        .into());
+    }
+    if request.lines.is_empty() {
+        return Err(ValidationError::InvalidInput(
+            "at least one zakat line is required".to_string(),
+        )
+        .into());
+    }
+    for line in &request.lines {
+        if line.category.trim().is_empty() {
+            return Err(
+                ValidationError::InvalidInput("line category is required".to_string()).into(),
+            );
+        }
+        if line
+            .asset_id
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or_default()
+            .is_empty()
+            && line.amount.is_none()
+        {
+            return Err(ValidationError::InvalidInput(
+                "line amount is required when asset_id is not provided".to_string(),
+            )
+            .into());
+        }
+        if let Some(amount) = line.amount {
+            if amount < Decimal::ZERO {
+                return Err(ValidationError::InvalidInput(
+                    "line amount cannot be negative".to_string(),
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn is_zakat_liability_category(category: &str) -> bool {
+    let normalised = category
+        .trim()
+        .to_ascii_lowercase()
+        .replace([' ', '-'], "_");
+    matches!(
+        normalised.as_str(),
+        "liability" | "deductible_liability" | "short_term_liability"
+    )
+}
+
+pub fn calculate_zakat_totals(
+    lines: &[ZakatLine],
+    nisab_value: Decimal,
+) -> (Decimal, Decimal, Decimal, Decimal) {
+    let total_zakatable_assets = lines
+        .iter()
+        .filter(|line| line.included && !is_zakat_liability_category(&line.category))
+        .map(|line| line.amount)
+        .sum::<Decimal>();
+    let deductible_liabilities = lines
+        .iter()
+        .filter(|line| line.included && is_zakat_liability_category(&line.category))
+        .map(|line| line.amount)
+        .sum::<Decimal>();
+    let net_zakatable_wealth = (total_zakatable_assets - deductible_liabilities).max(Decimal::ZERO);
+    let zakat_due = if net_zakatable_wealth >= nisab_value {
+        net_zakatable_wealth * Decimal::new(25, 3)
+    } else {
+        Decimal::ZERO
+    };
+    (
+        total_zakatable_assets,
+        deductible_liabilities,
+        net_zakatable_wealth,
+        zakat_due,
+    )
 }
 
 #[cfg(test)]
@@ -342,5 +488,68 @@ mod tests {
             let evaluation = evaluate_shariah_screening(&profile(), &ratios);
             assert_eq!(evaluation.status, ShariahScreeningStatus::NonCompliant);
         }
+    }
+
+    #[test]
+    fn zakat_totals_include_assets_and_deduct_liabilities() {
+        let lines = vec![
+            ZakatLine {
+                id: "line-1".to_string(),
+                snapshot_id: "snapshot-1".to_string(),
+                asset_id: Some("asset-1".to_string()),
+                category: "short_term_asset".to_string(),
+                amount: dec!(10000),
+                included: true,
+                explanation: "Included from latest market value".to_string(),
+                source_citation_id: None,
+            },
+            ZakatLine {
+                id: "line-2".to_string(),
+                snapshot_id: "snapshot-1".to_string(),
+                asset_id: None,
+                category: "liability".to_string(),
+                amount: dec!(2500),
+                included: true,
+                explanation: "Deductible short-term liability".to_string(),
+                source_citation_id: None,
+            },
+            ZakatLine {
+                id: "line-3".to_string(),
+                snapshot_id: "snapshot-1".to_string(),
+                asset_id: Some("asset-2".to_string()),
+                category: "investment".to_string(),
+                amount: dec!(999),
+                included: false,
+                explanation: "Excluded by user".to_string(),
+                source_citation_id: None,
+            },
+        ];
+
+        let (assets, liabilities, net, due) = calculate_zakat_totals(&lines, dec!(5000));
+
+        assert_eq!(assets, dec!(10000));
+        assert_eq!(liabilities, dec!(2500));
+        assert_eq!(net, dec!(7500));
+        assert_eq!(due, dec!(187.500));
+    }
+
+    #[test]
+    fn manual_nisab_is_required() {
+        let request = CalculateZakatSnapshotRequest {
+            snapshot_date: NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+            base_currency: "USD".to_string(),
+            nisab_value: Decimal::ZERO,
+            notes: None,
+            lines: vec![ZakatInputLine {
+                asset_id: None,
+                category: "cash".to_string(),
+                amount: Some(dec!(100)),
+                included: true,
+                explanation: Some("Manual cash balance".to_string()),
+                source_citation_id: None,
+            }],
+        };
+
+        assert!(validate_zakat_request(&request).is_err());
     }
 }

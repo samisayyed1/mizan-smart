@@ -148,6 +148,34 @@ diesel::table! {
 }
 
 diesel::table! {
+    zakat_snapshots (id) {
+        id -> Text,
+        snapshot_date -> Text,
+        base_currency -> Text,
+        total_zakatable_assets -> Text,
+        deductible_liabilities -> Text,
+        net_zakatable_wealth -> Text,
+        nisab_value -> Text,
+        zakat_due -> Text,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+    }
+}
+
+diesel::table! {
+    zakat_lines (id) {
+        id -> Text,
+        snapshot_id -> Text,
+        asset_id -> Nullable<Text>,
+        category -> Text,
+        amount -> Text,
+        included -> Integer,
+        explanation -> Text,
+        source_citation_id -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     asset_taxonomy_assignments (id) {
         id -> Text,
         asset_id -> Text,
@@ -1015,6 +1043,9 @@ diesel::joinable!(asset_shariah_screening -> source_citations (source_citation_i
 diesel::joinable!(shariah_screening_audit_log -> asset_shariah_screening (screening_id));
 diesel::joinable!(shariah_screening_audit_log -> assets (asset_id));
 diesel::joinable!(shariah_screening_audit_log -> shariah_screening_profiles (profile_id));
+diesel::joinable!(zakat_lines -> zakat_snapshots (snapshot_id));
+diesel::joinable!(zakat_lines -> assets (asset_id));
+diesel::joinable!(zakat_lines -> source_citations (source_citation_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -1128,6 +1159,8 @@ diesel::allow_tables_to_appear_in_same_query!(
     smart_alerts,
     shariah_screening_profiles,
     shariah_screening_audit_log,
+    zakat_snapshots,
+    zakat_lines,
     valuations,
     asset_public_market_details,
     asset_fixed_income_details,

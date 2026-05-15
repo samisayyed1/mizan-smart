@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  calculateZakatSnapshot,
   evaluateShariahCompliance,
   evaluateShariahScreeningRatios,
   listShariahScreeningProfiles,
@@ -71,5 +72,29 @@ describe("islamic mode adapter", () => {
     await upsertAssetShariahScreening(request);
 
     expect(invokeMock).toHaveBeenCalledWith("upsert_asset_shariah_screening", { request });
+  });
+
+  it("calculates a zakat snapshot with user-controlled lines and manual nisab", async () => {
+    invokeMock.mockResolvedValueOnce({ id: "zakat-1" });
+    const request = {
+      snapshotDate: "2026-05-15",
+      baseCurrency: "USD",
+      nisabValue: "5000",
+      notes: "Annual review",
+      lines: [
+        {
+          assetId: "asset-1",
+          category: "short_term_asset",
+          amount: null,
+          included: true,
+          explanation: null,
+          sourceCitationId: null,
+        },
+      ],
+    };
+
+    await calculateZakatSnapshot(request);
+
+    expect(invokeMock).toHaveBeenCalledWith("calculate_zakat_snapshot", { request });
   });
 });

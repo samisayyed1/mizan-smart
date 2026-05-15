@@ -10,16 +10,18 @@ use uuid::Uuid;
 
 use mizan_core::errors::ValidationError;
 use mizan_core::islamic_mode::{
-    evaluate_screening_request, AssetShariahScreening, ShariahScreeningAuditEntry,
+    calculate_zakat_totals, evaluate_screening_request, validate_zakat_request,
+    AssetShariahScreening, CalculateZakatSnapshotRequest, ShariahScreeningAuditEntry,
     ShariahScreeningProfile, ShariahScreeningRepositoryTrait, ShariahScreeningStatus,
-    UpsertAssetShariahScreeningRequest,
+    UpsertAssetShariahScreeningRequest, ZakatLine, ZakatSnapshot,
 };
 use mizan_core::{Error, Result};
 
 use crate::db::{get_connection, WriteHandle};
 use crate::errors::StorageError;
 use crate::schema::{
-    asset_shariah_screening, shariah_screening_audit_log, shariah_screening_profiles,
+    asset_shariah_screening, shariah_screening_audit_log, shariah_screening_profiles, valuations,
+    zakat_lines, zakat_snapshots,
 };
 
 pub struct ShariahScreeningRepository {
@@ -77,6 +79,43 @@ struct ShariahScreeningAuditRow {
     new_status: String,
     notes: Option<String>,
     created_at: String,
+}
+
+#[derive(Debug, Clone, Queryable, Insertable)]
+#[diesel(table_name = zakat_snapshots)]
+struct ZakatSnapshotRow {
+    id: String,
+    snapshot_date: String,
+    base_currency: String,
+    total_zakatable_assets: String,
+    deductible_liabilities: String,
+    net_zakatable_wealth: String,
+    nisab_value: String,
+    zakat_due: String,
+    notes: Option<String>,
+    created_at: String,
+}
+
+#[derive(Debug, Clone, Queryable, Insertable)]
+#[diesel(table_name = zakat_lines)]
+struct ZakatLineRow {
+    id: String,
+    snapshot_id: String,
+    asset_id: Option<String>,
+    category: String,
+    amount: String,
+    included: i32,
+    explanation: String,
+    source_citation_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct ZakatValuationRow {
+    asset_id: String,
+    value_native: String,
+    currency: String,
+    valuation_date: String,
+    source_citation_id: Option<String>,
 }
 
 impl TryFrom<ShariahScreeningProfileRow> for ShariahScreeningProfile {
@@ -152,6 +191,23 @@ impl TryFrom<ShariahScreeningAuditRow> for ShariahScreeningAuditEntry {
                 .ok_or_else(|| invalid("unsupported new Shariah screening status"))?,
             notes: row.notes,
             created_at: row.created_at,
+        })
+    }
+}
+
+impl TryFrom<ZakatLineRow> for ZakatLine {
+    type Error = Error;
+
+    fn try_from(row: ZakatLineRow) -> Result<Self> {
+        Ok(Self {
+            id: row.id,
+            snapshot_id: row.snapshot_id,
+            asset_id: row.asset_id,
+            category: row.category,
+            amount: parse_decimal("amount", &row.amount)?,
+            included: row.included == 1,
+            explanation: row.explanation,
+            source_citation_id: row.source_citation_id,
         })
     }
 }
@@ -330,6 +386,128 @@ impl ShariahScreeningRepositoryTrait for ShariahScreeningRepository {
             .map(ShariahScreeningAuditEntry::try_from)
             .collect()
     }
+
+    async fn calculate_zakat_snapshot(
+        &self,
+        request: CalculateZakatSnapshotRequest,
+    ) -> Result<ZakatSnapshot> {
+        validate_zakat_request(&request)?;
+        let base_currency = request.base_currency.trim().to_uppercase();
+        let snapshot_id = Uuid::new_v4().to_string();
+        let created_at = Utc::now().to_rfc3339();
+        let notes = request.notes.clone();
+        let mut lines = Vec::with_capacity(request.lines.len());
+
+        for input in request.lines.clone() {
+            let line_id = Uuid::new_v4().to_string();
+            let category = input.category.trim().to_string();
+            let asset_id = input
+                .asset_id
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string);
+            let valuation = match (&asset_id, input.amount) {
+                (Some(asset), None) => Some(self.latest_zakat_valuation(asset, &base_currency)?),
+                _ => None,
+            };
+            let amount = input
+                .amount
+                .or_else(|| valuation.as_ref().map(|row| row.amount))
+                .ok_or_else(|| invalid("zakat line amount could not be resolved"))?;
+            let source_citation_id = input.source_citation_id.or_else(|| {
+                valuation
+                    .as_ref()
+                    .and_then(|row| row.source_citation_id.clone())
+            });
+            let explanation = input
+                .explanation
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_string)
+                .unwrap_or_else(|| {
+                    if let Some(row) = &valuation {
+                        format!(
+                            "Included latest {base_currency} valuation dated {} for asset {}",
+                            row.valuation_date, row.asset_id
+                        )
+                    } else if input.included {
+                        format!("Included manual {category} amount entered by the user")
+                    } else {
+                        format!("Excluded manual {category} amount by user choice")
+                    }
+                });
+
+            lines.push(ZakatLine {
+                id: line_id,
+                snapshot_id: snapshot_id.clone(),
+                asset_id,
+                category,
+                amount: amount.normalize(),
+                included: input.included,
+                explanation,
+                source_citation_id,
+            });
+        }
+
+        let (total_zakatable_assets, deductible_liabilities, net_zakatable_wealth, zakat_due) =
+            calculate_zakat_totals(&lines, request.nisab_value);
+        let snapshot_row = ZakatSnapshotRow {
+            id: snapshot_id.clone(),
+            snapshot_date: request.snapshot_date.to_string(),
+            base_currency,
+            total_zakatable_assets: total_zakatable_assets.normalize().to_string(),
+            deductible_liabilities: deductible_liabilities.normalize().to_string(),
+            net_zakatable_wealth: net_zakatable_wealth.normalize().to_string(),
+            nisab_value: request.nisab_value.normalize().to_string(),
+            zakat_due: zakat_due.normalize().to_string(),
+            notes: notes.clone(),
+            created_at: created_at.clone(),
+        };
+        let line_rows: Vec<ZakatLineRow> = lines
+            .iter()
+            .map(|line| ZakatLineRow {
+                id: line.id.clone(),
+                snapshot_id: line.snapshot_id.clone(),
+                asset_id: line.asset_id.clone(),
+                category: line.category.clone(),
+                amount: line.amount.normalize().to_string(),
+                included: if line.included { 1 } else { 0 },
+                explanation: line.explanation.clone(),
+                source_citation_id: line.source_citation_id.clone(),
+            })
+            .collect();
+
+        self.writer
+            .exec_tx(move |tx| -> Result<()> {
+                let conn = tx.conn();
+                diesel::insert_into(zakat_snapshots::table)
+                    .values(&snapshot_row)
+                    .execute(conn)
+                    .map_err(StorageError::from)?;
+                diesel::insert_into(zakat_lines::table)
+                    .values(&line_rows)
+                    .execute(conn)
+                    .map_err(StorageError::from)?;
+                Ok(())
+            })
+            .await?;
+
+        Ok(ZakatSnapshot {
+            id: snapshot_id,
+            snapshot_date: request.snapshot_date,
+            base_currency: request.base_currency.trim().to_uppercase(),
+            total_zakatable_assets,
+            deductible_liabilities,
+            net_zakatable_wealth,
+            nisab_value: request.nisab_value,
+            zakat_due,
+            notes,
+            created_at,
+            lines,
+        })
+    }
 }
 
 impl ShariahScreeningRepository {
@@ -341,6 +519,52 @@ impl ShariahScreeningRepository {
             .map_err(StorageError::from)?;
         ShariahScreeningProfile::try_from(row)
     }
+
+    fn latest_zakat_valuation(
+        &self,
+        target_asset_id: &str,
+        base_currency: &str,
+    ) -> Result<ResolvedZakatValuation> {
+        let mut conn = get_connection(&self.pool)?;
+        let row = valuations::table
+            .filter(valuations::asset_id.eq(target_asset_id))
+            .order((
+                valuations::valuation_date.desc(),
+                valuations::created_at.desc(),
+            ))
+            .select((
+                valuations::asset_id,
+                valuations::value_native,
+                valuations::currency,
+                valuations::valuation_date,
+                valuations::source_citation_id,
+            ))
+            .first::<ZakatValuationRow>(&mut conn)
+            .optional()
+            .map_err(StorageError::from)?
+            .ok_or_else(|| invalid("asset has no valuation for zakat calculation"))?;
+
+        if row.currency != base_currency {
+            return Err(invalid(
+                "asset valuation currency must match the zakat base currency",
+            ));
+        }
+
+        Ok(ResolvedZakatValuation {
+            asset_id: row.asset_id,
+            amount: parse_decimal("value_native", &row.value_native)?.abs(),
+            valuation_date: row.valuation_date,
+            source_citation_id: row.source_citation_id,
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedZakatValuation {
+    asset_id: String,
+    amount: Decimal,
+    valuation_date: String,
+    source_citation_id: Option<String>,
 }
 
 fn parse_decimal(field: &str, value: &str) -> Result<Decimal> {
@@ -458,6 +682,101 @@ mod tests {
         assert!(audit.is_empty());
     }
 
+    #[tokio::test]
+    async fn zakat_snapshot_includes_short_term_asset_at_market_value() {
+        let (pool, writer) = setup();
+        seed_asset(&pool, "asset-1");
+        seed_valuation(&pool, "asset-1", "2026-05-14", dec!(10_000));
+        let repo = ShariahScreeningRepository::new(pool.clone(), writer);
+
+        let snapshot = repo
+            .calculate_zakat_snapshot(zakat_request(vec![
+                mizan_core::islamic_mode::ZakatInputLine {
+                    asset_id: Some("asset-1".to_string()),
+                    category: "short_term_asset".to_string(),
+                    amount: None,
+                    included: true,
+                    explanation: None,
+                    source_citation_id: None,
+                },
+            ]))
+            .await
+            .expect("calculate zakat");
+
+        assert_eq!(snapshot.total_zakatable_assets, dec!(10_000));
+        assert_eq!(snapshot.deductible_liabilities, Decimal::ZERO);
+        assert_eq!(snapshot.net_zakatable_wealth, dec!(10_000));
+        assert_eq!(snapshot.zakat_due, dec!(250.000));
+        assert!(snapshot.lines[0]
+            .explanation
+            .contains("latest USD valuation dated 2026-05-14"));
+
+        let mut conn = get_connection(&pool).expect("conn");
+        let persisted: i64 = zakat_snapshots::table
+            .count()
+            .get_result(&mut conn)
+            .expect("snapshot count");
+        assert_eq!(persisted, 1);
+    }
+
+    #[tokio::test]
+    async fn zakat_snapshot_deducts_liabilities_and_keeps_line_explanations() {
+        let (pool, writer) = setup();
+        let repo = ShariahScreeningRepository::new(pool, writer);
+
+        let snapshot = repo
+            .calculate_zakat_snapshot(zakat_request(vec![
+                mizan_core::islamic_mode::ZakatInputLine {
+                    asset_id: None,
+                    category: "cash".to_string(),
+                    amount: Some(dec!(12_000)),
+                    included: true,
+                    explanation: Some("Checking and savings balances".to_string()),
+                    source_citation_id: None,
+                },
+                mizan_core::islamic_mode::ZakatInputLine {
+                    asset_id: None,
+                    category: "liability".to_string(),
+                    amount: Some(dec!(2_000)),
+                    included: true,
+                    explanation: Some("Credit card due this month".to_string()),
+                    source_citation_id: None,
+                },
+            ]))
+            .await
+            .expect("calculate zakat");
+
+        assert_eq!(snapshot.total_zakatable_assets, dec!(12_000));
+        assert_eq!(snapshot.deductible_liabilities, dec!(2_000));
+        assert_eq!(snapshot.net_zakatable_wealth, dec!(10_000));
+        assert_eq!(snapshot.zakat_due, dec!(250.000));
+        assert_eq!(snapshot.lines[1].explanation, "Credit card due this month");
+    }
+
+    #[tokio::test]
+    async fn zakat_manual_nisab_is_required_before_write() {
+        let (pool, writer) = setup();
+        let repo = ShariahScreeningRepository::new(pool.clone(), writer);
+        let mut request = zakat_request(vec![mizan_core::islamic_mode::ZakatInputLine {
+            asset_id: None,
+            category: "cash".to_string(),
+            amount: Some(dec!(100)),
+            included: true,
+            explanation: None,
+            source_citation_id: None,
+        }]);
+        request.nisab_value = Decimal::ZERO;
+
+        assert!(repo.calculate_zakat_snapshot(request).await.is_err());
+
+        let mut conn = get_connection(&pool).expect("conn");
+        let persisted: i64 = zakat_snapshots::table
+            .count()
+            .get_result(&mut conn)
+            .expect("snapshot count");
+        assert_eq!(persisted, 0);
+    }
+
     fn request(
         asset_id: &str,
         debt_ratio: Decimal,
@@ -497,5 +816,39 @@ mod tests {
             ))
             .execute(&mut conn)
             .expect("seed asset");
+    }
+
+    fn seed_valuation(
+        pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
+        seeded_asset_id: &str,
+        date: &str,
+        value: Decimal,
+    ) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::insert_into(valuations::table)
+            .values((
+                valuations::id.eq(format!("valuation-{seeded_asset_id}-{date}")),
+                valuations::asset_id.eq(seeded_asset_id),
+                valuations::valuation_date.eq(date),
+                valuations::value_native.eq(value.normalize().to_string()),
+                valuations::currency.eq("USD"),
+                valuations::source_type.eq("market"),
+                valuations::created_at.eq("2026-05-15T00:00:00Z"),
+                valuations::updated_at.eq("2026-05-15T00:00:00Z"),
+            ))
+            .execute(&mut conn)
+            .expect("seed valuation");
+    }
+
+    fn zakat_request(
+        lines: Vec<mizan_core::islamic_mode::ZakatInputLine>,
+    ) -> CalculateZakatSnapshotRequest {
+        CalculateZakatSnapshotRequest {
+            snapshot_date: chrono::NaiveDate::from_ymd_opt(2026, 5, 15).unwrap(),
+            base_currency: "USD".to_string(),
+            nisab_value: dec!(5_000),
+            notes: Some("Annual Zakat review".to_string()),
+            lines,
+        }
     }
 }

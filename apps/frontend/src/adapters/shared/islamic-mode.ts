@@ -66,6 +66,48 @@ export interface ShariahScreeningAuditEntry {
   createdAt: string;
 }
 
+export interface ZakatInputLine {
+  assetId?: string | null;
+  category: string;
+  amount?: string | null;
+  included: boolean;
+  explanation?: string | null;
+  sourceCitationId?: string | null;
+}
+
+export interface CalculateZakatSnapshotRequest {
+  snapshotDate: string;
+  baseCurrency: string;
+  nisabValue: string;
+  notes?: string | null;
+  lines: ZakatInputLine[];
+}
+
+export interface ZakatLine {
+  id: string;
+  snapshotId: string;
+  assetId?: string | null;
+  category: string;
+  amount: string;
+  included: boolean;
+  explanation: string;
+  sourceCitationId?: string | null;
+}
+
+export interface ZakatSnapshot {
+  id: string;
+  snapshotDate: string;
+  baseCurrency: string;
+  totalZakatableAssets: string;
+  deductibleLiabilities: string;
+  netZakatableWealth: string;
+  nisabValue: string;
+  zakatDue: string;
+  notes?: string | null;
+  createdAt: string;
+  lines: ZakatLine[];
+}
+
 export function listShariahScreeningProfiles(): Promise<ShariahScreeningProfile[]> {
   return invoke<ShariahScreeningProfile[]>("list_shariah_screening_profiles");
 }
@@ -110,4 +152,10 @@ export function listShariahScreeningAudit(
     assetId,
     profileId,
   });
+}
+
+export function calculateZakatSnapshot(
+  request: CalculateZakatSnapshotRequest,
+): Promise<ZakatSnapshot> {
+  return invoke<ZakatSnapshot>("calculate_zakat_snapshot", { request });
 }

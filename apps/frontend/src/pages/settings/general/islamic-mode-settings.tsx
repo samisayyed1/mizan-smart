@@ -53,9 +53,14 @@ export function IslamicModeSettings() {
           />
         </div>
         {settings.shariahModeEnabled && (
-          <Link to="/shariah-screening" className="text-primary text-sm font-medium underline">
-            Open screening page
-          </Link>
+          <div className="flex flex-wrap gap-3">
+            <Link to="/shariah-screening" className="text-primary text-sm font-medium underline">
+              Open screening page
+            </Link>
+            <Link to="/zakat" className="text-primary text-sm font-medium underline">
+              Open Zakat calculator
+            </Link>
+          </div>
         )}
       </CardContent>
     </Card>

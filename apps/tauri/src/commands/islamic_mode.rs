@@ -3,8 +3,9 @@ use std::sync::Arc;
 use log::error;
 use mizan_core::islamic_mode::{
     evaluate_shariah_screening, validate_shariah_mode_enabled, AssetShariahScreening,
-    ShariahScreeningAuditEntry, ShariahScreeningEvaluation, ShariahScreeningProfile,
-    ShariahScreeningRatios, ShariahScreeningRepositoryTrait, UpsertAssetShariahScreeningRequest,
+    CalculateZakatSnapshotRequest, ShariahScreeningAuditEntry, ShariahScreeningEvaluation,
+    ShariahScreeningProfile, ShariahScreeningRatios, ShariahScreeningRepositoryTrait,
+    UpsertAssetShariahScreeningRequest, ZakatSnapshot,
 };
 use tauri::State;
 
@@ -96,6 +97,19 @@ pub async fn list_shariah_screening_audit(
         .shariah_screening_repository()
         .list_screening_audit(&asset_id, &profile_id)
         .map_err(command_error("list_shariah_screening_audit"))
+}
+
+#[tauri::command]
+pub async fn calculate_zakat_snapshot(
+    request: CalculateZakatSnapshotRequest,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<ZakatSnapshot, String> {
+    ensure_enabled(&state)?;
+    state
+        .shariah_screening_repository()
+        .calculate_zakat_snapshot(request)
+        .await
+        .map_err(command_error("calculate_zakat_snapshot"))
 }
 
 fn ensure_enabled(state: &State<'_, Arc<ServiceContext>>) -> Result<(), String> {

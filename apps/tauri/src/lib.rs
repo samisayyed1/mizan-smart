@@ -429,6 +429,7 @@ pub fn run() {
             commands::islamic_mode::upsert_asset_shariah_screening,
             commands::islamic_mode::get_asset_shariah_screening,
             commands::islamic_mode::list_shariah_screening_audit,
+            commands::islamic_mode::calculate_zakat_snapshot,
             // Goal commands
             commands::goal::create_goal,
             commands::goal::update_goal,

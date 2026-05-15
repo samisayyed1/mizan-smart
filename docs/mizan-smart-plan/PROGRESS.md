@@ -23,7 +23,7 @@
 - [x] p23 phase-3/p23  Golden import templates (6d01eb0)
 - [x] p24 phase-4/p24  Optional Islamic mode foundation (a7201db)
 - [x] p25 phase-4/p25  Shariah screening workflow (faa8619)
-- [ ] p26 phase-4/p26  Zakat calculator
+- [x] p26 phase-4/p26  Zakat calculator (55b5790)
 - [ ] p27 phase-4/p27  Dividend purification calculator
 - [ ] p28 phase-4/p28  Tax pack foundation
 - [ ] p29 phase-4/p29  CPA export bundle

@@ -7,8 +7,9 @@ use axum::{
 };
 use mizan_core::islamic_mode::{
     evaluate_shariah_screening, validate_shariah_mode_enabled, AssetShariahScreening,
-    ShariahScreeningAuditEntry, ShariahScreeningEvaluation, ShariahScreeningProfile,
-    ShariahScreeningRatios, ShariahScreeningRepositoryTrait, UpsertAssetShariahScreeningRequest,
+    CalculateZakatSnapshotRequest, ShariahScreeningAuditEntry, ShariahScreeningEvaluation,
+    ShariahScreeningProfile, ShariahScreeningRatios, ShariahScreeningRepositoryTrait,
+    UpsertAssetShariahScreeningRequest, ZakatSnapshot,
 };
 use mizan_core::settings::SettingsServiceTrait;
 
@@ -97,6 +98,19 @@ async fn list_shariah_screening_audit(
         .map_err(ApiError::from)
 }
 
+async fn calculate_zakat_snapshot(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CalculateZakatSnapshotRequest>,
+) -> ApiResult<Json<ZakatSnapshot>> {
+    ensure_enabled(&state)?;
+    state
+        .shariah_screening_repository
+        .calculate_zakat_snapshot(request)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
 fn ensure_enabled(state: &AppState) -> ApiResult<()> {
     let settings = state
         .settings_service
@@ -131,4 +145,5 @@ pub fn router() -> Router<Arc<AppState>> {
             "/shariah-screening/assets",
             post(upsert_asset_shariah_screening),
         )
+        .route("/zakat/snapshots", post(calculate_zakat_snapshot))
 }

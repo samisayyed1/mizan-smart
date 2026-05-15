@@ -346,6 +346,7 @@ export {
 } from "../shared/private-investments";
 export { getFixedIncomeProjection, upsertFixedIncomeDetails } from "../shared/fixed-income";
 export {
+  calculateZakatSnapshot,
   evaluateShariahCompliance,
   evaluateShariahScreeningRatios,
   getAssetShariahScreening,
@@ -419,6 +420,10 @@ export type {
   ShariahScreeningStatus,
   AssetShariahScreening,
   UpsertAssetShariahScreeningRequest,
+  CalculateZakatSnapshotRequest,
+  ZakatInputLine,
+  ZakatLine,
+  ZakatSnapshot,
 } from "../shared/islamic-mode";
 export type {
   LiquidityConfidence,

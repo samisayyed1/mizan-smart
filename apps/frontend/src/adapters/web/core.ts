@@ -234,6 +234,7 @@ export const COMMANDS: CommandMap = {
   upsert_asset_shariah_screening: { method: "POST", path: "/shariah-screening/assets" },
   get_asset_shariah_screening: { method: "GET", path: "/shariah-screening/assets" },
   list_shariah_screening_audit: { method: "GET", path: "/shariah-screening/assets" },
+  calculate_zakat_snapshot: { method: "POST", path: "/zakat/snapshots" },
   get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
@@ -990,6 +991,11 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
       break;
     }
     case "upsert_asset_shariah_screening": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "calculate_zakat_snapshot": {
       const { request } = payload as { request: Record<string, unknown> };
       body = JSON.stringify(request);
       break;

@@ -46,7 +46,7 @@ describe("ReportsPage", () => {
     expect(screen.getByText(/Deterministic Report Builder/i)).toBeInTheDocument();
   });
 
-  it("lists the four existing real report-like surfaces with correct hrefs", () => {
+  it("lists the existing real report-like surfaces with correct hrefs", () => {
     render(
       <MemoryRouter>
         <ReportsPage />
@@ -60,5 +60,7 @@ describe("ReportsPage", () => {
     expect(breakdown).toHaveAttribute("href", "/insights");
     const health = screen.getByRole("link", { name: /Data health/i });
     expect(health).toHaveAttribute("href", "/health");
+    const taxPack = screen.getByRole("link", { name: /Tax Pack/i });
+    expect(taxPack).toHaveAttribute("href", "/reports/tax-pack");
   });
 });

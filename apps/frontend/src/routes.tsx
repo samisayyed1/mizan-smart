@@ -23,6 +23,7 @@ import PurificationPage from "@/pages/islamic-mode/purification-page";
 import ShariahScreeningPage from "@/pages/islamic-mode/shariah-screening-page";
 import ZakatCalculatorPage from "@/pages/islamic-mode/zakat-calculator-page";
 import ReportsPage from "@/pages/reports/reports-page";
+import TaxPackPage from "@/pages/reports/tax-pack-page";
 import IncomePage from "@/pages/income/income-page";
 import PortfolioInsightsPage from "@/pages/insights/portfolio-insights";
 import LiquidityLadderPage from "@/pages/liquidity-ladder/liquidity-ladder-page";
@@ -111,6 +112,7 @@ export function AppRoutes() {
           <Route path="documents" element={<DocumentsPage />} />
           <Route path="documents/review-queue" element={<DocumentReviewQueuePage />} />
           <Route path="reports" element={<ReportsPage />} />
+          <Route path="reports/tax-pack" element={<TaxPackPage />} />
           <Route path="reconciliation" element={<ReconciliationCenterPage />} />
           <Route path="inbox" element={<InboxPage />} />
           <Route path="shariah-screening" element={<ShariahScreeningPage />} />

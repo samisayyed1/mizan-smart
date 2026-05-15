@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 
 // Reports page — landing surface for the deterministic Report Builder
 // (Phase 4, prompts 30–32 of docs/mizan-smart-plan/PLAN.md). The full
-// Report Builder, Monthly Wealth Letter, Tax Pack, and Estate Binder are
+// Report Builder, Monthly Wealth Letter, and Estate Binder are
 // implemented later.
 //
 // For now this page links to the real, existing report-like screens so
@@ -44,6 +44,12 @@ const EXISTING_REPORTS: ReportLink[] = [
     href: "/health",
     icon: "ShieldCheck",
   },
+  {
+    title: "Tax Pack",
+    description: "CPA-ready ledger summaries with missing-data checks.",
+    href: "/reports/tax-pack",
+    icon: "ShieldCheck",
+  },
 ];
 
 export default function ReportsPage() {
@@ -60,7 +66,7 @@ export default function ReportsPage() {
         >
           <p className="text-base font-medium">Deterministic Report Builder coming in Phase 4</p>
           <p className="text-muted-foreground mt-1 text-sm">
-            The full Report Builder, Monthly Wealth Letter, Tax Pack, and Estate Binder
+            The full Report Builder, Monthly Wealth Letter, and Estate Binder
             are implemented in Phase 4 of this branch. The reports below are real and
             available today.
           </p>

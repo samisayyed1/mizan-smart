@@ -239,6 +239,8 @@ export const COMMANDS: CommandMap = {
   mark_purification_paid: { method: "POST", path: "/purification/entries" },
   get_purification_period_summary: { method: "GET", path: "/purification/summary" },
   get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
+  generate_tax_pack: { method: "POST", path: "/tax-packs" },
+  get_tax_pack: { method: "GET", path: "/tax-packs" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
   list_corporate_actions: { method: "GET", path: "/corporate-actions" },
@@ -1056,6 +1058,16 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
         params.set("asOf", asOf);
         url += `?${params.toString()}`;
       }
+      break;
+    }
+    case "generate_tax_pack": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "get_tax_pack": {
+      const { taxPackId } = payload as { taxPackId: string };
+      url += `/${encodeURIComponent(taxPackId)}`;
       break;
     }
     case "create_asset": {

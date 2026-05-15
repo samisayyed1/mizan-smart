@@ -70,6 +70,7 @@ use mizan_storage_sqlite::{
     reconciliation::ReconciliationRepository,
     settings::SettingsRepository,
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
+    tax_packs::TaxPackRepository,
     taxonomies::TaxonomyRepository,
     universal_assets::ManualValuationRepository,
 };
@@ -133,6 +134,8 @@ pub struct AppState {
     pub corporate_actions_repository: Arc<CorporateActionsRepository>,
     /// mizan-smart Phase 4 P24 — optional Islamic finance overlay.
     pub shariah_screening_repository: Arc<ShariahScreeningRepository>,
+    /// mizan-smart Phase 4 P28 — CPA-ready tax pack data preparation.
+    pub tax_pack_repository: Arc<TaxPackRepository>,
     pub addon_service: Arc<dyn AddonServiceTrait + Send + Sync>,
     pub connect_sync_service: Arc<dyn BrokerSyncServiceTrait + Send + Sync>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait + Send + Sync>,
@@ -356,6 +359,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         pool.clone(),
         writer.clone(),
     ));
+    let tax_pack_repository = Arc::new(TaxPackRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(LocalDocumentParser::new(document_vault_repository.clone()));
     let document_job_processor = Arc::new(DocumentExtractionJobProcessor::new(
         document_parser,
@@ -629,6 +633,7 @@ pub async fn build_state(config: &Config) -> anyhow::Result<Arc<AppState>> {
         liquidity_ladder_repository,
         corporate_actions_repository,
         shariah_screening_repository,
+        tax_pack_repository,
         addon_service,
         connect_sync_service,
         ai_provider_service,

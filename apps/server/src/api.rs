@@ -58,6 +58,7 @@ mod settings;
 pub mod shared;
 #[cfg(feature = "device-sync")]
 mod sync_crypto;
+mod tax_packs;
 mod taxonomies;
 mod universal_assets;
 
@@ -132,6 +133,7 @@ pub fn app_router(state: Arc<AppState>, config: &Config) -> Router {
         .merge(fixed_income::router())
         .merge(liquidity_ladder::router())
         .merge(corporate_actions::router())
+        .merge(tax_packs::router())
         .merge(custom_providers::router());
 
     #[cfg(feature = "device-sync")]

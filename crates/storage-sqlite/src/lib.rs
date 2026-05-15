@@ -52,6 +52,7 @@ pub mod private_investments;
 pub mod reconciliation;
 pub mod settings;
 pub mod sync;
+pub mod tax_packs;
 pub mod taxonomies;
 pub mod universal_assets;
 

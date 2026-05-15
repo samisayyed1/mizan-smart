@@ -51,6 +51,7 @@ use mizan_storage_sqlite::{
     reconciliation::ReconciliationRepository,
     settings::SettingsRepository,
     sync::{AppSyncRepository, BrokerSyncStateRepository, ImportRunRepository, PlatformRepository},
+    tax_packs::TaxPackRepository,
     taxonomies::TaxonomyRepository,
     universal_assets::ManualValuationRepository,
 };
@@ -168,6 +169,7 @@ pub async fn initialize_context(
         pool.clone(),
         writer.clone(),
     ));
+    let tax_pack_repository = Arc::new(TaxPackRepository::new(pool.clone(), writer.clone()));
     let document_parser = Arc::new(
         mizan_storage_sqlite::documents::extraction::LocalDocumentParser::new(
             document_vault_repository.clone(),
@@ -470,6 +472,7 @@ pub async fn initialize_context(
             liquidity_ladder_repository,
             corporate_actions_repository,
             shariah_screening_repository,
+            tax_pack_repository,
             taxonomy_service,
             connect_service,
             ai_provider_service,

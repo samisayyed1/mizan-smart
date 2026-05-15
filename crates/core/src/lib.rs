@@ -34,6 +34,7 @@ pub mod reconciliation;
 pub mod secrets;
 pub mod settings;
 pub mod sync;
+pub mod tax_packs;
 pub mod taxonomies;
 pub mod universal_assets;
 pub mod utils;

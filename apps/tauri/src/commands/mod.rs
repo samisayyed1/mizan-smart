@@ -39,6 +39,7 @@ pub mod secrets;
 pub mod settings;
 #[cfg(feature = "device-sync")]
 pub mod sync_crypto;
+pub mod tax_packs;
 pub mod taxonomy;
 pub mod universal_asset;
 pub mod utilities;

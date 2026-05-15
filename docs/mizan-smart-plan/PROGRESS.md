@@ -25,7 +25,7 @@
 - [x] p25 phase-4/p25  Shariah screening workflow (faa8619)
 - [x] p26 phase-4/p26  Zakat calculator (55b5790)
 - [x] p27 phase-4/p27  Dividend purification calculator (4628282)
-- [ ] p28 phase-4/p28  Tax pack foundation
+- [x] p28 phase-4/p28  Tax pack foundation (6474569)
 - [ ] p29 phase-4/p29  CPA export bundle
 - [ ] p30 phase-4/p30  Report Builder foundation
 - [ ] p31 phase-4/p31  Monthly Wealth Letter (deterministic)

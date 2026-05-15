@@ -22,6 +22,7 @@ use mizan_storage_sqlite::{
     private_investments::PrivateInvestmentRepository,
     reconciliation::ReconciliationRepository,
     sync::AppSyncRepository,
+    tax_packs::TaxPackRepository,
     universal_assets::{ManualValuationRepository, UniversalAssetCreateRepository},
 };
 use std::sync::{Arc, RwLock};
@@ -90,6 +91,8 @@ pub struct ServiceContext {
     pub corporate_actions_repository: Arc<CorporateActionsRepository>,
     /// mizan-smart Phase 4 P24 — optional Islamic finance overlay.
     pub shariah_screening_repository: Arc<ShariahScreeningRepository>,
+    /// mizan-smart Phase 4 P28 — CPA-ready tax pack data preparation.
+    pub tax_pack_repository: Arc<TaxPackRepository>,
     pub taxonomy_service: Arc<dyn taxonomies::TaxonomyServiceTrait>,
     pub connect_service: Arc<ConnectService>,
     pub ai_provider_service: Arc<dyn AiProviderServiceTrait>,
@@ -247,6 +250,10 @@ impl ServiceContext {
 
     pub fn shariah_screening_repository(&self) -> Arc<ShariahScreeningRepository> {
         Arc::clone(&self.shariah_screening_repository)
+    }
+
+    pub fn tax_pack_repository(&self) -> Arc<TaxPackRepository> {
+        Arc::clone(&self.tax_pack_repository)
     }
 
     pub fn taxonomy_service(&self) -> Arc<dyn taxonomies::TaxonomyServiceTrait> {

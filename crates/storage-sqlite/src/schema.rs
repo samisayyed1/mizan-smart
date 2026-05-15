@@ -197,6 +197,44 @@ diesel::table! {
 }
 
 diesel::table! {
+    tax_packs (id) {
+        id -> Text,
+        tax_year -> Integer,
+        jurisdiction -> Text,
+        base_currency -> Text,
+        status -> Text,
+        created_at -> Text,
+        finalized_at -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    tax_pack_lines (id) {
+        id -> Text,
+        tax_pack_id -> Text,
+        category -> Text,
+        asset_id -> Nullable<Text>,
+        activity_id -> Nullable<Text>,
+        amount -> Text,
+        currency -> Text,
+        taxable_date -> Text,
+        source_citation_id -> Nullable<Text>,
+        notes -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
+    tax_pack_missing_items (id) {
+        id -> Text,
+        tax_pack_id -> Text,
+        severity -> Text,
+        message -> Text,
+        related_activity_id -> Nullable<Text>,
+        related_asset_id -> Nullable<Text>,
+    }
+}
+
+diesel::table! {
     asset_taxonomy_assignments (id) {
         id -> Text,
         asset_id -> Text,
@@ -1069,6 +1107,13 @@ diesel::joinable!(zakat_lines -> assets (asset_id));
 diesel::joinable!(zakat_lines -> source_citations (source_citation_id));
 diesel::joinable!(purification_entries -> assets (asset_id));
 diesel::joinable!(purification_entries -> source_citations (source_citation_id));
+diesel::joinable!(tax_pack_lines -> tax_packs (tax_pack_id));
+diesel::joinable!(tax_pack_lines -> assets (asset_id));
+diesel::joinable!(tax_pack_lines -> activities (activity_id));
+diesel::joinable!(tax_pack_lines -> source_citations (source_citation_id));
+diesel::joinable!(tax_pack_missing_items -> tax_packs (tax_pack_id));
+diesel::joinable!(tax_pack_missing_items -> activities (related_activity_id));
+diesel::joinable!(tax_pack_missing_items -> assets (related_asset_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -1185,6 +1230,9 @@ diesel::allow_tables_to_appear_in_same_query!(
     zakat_snapshots,
     zakat_lines,
     purification_entries,
+    tax_packs,
+    tax_pack_lines,
+    tax_pack_missing_items,
     valuations,
     asset_public_market_details,
     asset_fixed_income_details,

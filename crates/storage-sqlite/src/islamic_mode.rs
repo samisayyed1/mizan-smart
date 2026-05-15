@@ -10,18 +10,20 @@ use uuid::Uuid;
 
 use mizan_core::errors::ValidationError;
 use mizan_core::islamic_mode::{
-    calculate_zakat_totals, evaluate_screening_request, validate_zakat_request,
-    AssetShariahScreening, CalculateZakatSnapshotRequest, ShariahScreeningAuditEntry,
+    calculate_purification, calculate_zakat_totals, evaluate_screening_request,
+    summarize_purification_period, validate_zakat_request, AssetShariahScreening,
+    CalculateZakatSnapshotRequest, PurificationCalculationMethod, PurificationEntry,
+    PurificationPeriodSummary, PurificationStatus, ShariahScreeningAuditEntry,
     ShariahScreeningProfile, ShariahScreeningRepositoryTrait, ShariahScreeningStatus,
-    UpsertAssetShariahScreeningRequest, ZakatLine, ZakatSnapshot,
+    UpsertAssetShariahScreeningRequest, UpsertPurificationEntryRequest, ZakatLine, ZakatSnapshot,
 };
 use mizan_core::{Error, Result};
 
 use crate::db::{get_connection, WriteHandle};
 use crate::errors::StorageError;
 use crate::schema::{
-    asset_shariah_screening, shariah_screening_audit_log, shariah_screening_profiles, valuations,
-    zakat_lines, zakat_snapshots,
+    asset_shariah_screening, purification_entries, shariah_screening_audit_log,
+    shariah_screening_profiles, valuations, zakat_lines, zakat_snapshots,
 };
 
 pub struct ShariahScreeningRepository {
@@ -118,6 +120,27 @@ struct ZakatValuationRow {
     source_citation_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Queryable, Insertable)]
+#[diesel(table_name = purification_entries)]
+struct PurificationEntryRow {
+    id: String,
+    asset_id: String,
+    period_start: String,
+    period_end: String,
+    total_impure_income: Option<String>,
+    outstanding_shares: Option<String>,
+    user_shares: Option<String>,
+    dividend_received: Option<String>,
+    impure_income_ratio: Option<String>,
+    purification_amount: String,
+    calculation_method: String,
+    status: String,
+    source_citation_id: Option<String>,
+    notes: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
 impl TryFrom<ShariahScreeningProfileRow> for ShariahScreeningProfile {
     type Error = Error;
 
@@ -208,6 +231,44 @@ impl TryFrom<ZakatLineRow> for ZakatLine {
             included: row.included == 1,
             explanation: row.explanation,
             source_citation_id: row.source_citation_id,
+        })
+    }
+}
+
+impl TryFrom<PurificationEntryRow> for PurificationEntry {
+    type Error = Error;
+
+    fn try_from(row: PurificationEntryRow) -> Result<Self> {
+        Ok(Self {
+            id: row.id,
+            asset_id: row.asset_id,
+            period_start: chrono::NaiveDate::parse_from_str(&row.period_start, "%Y-%m-%d")
+                .map_err(|_| invalid("period_start is not a valid date"))?,
+            period_end: chrono::NaiveDate::parse_from_str(&row.period_end, "%Y-%m-%d")
+                .map_err(|_| invalid("period_end is not a valid date"))?,
+            total_impure_income: parse_optional_decimal(
+                "total_impure_income",
+                row.total_impure_income,
+            )?,
+            outstanding_shares: parse_optional_decimal(
+                "outstanding_shares",
+                row.outstanding_shares,
+            )?,
+            user_shares: parse_optional_decimal("user_shares", row.user_shares)?,
+            dividend_received: parse_optional_decimal("dividend_received", row.dividend_received)?,
+            impure_income_ratio: parse_optional_decimal(
+                "impure_income_ratio",
+                row.impure_income_ratio,
+            )?,
+            purification_amount: parse_decimal("purification_amount", &row.purification_amount)?,
+            calculation_method: PurificationCalculationMethod::parse(&row.calculation_method)
+                .ok_or_else(|| invalid("unsupported purification calculation method"))?,
+            status: PurificationStatus::parse(&row.status)
+                .ok_or_else(|| invalid("unsupported purification status"))?,
+            source_citation_id: row.source_citation_id,
+            notes: row.notes,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
         })
     }
 }
@@ -508,6 +569,106 @@ impl ShariahScreeningRepositoryTrait for ShariahScreeningRepository {
             lines,
         })
     }
+
+    async fn upsert_purification_entry(
+        &self,
+        request: UpsertPurificationEntryRequest,
+    ) -> Result<PurificationEntry> {
+        let (purification_amount, calculation_method) = calculate_purification(&request)?;
+        let now = Utc::now().to_rfc3339();
+        let row = PurificationEntryRow {
+            id: Uuid::new_v4().to_string(),
+            asset_id: request.asset_id.trim().to_string(),
+            period_start: request.period_start.to_string(),
+            period_end: request.period_end.to_string(),
+            total_impure_income: decimal_to_string(request.total_impure_income),
+            outstanding_shares: decimal_to_string(request.outstanding_shares),
+            user_shares: decimal_to_string(request.user_shares),
+            dividend_received: decimal_to_string(request.dividend_received),
+            impure_income_ratio: decimal_to_string(request.impure_income_ratio),
+            purification_amount: purification_amount.normalize().to_string(),
+            calculation_method: calculation_method.as_str().to_string(),
+            status: request
+                .status
+                .unwrap_or(PurificationStatus::Calculated)
+                .as_str()
+                .to_string(),
+            source_citation_id: request.source_citation_id,
+            notes: request.notes,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        let saved = row.clone();
+
+        self.writer
+            .exec_tx(move |tx| -> Result<()> {
+                diesel::insert_into(purification_entries::table)
+                    .values(&row)
+                    .execute(tx.conn())
+                    .map_err(StorageError::from)?;
+                Ok(())
+            })
+            .await?;
+
+        PurificationEntry::try_from(saved)
+    }
+
+    async fn mark_purification_paid(&self, entry_id: &str) -> Result<PurificationEntry> {
+        let target_id = entry_id.to_string();
+        let now = Utc::now().to_rfc3339();
+        let row = self
+            .writer
+            .exec_tx(move |tx| -> Result<PurificationEntryRow> {
+                let conn = tx.conn();
+                diesel::update(purification_entries::table.find(&target_id))
+                    .set((
+                        purification_entries::status.eq(PurificationStatus::Paid.as_str()),
+                        purification_entries::updated_at.eq(&now),
+                    ))
+                    .execute(conn)
+                    .map_err(StorageError::from)?;
+                purification_entries::table
+                    .find(&target_id)
+                    .first::<PurificationEntryRow>(conn)
+                    .map_err(StorageError::from)
+                    .map_err(Error::from)
+            })
+            .await?;
+
+        PurificationEntry::try_from(row)
+    }
+
+    fn list_purification_entries(
+        &self,
+        period_start: chrono::NaiveDate,
+        period_end: chrono::NaiveDate,
+    ) -> Result<Vec<PurificationEntry>> {
+        let mut conn = get_connection(&self.pool)?;
+        let rows = purification_entries::table
+            .filter(purification_entries::period_start.ge(period_start.to_string()))
+            .filter(purification_entries::period_end.le(period_end.to_string()))
+            .order((
+                purification_entries::period_start.asc(),
+                purification_entries::created_at.asc(),
+            ))
+            .load::<PurificationEntryRow>(&mut conn)
+            .map_err(StorageError::from)?;
+
+        rows.into_iter().map(PurificationEntry::try_from).collect()
+    }
+
+    fn purification_period_summary(
+        &self,
+        period_start: chrono::NaiveDate,
+        period_end: chrono::NaiveDate,
+    ) -> Result<PurificationPeriodSummary> {
+        let entries = self.list_purification_entries(period_start, period_end)?;
+        Ok(summarize_purification_period(
+            period_start,
+            period_end,
+            entries,
+        ))
+    }
 }
 
 impl ShariahScreeningRepository {
@@ -576,6 +737,10 @@ fn parse_optional_decimal(field: &str, value: Option<String>) -> Result<Option<D
         .as_deref()
         .map(|raw| parse_decimal(field, raw))
         .transpose()
+}
+
+fn decimal_to_string(value: Option<Decimal>) -> Option<String> {
+    value.map(|amount| amount.normalize().to_string())
 }
 
 fn invalid(message: &str) -> Error {
@@ -777,6 +942,90 @@ mod tests {
         assert_eq!(persisted, 0);
     }
 
+    #[tokio::test]
+    async fn purification_entry_supports_both_calculation_methods_and_mark_paid() {
+        let (pool, writer) = setup();
+        seed_asset(&pool, "asset-1");
+        let repo = ShariahScreeningRepository::new(pool, writer);
+
+        let per_share = repo
+            .upsert_purification_entry(purification_request(
+                Some(dec!(1_000)),
+                Some(dec!(10_000)),
+                Some(dec!(50)),
+                None,
+                None,
+            ))
+            .await
+            .expect("per-share purification");
+        let ratio = repo
+            .upsert_purification_entry(purification_request(
+                None,
+                None,
+                None,
+                Some(dec!(400)),
+                Some(dec!(0.05)),
+            ))
+            .await
+            .expect("ratio purification");
+
+        assert_eq!(per_share.purification_amount, dec!(5));
+        assert_eq!(
+            per_share.calculation_method,
+            PurificationCalculationMethod::ImpureIncomePerShare
+        );
+        assert_eq!(ratio.purification_amount, dec!(20.00));
+        assert_eq!(
+            ratio.calculation_method,
+            PurificationCalculationMethod::DividendRatio
+        );
+
+        let paid = repo
+            .mark_purification_paid(&ratio.id)
+            .await
+            .expect("mark paid");
+        assert_eq!(paid.status, PurificationStatus::Paid);
+    }
+
+    #[tokio::test]
+    async fn purification_missing_data_needs_review_and_period_totals() {
+        let (pool, writer) = setup();
+        seed_asset(&pool, "asset-1");
+        let repo = ShariahScreeningRepository::new(pool, writer);
+
+        let review = repo
+            .upsert_purification_entry(purification_request(None, None, None, None, None))
+            .await
+            .expect("needs review purification");
+        let paid = repo
+            .upsert_purification_entry(purification_request(
+                None,
+                None,
+                None,
+                Some(dec!(100)),
+                Some(dec!(0.10)),
+            ))
+            .await
+            .expect("ratio purification");
+        repo.mark_purification_paid(&paid.id).await.expect("paid");
+
+        assert_eq!(
+            review.calculation_method,
+            PurificationCalculationMethod::NeedsReview
+        );
+        assert_eq!(review.purification_amount, Decimal::ZERO);
+
+        let summary = repo
+            .purification_period_summary(
+                chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+                chrono::NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
+            )
+            .expect("summary");
+        assert_eq!(summary.total_calculated, dec!(10.00));
+        assert_eq!(summary.total_paid, dec!(10.00));
+        assert_eq!(summary.entries.len(), 2);
+    }
+
     fn request(
         asset_id: &str,
         debt_ratio: Decimal,
@@ -849,6 +1098,28 @@ mod tests {
             nisab_value: dec!(5_000),
             notes: Some("Annual Zakat review".to_string()),
             lines,
+        }
+    }
+
+    fn purification_request(
+        total_impure_income: Option<Decimal>,
+        outstanding_shares: Option<Decimal>,
+        user_shares: Option<Decimal>,
+        dividend_received: Option<Decimal>,
+        impure_income_ratio: Option<Decimal>,
+    ) -> UpsertPurificationEntryRequest {
+        UpsertPurificationEntryRequest {
+            asset_id: "asset-1".to_string(),
+            period_start: chrono::NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            period_end: chrono::NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
+            total_impure_income,
+            outstanding_shares,
+            user_shares,
+            dividend_received,
+            impure_income_ratio,
+            status: None,
+            source_citation_id: None,
+            notes: Some("Reviewed dividends".to_string()),
         }
     }
 }

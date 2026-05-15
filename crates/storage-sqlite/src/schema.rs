@@ -176,6 +176,27 @@ diesel::table! {
 }
 
 diesel::table! {
+    purification_entries (id) {
+        id -> Text,
+        asset_id -> Text,
+        period_start -> Text,
+        period_end -> Text,
+        total_impure_income -> Nullable<Text>,
+        outstanding_shares -> Nullable<Text>,
+        user_shares -> Nullable<Text>,
+        dividend_received -> Nullable<Text>,
+        impure_income_ratio -> Nullable<Text>,
+        purification_amount -> Text,
+        calculation_method -> Text,
+        status -> Text,
+        source_citation_id -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     asset_taxonomy_assignments (id) {
         id -> Text,
         asset_id -> Text,
@@ -1046,6 +1067,8 @@ diesel::joinable!(shariah_screening_audit_log -> shariah_screening_profiles (pro
 diesel::joinable!(zakat_lines -> zakat_snapshots (snapshot_id));
 diesel::joinable!(zakat_lines -> assets (asset_id));
 diesel::joinable!(zakat_lines -> source_citations (source_citation_id));
+diesel::joinable!(purification_entries -> assets (asset_id));
+diesel::joinable!(purification_entries -> source_citations (source_citation_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -1161,6 +1184,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     shariah_screening_audit_log,
     zakat_snapshots,
     zakat_lines,
+    purification_entries,
     valuations,
     asset_public_market_details,
     asset_fixed_income_details,

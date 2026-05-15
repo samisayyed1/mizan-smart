@@ -349,10 +349,13 @@ export {
   calculateZakatSnapshot,
   evaluateShariahCompliance,
   evaluateShariahScreeningRatios,
+  getPurificationPeriodSummary,
   getAssetShariahScreening,
   listShariahScreeningAudit,
   listShariahScreeningProfiles,
+  markPurificationPaid,
   upsertAssetShariahScreening,
+  upsertPurificationEntry,
 } from "../shared/islamic-mode";
 export { getLiquidityLadder } from "../shared/liquidity-ladder";
 export { applyCorporateAction, listCorporateActions, previewCorporateAction } from "../shared/corporate-actions";
@@ -424,6 +427,11 @@ export type {
   ZakatInputLine,
   ZakatLine,
   ZakatSnapshot,
+  PurificationCalculationMethod,
+  PurificationStatus,
+  UpsertPurificationEntryRequest,
+  PurificationEntry,
+  PurificationPeriodSummary,
 } from "../shared/islamic-mode";
 export type {
   LiquidityConfidence,

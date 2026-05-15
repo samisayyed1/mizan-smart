@@ -235,6 +235,9 @@ export const COMMANDS: CommandMap = {
   get_asset_shariah_screening: { method: "GET", path: "/shariah-screening/assets" },
   list_shariah_screening_audit: { method: "GET", path: "/shariah-screening/assets" },
   calculate_zakat_snapshot: { method: "POST", path: "/zakat/snapshots" },
+  upsert_purification_entry: { method: "POST", path: "/purification/entries" },
+  mark_purification_paid: { method: "POST", path: "/purification/entries" },
+  get_purification_period_summary: { method: "GET", path: "/purification/summary" },
   get_liquidity_ladder: { method: "GET", path: "/liquidity-ladder" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
@@ -998,6 +1001,21 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "calculate_zakat_snapshot": {
       const { request } = payload as { request: Record<string, unknown> };
       body = JSON.stringify(request);
+      break;
+    }
+    case "upsert_purification_entry": {
+      const { request } = payload as { request: Record<string, unknown> };
+      body = JSON.stringify(request);
+      break;
+    }
+    case "mark_purification_paid": {
+      const { entryId } = payload as { entryId: string };
+      url += `/${encodeURIComponent(entryId)}/paid`;
+      break;
+    }
+    case "get_purification_period_summary": {
+      const { periodStart, periodEnd } = payload as { periodStart: string; periodEnd: string };
+      url += `/${encodeURIComponent(periodStart)}/${encodeURIComponent(periodEnd)}`;
       break;
     }
     case "evaluate_shariah_compliance": {

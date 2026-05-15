@@ -162,6 +162,107 @@ pub struct ZakatSnapshot {
     pub lines: Vec<ZakatLine>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PurificationCalculationMethod {
+    ImpureIncomePerShare,
+    DividendRatio,
+    NeedsReview,
+}
+
+impl PurificationCalculationMethod {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::ImpureIncomePerShare => "impure_income_per_share",
+            Self::DividendRatio => "dividend_ratio",
+            Self::NeedsReview => "needs_review",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "impure_income_per_share" => Some(Self::ImpureIncomePerShare),
+            "dividend_ratio" => Some(Self::DividendRatio),
+            "needs_review" => Some(Self::NeedsReview),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PurificationStatus {
+    Calculated,
+    Paid,
+    Waived,
+}
+
+impl PurificationStatus {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Calculated => "calculated",
+            Self::Paid => "paid",
+            Self::Waived => "waived",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "calculated" => Some(Self::Calculated),
+            "paid" => Some(Self::Paid),
+            "waived" => Some(Self::Waived),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpsertPurificationEntryRequest {
+    pub asset_id: String,
+    pub period_start: NaiveDate,
+    pub period_end: NaiveDate,
+    pub total_impure_income: Option<Decimal>,
+    pub outstanding_shares: Option<Decimal>,
+    pub user_shares: Option<Decimal>,
+    pub dividend_received: Option<Decimal>,
+    pub impure_income_ratio: Option<Decimal>,
+    pub status: Option<PurificationStatus>,
+    pub source_citation_id: Option<String>,
+    pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PurificationEntry {
+    pub id: String,
+    pub asset_id: String,
+    pub period_start: NaiveDate,
+    pub period_end: NaiveDate,
+    pub total_impure_income: Option<Decimal>,
+    pub outstanding_shares: Option<Decimal>,
+    pub user_shares: Option<Decimal>,
+    pub dividend_received: Option<Decimal>,
+    pub impure_income_ratio: Option<Decimal>,
+    pub purification_amount: Decimal,
+    pub calculation_method: PurificationCalculationMethod,
+    pub status: PurificationStatus,
+    pub source_citation_id: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PurificationPeriodSummary {
+    pub period_start: NaiveDate,
+    pub period_end: NaiveDate,
+    pub total_calculated: Decimal,
+    pub total_paid: Decimal,
+    pub entries: Vec<PurificationEntry>,
+}
+
 #[async_trait]
 pub trait ShariahScreeningRepositoryTrait: Send + Sync {
     fn list_profiles(&self) -> Result<Vec<ShariahScreeningProfile>>;
@@ -193,6 +294,25 @@ pub trait ShariahScreeningRepositoryTrait: Send + Sync {
         &self,
         request: CalculateZakatSnapshotRequest,
     ) -> Result<ZakatSnapshot>;
+
+    async fn upsert_purification_entry(
+        &self,
+        request: UpsertPurificationEntryRequest,
+    ) -> Result<PurificationEntry>;
+
+    async fn mark_purification_paid(&self, entry_id: &str) -> Result<PurificationEntry>;
+
+    fn list_purification_entries(
+        &self,
+        period_start: NaiveDate,
+        period_end: NaiveDate,
+    ) -> Result<Vec<PurificationEntry>>;
+
+    fn purification_period_summary(
+        &self,
+        period_start: NaiveDate,
+        period_end: NaiveDate,
+    ) -> Result<PurificationPeriodSummary>;
 }
 
 pub fn evaluate_shariah_screening(
@@ -379,6 +499,85 @@ pub fn calculate_zakat_totals(
     )
 }
 
+pub fn calculate_purification(
+    request: &UpsertPurificationEntryRequest,
+) -> Result<(Decimal, PurificationCalculationMethod)> {
+    validate_purification_request(request)?;
+    if let (Some(total_impure_income), Some(outstanding_shares), Some(user_shares)) = (
+        request.total_impure_income,
+        request.outstanding_shares,
+        request.user_shares,
+    ) {
+        if outstanding_shares > Decimal::ZERO {
+            return Ok((
+                (total_impure_income / outstanding_shares) * user_shares,
+                PurificationCalculationMethod::ImpureIncomePerShare,
+            ));
+        }
+    }
+    if let (Some(dividend_received), Some(impure_income_ratio)) =
+        (request.dividend_received, request.impure_income_ratio)
+    {
+        return Ok((
+            dividend_received * impure_income_ratio,
+            PurificationCalculationMethod::DividendRatio,
+        ));
+    }
+    Ok((Decimal::ZERO, PurificationCalculationMethod::NeedsReview))
+}
+
+pub fn validate_purification_request(request: &UpsertPurificationEntryRequest) -> Result<()> {
+    if request.asset_id.trim().is_empty() {
+        return Err(ValidationError::InvalidInput("asset_id is required".to_string()).into());
+    }
+    if request.period_end < request.period_start {
+        return Err(ValidationError::InvalidInput(
+            "period_end must be on or after period_start".to_string(),
+        )
+        .into());
+    }
+    for (field, value) in [
+        ("total_impure_income", request.total_impure_income),
+        ("outstanding_shares", request.outstanding_shares),
+        ("user_shares", request.user_shares),
+        ("dividend_received", request.dividend_received),
+        ("impure_income_ratio", request.impure_income_ratio),
+    ] {
+        if let Some(amount) = value {
+            if amount < Decimal::ZERO {
+                return Err(
+                    ValidationError::InvalidInput(format!("{field} cannot be negative")).into(),
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+pub fn summarize_purification_period(
+    period_start: NaiveDate,
+    period_end: NaiveDate,
+    entries: Vec<PurificationEntry>,
+) -> PurificationPeriodSummary {
+    let total_calculated = entries
+        .iter()
+        .filter(|entry| entry.calculation_method != PurificationCalculationMethod::NeedsReview)
+        .map(|entry| entry.purification_amount)
+        .sum::<Decimal>();
+    let total_paid = entries
+        .iter()
+        .filter(|entry| entry.status == PurificationStatus::Paid)
+        .map(|entry| entry.purification_amount)
+        .sum::<Decimal>();
+    PurificationPeriodSummary {
+        period_start,
+        period_end,
+        total_calculated,
+        total_paid,
+        entries,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use rust_decimal_macros::dec;
@@ -551,5 +750,103 @@ mod tests {
         };
 
         assert!(validate_zakat_request(&request).is_err());
+    }
+
+    #[test]
+    fn purification_impure_income_per_share_method() {
+        let request = purification_request(
+            Some(dec!(1_000)),
+            Some(dec!(10_000)),
+            Some(dec!(50)),
+            None,
+            None,
+        );
+
+        let (amount, method) = calculate_purification(&request).expect("calculation");
+
+        assert_eq!(amount, dec!(5));
+        assert_eq!(method, PurificationCalculationMethod::ImpureIncomePerShare);
+    }
+
+    #[test]
+    fn purification_dividend_ratio_method() {
+        let request = purification_request(None, None, None, Some(dec!(400)), Some(dec!(0.05)));
+
+        let (amount, method) = calculate_purification(&request).expect("calculation");
+
+        assert_eq!(amount, dec!(20.00));
+        assert_eq!(method, PurificationCalculationMethod::DividendRatio);
+    }
+
+    #[test]
+    fn purification_missing_data_needs_review() {
+        let request = purification_request(None, None, None, None, None);
+
+        let (amount, method) = calculate_purification(&request).expect("calculation");
+
+        assert_eq!(amount, Decimal::ZERO);
+        assert_eq!(method, PurificationCalculationMethod::NeedsReview);
+    }
+
+    #[test]
+    fn purification_period_summary_totals_paid_separately() {
+        let start = NaiveDate::from_ymd_opt(2026, 1, 1).unwrap();
+        let end = NaiveDate::from_ymd_opt(2026, 12, 31).unwrap();
+        let entries = vec![
+            purification_entry("entry-1", dec!(10), PurificationStatus::Calculated),
+            purification_entry("entry-2", dec!(20), PurificationStatus::Paid),
+        ];
+
+        let summary = summarize_purification_period(start, end, entries);
+
+        assert_eq!(summary.total_calculated, dec!(30));
+        assert_eq!(summary.total_paid, dec!(20));
+    }
+
+    fn purification_request(
+        total_impure_income: Option<Decimal>,
+        outstanding_shares: Option<Decimal>,
+        user_shares: Option<Decimal>,
+        dividend_received: Option<Decimal>,
+        impure_income_ratio: Option<Decimal>,
+    ) -> UpsertPurificationEntryRequest {
+        UpsertPurificationEntryRequest {
+            asset_id: "asset-1".to_string(),
+            period_start: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            period_end: NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
+            total_impure_income,
+            outstanding_shares,
+            user_shares,
+            dividend_received,
+            impure_income_ratio,
+            status: None,
+            source_citation_id: None,
+            notes: None,
+        }
+    }
+
+    fn purification_entry(
+        id: &str,
+        purification_amount: Decimal,
+        status: PurificationStatus,
+    ) -> PurificationEntry {
+        PurificationEntry {
+            id: id.to_string(),
+            asset_id: "asset-1".to_string(),
+            period_start: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+            period_end: NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
+            total_impure_income: None,
+            outstanding_shares: None,
+            user_shares: None,
+            dividend_received: None,
+            impure_income_ratio: None,
+            purification_amount,
+            calculation_method: PurificationCalculationMethod::DividendRatio,
+            status,
+            source_citation_id: None,
+            notes: None,
+            created_at: "2026-05-15T00:00:00Z".to_string(),
+            updated_at: "2026-05-15T00:00:00Z".to_string(),
+        }
     }
 }

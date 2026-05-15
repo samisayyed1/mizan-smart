@@ -108,6 +108,44 @@ export interface ZakatSnapshot {
   lines: ZakatLine[];
 }
 
+export type PurificationCalculationMethod =
+  | "impure_income_per_share"
+  | "dividend_ratio"
+  | "needs_review";
+
+export type PurificationStatus = "calculated" | "paid" | "waived";
+
+export interface UpsertPurificationEntryRequest {
+  assetId: string;
+  periodStart: string;
+  periodEnd: string;
+  totalImpureIncome?: string | null;
+  outstandingShares?: string | null;
+  userShares?: string | null;
+  dividendReceived?: string | null;
+  impureIncomeRatio?: string | null;
+  status?: PurificationStatus | null;
+  sourceCitationId?: string | null;
+  notes?: string | null;
+}
+
+export interface PurificationEntry extends UpsertPurificationEntryRequest {
+  id: string;
+  purificationAmount: string;
+  calculationMethod: PurificationCalculationMethod;
+  status: PurificationStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurificationPeriodSummary {
+  periodStart: string;
+  periodEnd: string;
+  totalCalculated: string;
+  totalPaid: string;
+  entries: PurificationEntry[];
+}
+
 export function listShariahScreeningProfiles(): Promise<ShariahScreeningProfile[]> {
   return invoke<ShariahScreeningProfile[]>("list_shariah_screening_profiles");
 }
@@ -158,4 +196,24 @@ export function calculateZakatSnapshot(
   request: CalculateZakatSnapshotRequest,
 ): Promise<ZakatSnapshot> {
   return invoke<ZakatSnapshot>("calculate_zakat_snapshot", { request });
+}
+
+export function upsertPurificationEntry(
+  request: UpsertPurificationEntryRequest,
+): Promise<PurificationEntry> {
+  return invoke<PurificationEntry>("upsert_purification_entry", { request });
+}
+
+export function markPurificationPaid(entryId: string): Promise<PurificationEntry> {
+  return invoke<PurificationEntry>("mark_purification_paid", { entryId });
+}
+
+export function getPurificationPeriodSummary(
+  periodStart: string,
+  periodEnd: string,
+): Promise<PurificationPeriodSummary> {
+  return invoke<PurificationPeriodSummary>("get_purification_period_summary", {
+    periodStart,
+    periodEnd,
+  });
 }

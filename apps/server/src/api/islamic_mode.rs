@@ -5,11 +5,13 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono::NaiveDate;
 use mizan_core::islamic_mode::{
     evaluate_shariah_screening, validate_shariah_mode_enabled, AssetShariahScreening,
-    CalculateZakatSnapshotRequest, ShariahScreeningAuditEntry, ShariahScreeningEvaluation,
-    ShariahScreeningProfile, ShariahScreeningRatios, ShariahScreeningRepositoryTrait,
-    UpsertAssetShariahScreeningRequest, ZakatSnapshot,
+    CalculateZakatSnapshotRequest, PurificationEntry, PurificationPeriodSummary,
+    ShariahScreeningAuditEntry, ShariahScreeningEvaluation, ShariahScreeningProfile,
+    ShariahScreeningRatios, ShariahScreeningRepositoryTrait, UpsertAssetShariahScreeningRequest,
+    UpsertPurificationEntryRequest, ZakatSnapshot,
 };
 use mizan_core::settings::SettingsServiceTrait;
 
@@ -111,12 +113,58 @@ async fn calculate_zakat_snapshot(
         .map_err(ApiError::from)
 }
 
+async fn upsert_purification_entry(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<UpsertPurificationEntryRequest>,
+) -> ApiResult<Json<PurificationEntry>> {
+    ensure_enabled(&state)?;
+    state
+        .shariah_screening_repository
+        .upsert_purification_entry(request)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+async fn mark_purification_paid(
+    State(state): State<Arc<AppState>>,
+    Path(entry_id): Path<String>,
+) -> ApiResult<Json<PurificationEntry>> {
+    ensure_enabled(&state)?;
+    state
+        .shariah_screening_repository
+        .mark_purification_paid(&entry_id)
+        .await
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
+async fn get_purification_period_summary(
+    State(state): State<Arc<AppState>>,
+    Path((period_start, period_end)): Path<(String, String)>,
+) -> ApiResult<Json<PurificationPeriodSummary>> {
+    ensure_enabled(&state)?;
+    let period_start = parse_date(&period_start)?;
+    let period_end = parse_date(&period_end)?;
+    state
+        .shariah_screening_repository
+        .purification_period_summary(period_start, period_end)
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
 fn ensure_enabled(state: &AppState) -> ApiResult<()> {
     let settings = state
         .settings_service
         .get_settings()
         .map_err(ApiError::from)?;
     validate_shariah_mode_enabled(settings.shariah_mode_enabled).map_err(ApiError::from)
+}
+
+fn parse_date(value: &str) -> ApiResult<NaiveDate> {
+    NaiveDate::parse_from_str(value, "%Y-%m-%d").map_err(|err| {
+        ApiError::BadRequest(format!("invalid purification period date {value}: {err}"))
+    })
 }
 
 pub fn router() -> Router<Arc<AppState>> {
@@ -146,4 +194,13 @@ pub fn router() -> Router<Arc<AppState>> {
             post(upsert_asset_shariah_screening),
         )
         .route("/zakat/snapshots", post(calculate_zakat_snapshot))
+        .route("/purification/entries", post(upsert_purification_entry))
+        .route(
+            "/purification/entries/{entry_id}/paid",
+            post(mark_purification_paid),
+        )
+        .route(
+            "/purification/summary/{period_start}/{period_end}",
+            get(get_purification_period_summary),
+        )
 }

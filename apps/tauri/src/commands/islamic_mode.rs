@@ -3,9 +3,10 @@ use std::sync::Arc;
 use log::error;
 use mizan_core::islamic_mode::{
     evaluate_shariah_screening, validate_shariah_mode_enabled, AssetShariahScreening,
-    CalculateZakatSnapshotRequest, ShariahScreeningAuditEntry, ShariahScreeningEvaluation,
-    ShariahScreeningProfile, ShariahScreeningRatios, ShariahScreeningRepositoryTrait,
-    UpsertAssetShariahScreeningRequest, ZakatSnapshot,
+    CalculateZakatSnapshotRequest, PurificationEntry, PurificationPeriodSummary,
+    ShariahScreeningAuditEntry, ShariahScreeningEvaluation, ShariahScreeningProfile,
+    ShariahScreeningRatios, ShariahScreeningRepositoryTrait, UpsertAssetShariahScreeningRequest,
+    UpsertPurificationEntryRequest, ZakatSnapshot,
 };
 use tauri::State;
 
@@ -110,6 +111,45 @@ pub async fn calculate_zakat_snapshot(
         .calculate_zakat_snapshot(request)
         .await
         .map_err(command_error("calculate_zakat_snapshot"))
+}
+
+#[tauri::command]
+pub async fn upsert_purification_entry(
+    request: UpsertPurificationEntryRequest,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<PurificationEntry, String> {
+    ensure_enabled(&state)?;
+    state
+        .shariah_screening_repository()
+        .upsert_purification_entry(request)
+        .await
+        .map_err(command_error("upsert_purification_entry"))
+}
+
+#[tauri::command]
+pub async fn mark_purification_paid(
+    entry_id: String,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<PurificationEntry, String> {
+    ensure_enabled(&state)?;
+    state
+        .shariah_screening_repository()
+        .mark_purification_paid(&entry_id)
+        .await
+        .map_err(command_error("mark_purification_paid"))
+}
+
+#[tauri::command]
+pub async fn get_purification_period_summary(
+    period_start: chrono::NaiveDate,
+    period_end: chrono::NaiveDate,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<PurificationPeriodSummary, String> {
+    ensure_enabled(&state)?;
+    state
+        .shariah_screening_repository()
+        .purification_period_summary(period_start, period_end)
+        .map_err(command_error("get_purification_period_summary"))
 }
 
 fn ensure_enabled(state: &State<'_, Arc<ServiceContext>>) -> Result<(), String> {

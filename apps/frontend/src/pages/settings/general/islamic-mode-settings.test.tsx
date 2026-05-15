@@ -52,6 +52,7 @@ describe("IslamicModeSettings", () => {
     expect(screen.getByLabelText("Enable Islamic finance tools")).not.toBeChecked();
     expect(screen.queryByText("Open screening page")).not.toBeInTheDocument();
     expect(screen.queryByText("Open Zakat calculator")).not.toBeInTheDocument();
+    expect(screen.queryByText("Open purification tracker")).not.toBeInTheDocument();
   });
 
   it("shows the screening link while enabled", () => {
@@ -71,5 +72,6 @@ describe("IslamicModeSettings", () => {
     expect(screen.getByLabelText("Enable Islamic finance tools")).toBeChecked();
     expect(screen.getByText("Open screening page")).toHaveAttribute("href", "/shariah-screening");
     expect(screen.getByText("Open Zakat calculator")).toHaveAttribute("href", "/zakat");
+    expect(screen.getByText("Open purification tracker")).toHaveAttribute("href", "/purification");
   });
 });

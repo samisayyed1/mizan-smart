@@ -430,6 +430,9 @@ pub fn run() {
             commands::islamic_mode::get_asset_shariah_screening,
             commands::islamic_mode::list_shariah_screening_audit,
             commands::islamic_mode::calculate_zakat_snapshot,
+            commands::islamic_mode::upsert_purification_entry,
+            commands::islamic_mode::mark_purification_paid,
+            commands::islamic_mode::get_purification_period_summary,
             // Goal commands
             commands::goal::create_goal,
             commands::goal::update_goal,

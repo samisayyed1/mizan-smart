@@ -60,6 +60,9 @@ export function IslamicModeSettings() {
             <Link to="/zakat" className="text-primary text-sm font-medium underline">
               Open Zakat calculator
             </Link>
+            <Link to="/purification" className="text-primary text-sm font-medium underline">
+              Open purification tracker
+            </Link>
           </div>
         )}
       </CardContent>

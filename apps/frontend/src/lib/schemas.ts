@@ -71,6 +71,17 @@ export const importMappingSchema = z.object({
     .optional(),
   /** CSV parsing configuration */
   parseConfig: parseConfigSchema.optional(),
+  goldenTemplate: z
+    .object({
+      id: z.string(),
+      displayName: z.string(),
+      strictHeaders: z.array(z.string()).default([]),
+      requiredHeaders: z.array(z.string()).default([]),
+      requiredFields: z.array(z.string()).default([]),
+      noAiMapping: z.boolean().default(false),
+      dryRunPreviewRequired: z.boolean().default(false),
+    })
+    .optional(),
 });
 
 export const trackingModeSchema = z.enum(["TRANSACTIONS", "HOLDINGS", "NOT_SET"]);

@@ -312,6 +312,17 @@ export interface ImportTemplateData {
     }
   >;
   parseConfig?: ParseConfig;
+  goldenTemplate?: GoldenImportTemplateConfig;
+}
+
+export interface GoldenImportTemplateConfig {
+  id: string;
+  displayName: string;
+  strictHeaders: string[];
+  requiredHeaders: string[];
+  requiredFields: string[];
+  noAiMapping: boolean;
+  dryRunPreviewRequired: boolean;
 }
 
 export type TemplateKind = "CSV_ACTIVITY" | "CSV_HOLDINGS" | "BROKER_ACTIVITY";

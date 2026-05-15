@@ -554,6 +554,7 @@ export function UploadStep() {
           accountMappings: template.accountMappings || {},
           symbolMappingMeta: template.symbolMappingMeta || {},
           parseConfig: template.parseConfig,
+          goldenTemplate: template.goldenTemplate,
         }),
       );
       if (selectTemplate) {

@@ -2026,6 +2026,44 @@ mod tests {
             .expect("activity is_user_modified")
     }
 
+    #[tokio::test]
+    async fn migrations_seed_golden_import_templates() {
+        let (pool, writer) = setup_db();
+        let repo = ActivityRepository::new(pool, writer);
+
+        let templates = repo
+            .list_import_templates()
+            .expect("list import templates after migrations");
+        let yahoo_holdings = templates
+            .iter()
+            .find(|template| template.id == "system_yahoo_finance_holdings_golden")
+            .expect("Yahoo Finance holdings golden template");
+        let generic_bank = templates
+            .iter()
+            .find(|template| template.id == "system_generic_bank_golden")
+            .expect("generic bank golden template");
+
+        let holdings_data = yahoo_holdings.to_template_data().expect("holdings data");
+        let bank_data = generic_bank.to_template_data().expect("bank data");
+
+        assert_eq!(
+            holdings_data.kind,
+            mizan_core::activities::TemplateKind::CsvHoldings
+        );
+        let holdings_golden = holdings_data
+            .golden_template
+            .expect("holdings golden metadata");
+        assert!(holdings_golden.no_ai_mapping);
+        assert_eq!(
+            holdings_golden.required_fields,
+            vec!["date", "symbol", "quantity"]
+        );
+
+        let bank_golden = bank_data.golden_template.expect("bank golden metadata");
+        assert!(bank_golden.dry_run_preview_required);
+        assert!(bank_golden.strict_headers.contains(&"Account".to_string()));
+    }
+
     /// Regression: re-linking the same (account_id, context_kind, source_system) must preserve the row `id`
     /// so that sync outbox events keep a stable entity_id across updates. Generating a new UUID
     /// on every upsert causes remote devices to receive a different entity_id and fail with a

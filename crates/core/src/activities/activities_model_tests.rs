@@ -736,4 +736,54 @@ mod tests {
         assert_eq!(asset.exchange_mic.as_deref(), Some("XLON"));
         assert_eq!(asset.quote_mode.as_deref(), Some("MANUAL"));
     }
+
+    #[test]
+    fn test_import_template_data_preserves_golden_template_contract() {
+        let template_data = ImportTemplateData {
+            id: "system_generic_bank_golden".to_string(),
+            name: "Generic Bank CSV (Golden)".to_string(),
+            scope: ImportTemplateScope::System,
+            kind: TemplateKind::CsvActivity,
+            field_mappings: std::collections::HashMap::from([
+                (
+                    "date".to_string(),
+                    FieldMappingValue::Single("Date".to_string()),
+                ),
+                (
+                    "amount".to_string(),
+                    FieldMappingValue::Single("Amount".to_string()),
+                ),
+            ]),
+            activity_mappings: std::collections::HashMap::new(),
+            symbol_mappings: std::collections::HashMap::new(),
+            account_mappings: std::collections::HashMap::new(),
+            symbol_mapping_meta: std::collections::HashMap::new(),
+            parse_config: None,
+            golden_template: Some(GoldenImportTemplateConfig {
+                id: "generic_bank".to_string(),
+                display_name: "generic bank CSV".to_string(),
+                strict_headers: vec![
+                    "Date".to_string(),
+                    "Type".to_string(),
+                    "Amount".to_string(),
+                    "Currency".to_string(),
+                ],
+                required_headers: vec!["Date".to_string(), "Amount".to_string()],
+                required_fields: vec!["date".to_string(), "amount".to_string()],
+                no_ai_mapping: true,
+                dry_run_preview_required: true,
+            }),
+        };
+
+        let persisted = ImportTemplate::from_template_data(&template_data).unwrap();
+        let restored = persisted.to_template_data().unwrap();
+
+        let golden = restored
+            .golden_template
+            .expect("golden template metadata should round-trip");
+        assert_eq!(golden.id, "generic_bank");
+        assert!(golden.no_ai_mapping);
+        assert!(golden.dry_run_preview_required);
+        assert_eq!(golden.required_fields, vec!["date", "amount"]);
+    }
 }

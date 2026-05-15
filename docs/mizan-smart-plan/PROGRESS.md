@@ -20,7 +20,7 @@
 - [x] p20 phase-3/p20  Liquidity Ladder (afce9e9)
 - [x] p21 phase-3/p21  Corporate actions (af6d286)
 - [x] p22 phase-3/p22  Accuracy invariants (9d6a814)
-- [ ] p23 phase-3/p23  Golden import templates
+- [x] p23 phase-3/p23  Golden import templates (6d01eb0)
 - [ ] p24 phase-4/p24  Optional Islamic mode foundation
 - [ ] p25 phase-4/p25  Shariah screening workflow
 - [ ] p26 phase-4/p26  Zakat calculator

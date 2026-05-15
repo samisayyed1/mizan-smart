@@ -53,6 +53,12 @@ import {
   buildSyntheticDraftsFromHoldings,
 } from "./utils/asset-review-utils";
 import { isFieldMapped, primaryHeader } from "./utils/draft-utils";
+import {
+  buildGoldenRowIssues,
+  getGoldenRequiredFields,
+  mergeGoldenIssuesIntoDrafts,
+  validateGoldenHeaders,
+} from "./utils/golden-import-templates";
 import { findMappedActivityType, validateTickerSymbol } from "./utils/validation-utils";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,6 +126,9 @@ function useStepValidation(isHoldingsMode: boolean, accounts?: Account[]) {
           // Holdings mode: only check required fields are mapped.
           // Symbol resolution happens in the asset review step.
           if (!mapping) return false;
+          if (validateGoldenHeaders(headers, mapping.goldenTemplate).errors.length > 0) {
+            return false;
+          }
           return HOLDINGS_REQUIRED_FIELDS.every((field) =>
             isFieldMapped(mapping.fieldMappings[field], headers),
           );
@@ -153,10 +162,15 @@ function useStepValidation(isHoldingsMode: boolean, accounts?: Account[]) {
           }
         }
 
-        const requiredFieldsMapped = IMPORT_REQUIRED_FIELDS.every(
+        const requiredImportFields = getGoldenRequiredFields(mapping) ?? [...IMPORT_REQUIRED_FIELDS];
+        const requiredFieldsMapped = requiredImportFields.every(
           (field) => mapping.fieldMappings[field],
         );
         if (!requiredFieldsMapped) return false;
+
+        if (validateGoldenHeaders(headers, mapping.goldenTemplate).errors.length > 0) {
+          return false;
+        }
 
         // Check if all activity types have mappings
         const activityTypeMapping = mapping.fieldMappings[ImportFormat.ACTIVITY_TYPE];
@@ -413,11 +427,13 @@ function ImportWizardContent() {
           },
           state.accountId,
         );
-        dispatch(setDraftActivities(drafts));
+        const goldenIssues = buildGoldenRowIssues(state.headers, state.parsedRows, state.mapping);
+        const reviewedDrafts = mergeGoldenIssuesIntoDrafts(drafts, goldenIssues);
+        dispatch(setDraftActivities(reviewedDrafts));
         dispatch({ type: "SET_ASSET_PREVIEW_ITEMS", payload: [] });
         dispatch({ type: "CLEAR_PENDING_IMPORT_ASSETS" });
         dispatch(nextStep());
-        void previewAssets(drafts); // fire-and-forget: assets step shows spinner
+        void previewAssets(reviewedDrafts); // fire-and-forget: assets step shows spinner
         return;
       }
 

@@ -767,6 +767,8 @@ pub struct ImportMappingData {
     /// CSV parsing configuration (delimiter, date format, etc.)
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parse_config: Option<ParseConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub golden_template: Option<GoldenImportTemplateConfig>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -842,6 +844,27 @@ pub struct ImportTemplateData {
     pub symbol_mapping_meta: std::collections::HashMap<String, SymbolMappingMeta>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parse_config: Option<ParseConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub golden_template: Option<GoldenImportTemplateConfig>,
+}
+
+/// Deterministic import-template contract for broker/export formats that must
+/// not rely on heuristic or AI column mapping.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct GoldenImportTemplateConfig {
+    pub id: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub strict_headers: Vec<String>,
+    #[serde(default)]
+    pub required_headers: Vec<String>,
+    #[serde(default)]
+    pub required_fields: Vec<String>,
+    #[serde(default)]
+    pub no_ai_mapping: bool,
+    #[serde(default)]
+    pub dry_run_preview_required: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -904,6 +927,8 @@ pub struct ImportMappingConfig {
     pub symbol_mapping_meta: std::collections::HashMap<String, SymbolMappingMeta>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub parse_config: Option<ParseConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub golden_template: Option<GoldenImportTemplateConfig>,
 }
 
 /// Config for broker activity profiles — only reusable normalization rules.
@@ -1031,6 +1056,7 @@ impl Default for ImportMappingData {
             account_mappings: std::collections::HashMap::new(),
             symbol_mapping_meta: std::collections::HashMap::new(),
             parse_config: None,
+            golden_template: None,
         }
     }
 }
@@ -1050,6 +1076,7 @@ impl Default for ImportTemplateData {
             account_mappings: mapping.account_mappings,
             symbol_mapping_meta: mapping.symbol_mapping_meta,
             parse_config: mapping.parse_config,
+            golden_template: None,
         }
     }
 }
@@ -1070,6 +1097,7 @@ impl ImportMapping {
             account_mappings: config.account_mappings,
             symbol_mapping_meta: config.symbol_mapping_meta,
             parse_config: config.parse_config,
+            golden_template: config.golden_template,
         })
     }
 
@@ -1084,6 +1112,7 @@ impl ImportMapping {
             account_mappings: data.account_mappings.clone(),
             symbol_mapping_meta: data.symbol_mapping_meta.clone(),
             parse_config: data.parse_config.clone(),
+            golden_template: data.golden_template.clone(),
         };
 
         Ok(Self {
@@ -1114,6 +1143,7 @@ impl ImportTemplate {
             account_mappings: config.account_mappings,
             symbol_mapping_meta: config.symbol_mapping_meta,
             parse_config: config.parse_config,
+            golden_template: config.golden_template,
         })
     }
 
@@ -1143,6 +1173,7 @@ impl ImportTemplate {
             account_mappings: data.account_mappings.clone(),
             symbol_mapping_meta: data.symbol_mapping_meta.clone(),
             parse_config: data.parse_config.clone(),
+            golden_template: data.golden_template.clone(),
         };
 
         Ok(Self {

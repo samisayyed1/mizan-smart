@@ -35,6 +35,7 @@ import {
   isDefaultActivityTemplateId,
   prependDefaultActivityTemplate,
 } from "../utils/default-activity-template";
+import { getGoldenRequiredFields, validateGoldenHeaders } from "../utils/golden-import-templates";
 import { mergeDetectedParseConfig } from "../utils/import-flow-utils";
 
 import { isCashSymbol, needsImportAssetResolution } from "@/lib/activity-utils";
@@ -126,9 +127,11 @@ export function MappingStepUnified() {
   );
 
   // Check if all required fields are mapped
-  const requiredFieldsMapped = IMPORT_REQUIRED_FIELDS.every((field) =>
+  const requiredImportFields = getGoldenRequiredFields(localMapping) ?? [...IMPORT_REQUIRED_FIELDS];
+  const requiredFieldsMapped = requiredImportFields.every((field) =>
     isFieldMapped(localMapping.fieldMappings[field], headers),
   );
+  const goldenHeaderIssues = validateGoldenHeaders(headers, localMapping.goldenTemplate);
 
   // Count how many fields are mapped
   const mappedFieldsCount = Object.entries(localMapping.fieldMappings).filter(([_, headerName]) =>
@@ -507,6 +510,7 @@ export function MappingStepUnified() {
           accountMappings: template.accountMappings || {},
           symbolMappingMeta: template.symbolMappingMeta || {},
           parseConfig: nextParseConfig,
+          goldenTemplate: template.goldenTemplate,
         });
         dispatch(setSelectedTemplate(template.id, template.scope));
       } catch (error) {
@@ -676,13 +680,21 @@ export function MappingStepUnified() {
       {/* Summary Cards */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <ImportAlert
-          variant={requiredFieldsMapped ? "success" : "destructive"}
+          variant={
+            requiredFieldsMapped && goldenHeaderIssues.errors.length === 0
+              ? "success"
+              : "destructive"
+          }
           size="sm"
           title="Fields"
           description={`${mappedFieldsCount} of ${totalFields} mapped`}
           icon={Icons.ListChecks}
           className="mb-0"
-          rightIcon={requiredFieldsMapped ? Icons.CheckCircle : Icons.AlertCircle}
+          rightIcon={
+            requiredFieldsMapped && goldenHeaderIssues.errors.length === 0
+              ? Icons.CheckCircle
+              : Icons.AlertCircle
+          }
         />
 
         <ImportAlert
@@ -729,6 +741,24 @@ export function MappingStepUnified() {
             }
           />
         )}
+
+      {goldenHeaderIssues.errors.length > 0 && (
+        <ImportAlert
+          variant="destructive"
+          size="sm"
+          title="Golden template header mismatch"
+          description={goldenHeaderIssues.errors[0]?.message ?? "Required columns are missing."}
+        />
+      )}
+
+      {goldenHeaderIssues.warnings.length > 0 && (
+        <ImportAlert
+          variant="warning"
+          size="sm"
+          title="Golden template preview warning"
+          description={goldenHeaderIssues.warnings[0]?.message ?? "Unknown columns need review."}
+        />
+      )}
 
       {/* Mapping Editor with Preview Toggle */}
       <div className="flex flex-1 flex-col overflow-hidden">

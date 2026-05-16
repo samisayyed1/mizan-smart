@@ -247,6 +247,10 @@ export const COMMANDS: CommandMap = {
   export_report: { method: "POST", path: "/report-runs" },
   add_manual_fee_entry: { method: "POST", path: "/fee-entries" },
   get_fee_intelligence_summary: { method: "GET", path: "/fee-intelligence/summary" },
+  get_concentration_fragility_summary: {
+    method: "GET",
+    path: "/concentration-fragility/summary",
+  },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
   list_corporate_actions: { method: "GET", path: "/corporate-actions" },
@@ -1108,6 +1112,13 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
         params.set("periodMonth", periodMonth);
         url += `?${params.toString()}`;
       }
+      break;
+    }
+    case "get_concentration_fragility_summary": {
+      const { baseCurrency } = payload as { baseCurrency: string };
+      const params = new URLSearchParams();
+      params.set("baseCurrency", baseCurrency);
+      url += `?${params.toString()}`;
       break;
     }
     case "create_asset": {

@@ -364,6 +364,7 @@ export {
   addManualFeeEntry,
   exportReport,
   generateReport,
+  getConcentrationFragilitySummary,
   getFeeIntelligenceSummary,
   getReportRun,
 } from "../shared/report-builder";
@@ -472,6 +473,10 @@ export type {
   TaxPackStatus,
 } from "../shared/tax-packs";
 export type {
+  ConcentrationDimension,
+  ConcentrationExposure,
+  ConcentrationFinding,
+  ConcentrationFragilitySummary,
   EstateBinderSection,
   FeeCategory,
   FeeCategoryTotal,

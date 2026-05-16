@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use log::error;
 use mizan_core::report_builder::{
-    FeeIntelligenceSummary, GenerateReportRequest, ManualFeeEntry, ManualFeeEntryInput,
-    ReportBuilderRepositoryTrait, ReportExportBundle, ReportRun,
+    ConcentrationFragilitySummary, FeeIntelligenceSummary, GenerateReportRequest, ManualFeeEntry,
+    ManualFeeEntryInput, ReportBuilderRepositoryTrait, ReportExportBundle, ReportRun,
 };
 use tauri::State;
 
@@ -64,6 +64,17 @@ pub async fn get_fee_intelligence_summary(
         .report_builder_repository()
         .get_fee_intelligence_summary(period_month)
         .map_err(command_error("get_fee_intelligence_summary"))
+}
+
+#[tauri::command]
+pub async fn get_concentration_fragility_summary(
+    base_currency: String,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<ConcentrationFragilitySummary, String> {
+    state
+        .report_builder_repository()
+        .get_concentration_fragility_summary(base_currency)
+        .map_err(command_error("get_concentration_fragility_summary"))
 }
 
 fn command_error(command: &'static str) -> impl FnOnce(mizan_core::Error) -> String {

@@ -83,6 +83,49 @@ export interface FeeIntelligenceSummary {
   missingFeesState: boolean;
 }
 
+export type ConcentrationDimension =
+  | "asset"
+  | "account_custodian"
+  | "currency"
+  | "sector_taxonomy"
+  | "country_taxonomy"
+  | "asset_class"
+  | "income_source"
+  | "manual_stale"
+  | "private_illiquid"
+  | "shariah_unknown"
+  | "document_uncited";
+
+export interface ConcentrationExposure {
+  dimension: ConcentrationDimension;
+  label: string;
+  amount: string;
+  currency: string;
+  percent: string;
+  sourceCount: number;
+}
+
+export interface ConcentrationFinding {
+  dimension: ConcentrationDimension;
+  label: string;
+  message: string;
+  amount: string;
+  currency: string;
+  percent: string;
+  thresholdPercent: string;
+}
+
+export interface ConcentrationFragilitySummary {
+  asOfDate: string;
+  baseCurrency: string;
+  totalWealth: string;
+  exposures: ConcentrationExposure[];
+  findings: ConcentrationFinding[];
+  emptyState: boolean;
+  islamicModeEnabled: boolean;
+  taxonomyState: string;
+}
+
 export interface ReportLine {
   id: string;
   sectionId: string;
@@ -140,4 +183,12 @@ export function getFeeIntelligenceSummary(
   periodMonth?: string | null,
 ): Promise<FeeIntelligenceSummary> {
   return invoke<FeeIntelligenceSummary>("get_fee_intelligence_summary", { periodMonth });
+}
+
+export function getConcentrationFragilitySummary(
+  baseCurrency: string,
+): Promise<ConcentrationFragilitySummary> {
+  return invoke<ConcentrationFragilitySummary>("get_concentration_fragility_summary", {
+    baseCurrency,
+  });
 }

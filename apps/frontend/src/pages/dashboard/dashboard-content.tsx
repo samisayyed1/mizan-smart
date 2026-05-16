@@ -1,4 +1,8 @@
-import { getEstimatedHistoricalValuation, getFeeIntelligenceSummary } from "@/adapters";
+import {
+  getConcentrationFragilitySummary,
+  getEstimatedHistoricalValuation,
+  getFeeIntelligenceSummary,
+} from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
 import { ExplainableNumber } from "@/components/explainable-number";
 import { useHapticFeedback } from "@/hooks";
@@ -35,6 +39,7 @@ import InboxPreview from "./inbox-preview";
 import LiquidityLadderCard from "../liquidity-ladder/liquidity-ladder-card";
 import QuickActions from "./quick-actions";
 import TopHoldings from "./top-holdings";
+import { ConcentrationRadarCard } from "./concentration-radar-card";
 
 const DEFAULT_INTERVAL: UITimePeriod = "3M";
 const INTERVAL_STORAGE_KEY = "dashboard-interval";
@@ -103,6 +108,11 @@ export function DashboardContent() {
   const feeSummary = useQuery({
     queryKey: ["fee-intelligence-summary", feePeriodMonth],
     queryFn: () => getFeeIntelligenceSummary(feePeriodMonth),
+    staleTime: 5 * 60 * 1000,
+  });
+  const concentrationSummary = useQuery({
+    queryKey: ["concentration-fragility-summary", baseCurrency],
+    queryFn: () => getConcentrationFragilitySummary(baseCurrency),
     staleTime: 5 * 60 * 1000,
   });
 
@@ -286,6 +296,9 @@ export function DashboardContent() {
             </div>
             <div className="space-y-6 lg:col-span-1">
               {feeSummary.data?.spike ? <FeeSpikeWarning spike={feeSummary.data.spike} /> : null}
+              {concentrationSummary.data ? (
+                <ConcentrationRadarCard summary={concentrationSummary.data} />
+              ) : null}
               <InboxPreview />
               <LiquidityLadderCard />
               <QuickActions />

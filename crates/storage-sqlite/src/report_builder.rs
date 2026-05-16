@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use chrono::{Datelike, NaiveDate, Utc};
 use diesel::prelude::*;
 use diesel::r2d2::{self, Pool};
+use diesel::sql_query;
+use diesel::sql_types::{Integer, Nullable, Text};
 use diesel::SqliteConnection;
 use rust_decimal::Decimal;
 use serde_json::json;
@@ -11,11 +13,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use mizan_core::report_builder::{
-    build_empty_report, build_report_export, EstateBinderSection, FeeCategory, FeeCategoryTotal,
-    FeeCurrencyTotal, FeeIntelligenceSummary, FeeSpikeAlert, GenerateReportRequest, ManualFeeEntry,
-    ManualFeeEntryInput, ReportBuilderRepositoryTrait, ReportExportBundle, ReportLine, ReportRun,
-    ReportRunStatus, ReportSection, ReportType, ESTATE_BINDER_DISCLAIMER,
-    REPORT_BUILDER_DISCLAIMER,
+    build_empty_report, build_report_export, ConcentrationDimension, ConcentrationExposure,
+    ConcentrationFinding, ConcentrationFragilitySummary, EstateBinderSection, FeeCategory,
+    FeeCategoryTotal, FeeCurrencyTotal, FeeIntelligenceSummary, FeeSpikeAlert,
+    GenerateReportRequest, ManualFeeEntry, ManualFeeEntryInput, ReportBuilderRepositoryTrait,
+    ReportExportBundle, ReportLine, ReportRun, ReportRunStatus, ReportSection, ReportType,
+    ESTATE_BINDER_DISCLAIMER, REPORT_BUILDER_DISCLAIMER,
 };
 use mizan_core::{Error, Result};
 
@@ -235,6 +238,75 @@ struct ActivityFeeRow {
     currency: String,
 }
 
+#[derive(Debug, Clone, diesel::QueryableByName)]
+struct ConcentrationAssetRow {
+    #[diesel(sql_type = Text)]
+    asset_id: String,
+    #[diesel(sql_type = Nullable<Text>)]
+    asset_name: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    display_code: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    classification: Option<String>,
+    #[diesel(sql_type = Text)]
+    quote_mode: String,
+    #[diesel(sql_type = Text)]
+    valuation_date: String,
+    #[diesel(sql_type = Text)]
+    value_native: String,
+    #[diesel(sql_type = Text)]
+    currency: String,
+    #[diesel(sql_type = Text)]
+    source_type: String,
+    #[diesel(sql_type = Nullable<Text>)]
+    source_citation_id: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    private_asset_id: Option<String>,
+    #[diesel(sql_type = Nullable<Text>)]
+    shariah_status: Option<String>,
+}
+
+#[derive(Debug, Clone, diesel::QueryableByName)]
+struct ConcentrationAccountRow {
+    #[diesel(sql_type = Text)]
+    account_id: String,
+    #[diesel(sql_type = Text)]
+    account_name: String,
+    #[diesel(sql_type = Text)]
+    total_value: String,
+    #[diesel(sql_type = Text)]
+    base_currency: String,
+}
+
+#[derive(Debug, Clone, diesel::QueryableByName)]
+struct ConcentrationTaxonomyRow {
+    #[diesel(sql_type = Text)]
+    asset_id: String,
+    #[diesel(sql_type = Text)]
+    taxonomy_name: String,
+    #[diesel(sql_type = Text)]
+    category_name: String,
+    #[diesel(sql_type = Integer)]
+    weight: i32,
+}
+
+#[derive(Debug, Clone, diesel::QueryableByName)]
+struct ConcentrationIncomeRow {
+    #[diesel(sql_type = Text)]
+    source_label: String,
+    #[diesel(sql_type = Text)]
+    amount: String,
+    #[diesel(sql_type = Text)]
+    currency: String,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct ConcentrationThresholds {
+    single_exposure_percent: Decimal,
+    combined_income_percent: Decimal,
+    fragility_percent: Decimal,
+}
+
 #[async_trait]
 impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
     async fn generate_report(&self, request: GenerateReportRequest) -> Result<ReportRun> {
@@ -242,6 +314,9 @@ impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
         let created_at = Utc::now().to_rfc3339();
         let report = match request.report_type {
             ReportType::TaxPack => self.build_tax_pack_report(request, created_at)?,
+            ReportType::PortfolioSummary => {
+                self.build_portfolio_summary_report(request, created_at)?
+            }
             ReportType::MonthlyWealthLetter => {
                 self.build_monthly_wealth_letter(request, created_at)?
             }
@@ -341,9 +416,93 @@ impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
         let mut conn = get_connection(&self.pool)?;
         build_fee_summary(&mut conn, &period_month)
     }
+
+    fn get_concentration_fragility_summary(
+        &self,
+        base_currency: String,
+    ) -> Result<ConcentrationFragilitySummary> {
+        validate_currency_code(&base_currency)?;
+        let mut conn = get_connection(&self.pool)?;
+        build_concentration_summary(&mut conn, base_currency.to_ascii_uppercase())
+    }
 }
 
 impl ReportBuilderRepository {
+    fn build_portfolio_summary_report(
+        &self,
+        request: GenerateReportRequest,
+        created_at: String,
+    ) -> Result<ReportRun> {
+        let mut conn = get_connection(&self.pool)?;
+        let summary = build_concentration_summary(&mut conn, request.base_currency.clone())?;
+        if summary.empty_state {
+            return build_empty_report(
+                Uuid::new_v4().to_string(),
+                Uuid::new_v4().to_string(),
+                Uuid::new_v4().to_string(),
+                request,
+                created_at,
+            );
+        }
+
+        let run_id = Uuid::new_v4().to_string();
+        let section_id = Uuid::new_v4().to_string();
+        let lines = if summary.findings.is_empty() {
+            vec![text_line(
+                &section_id,
+                "No concentration thresholds crossed".to_string(),
+                "Current deterministic data did not cross the configured concentration thresholds."
+                    .to_string(),
+                json!({"sourceTable":"valuations","citationStatus":"missing"}),
+            )]
+        } else {
+            summary
+                .findings
+                .iter()
+                .map(|finding| ReportLine {
+                    id: Uuid::new_v4().to_string(),
+                    section_id: section_id.clone(),
+                    label: finding.label.clone(),
+                    amount: Some(finding.amount),
+                    currency: Some(finding.currency.clone()),
+                    value_text: Some(finding.message.clone()),
+                    source_citation_id: None,
+                    metadata_json: Some(
+                        json!({
+                            "dimension": finding.dimension,
+                            "percent": finding.percent,
+                            "thresholdPercent": finding.threshold_percent,
+                            "citationStatus":"missing"
+                        })
+                        .to_string(),
+                    ),
+                })
+                .collect()
+        };
+
+        Ok(ReportRun {
+            id: run_id.clone(),
+            report_type: request.report_type,
+            base_currency: request.base_currency,
+            status: ReportRunStatus::Generated,
+            created_at: created_at.clone(),
+            completed_at: Some(created_at),
+            disclaimer: REPORT_BUILDER_DISCLAIMER.to_string(),
+            sections: vec![section(
+                &run_id,
+                section_id,
+                "Concentration and fragility",
+                1,
+                json!({
+                    "asOfDate": summary.as_of_date,
+                    "taxonomyState": summary.taxonomy_state,
+                    "islamicModeEnabled": summary.islamic_mode_enabled
+                }),
+                lines,
+            )],
+        })
+    }
+
     fn build_tax_pack_report(
         &self,
         request: GenerateReportRequest,
@@ -1234,6 +1393,744 @@ fn shariah_mode_enabled(conn: &mut SqliteConnection) -> Result<bool> {
     Ok(value.as_deref() == Some("true"))
 }
 
+fn build_concentration_summary(
+    conn: &mut SqliteConnection,
+    base_currency: String,
+) -> Result<ConcentrationFragilitySummary> {
+    let as_of_date = Utc::now().date_naive();
+    let thresholds = concentration_thresholds(conn)?;
+    let asset_rows = concentration_asset_rows(conn)?;
+    let account_rows = concentration_account_rows(conn)?;
+    let taxonomy_rows = concentration_taxonomy_rows(conn)?;
+    let income_rows = concentration_income_rows(conn)?;
+    let islamic_enabled = shariah_mode_enabled(conn)?;
+
+    let mut exposures = Vec::new();
+    let mut findings = Vec::new();
+    let mut wealth_total = Decimal::ZERO;
+    let mut asset_groups = BTreeMap::<String, (Decimal, i64)>::new();
+    let mut currency_groups = BTreeMap::<String, (Decimal, i64)>::new();
+    let mut class_groups = BTreeMap::<String, (Decimal, i64)>::new();
+    let mut stale_manual = (Decimal::ZERO, 0_i64);
+    let mut private_illiquid = (Decimal::ZERO, 0_i64);
+    let mut shariah_unknown = (Decimal::ZERO, 0_i64);
+    let mut uncited = (Decimal::ZERO, 0_i64);
+    let has_any_citation = asset_rows
+        .iter()
+        .any(|row| row.source_citation_id.is_some());
+
+    for row in &asset_rows {
+        let value = parse_decimal("valuation amount", &row.value_native)?.abs();
+        if value == Decimal::ZERO {
+            continue;
+        }
+        if row.currency == base_currency {
+            wealth_total += value;
+            add_group(&mut asset_groups, asset_label(row), value);
+            add_group(&mut class_groups, asset_class_label(row), value);
+
+            if is_stale_manual(row, as_of_date) {
+                stale_manual.0 += value;
+                stale_manual.1 += 1;
+            }
+            if is_private_or_illiquid(row) {
+                private_illiquid.0 += value;
+                private_illiquid.1 += 1;
+            }
+            if islamic_enabled && shariah_unknown_status(row.shariah_status.as_deref()) {
+                shariah_unknown.0 += value;
+                shariah_unknown.1 += 1;
+            }
+            if has_any_citation && row.source_citation_id.is_none() {
+                uncited.0 += value;
+                uncited.1 += 1;
+            }
+        }
+        add_group(&mut currency_groups, row.currency.clone(), value);
+    }
+
+    let taxonomy_asset_ids = taxonomy_rows
+        .iter()
+        .map(|row| row.asset_id.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let taxonomy_state = if taxonomy_rows.is_empty() {
+        "missing"
+    } else if taxonomy_asset_ids.len() < asset_rows.len() {
+        "partial"
+    } else {
+        "available"
+    }
+    .to_string();
+
+    add_group_exposures(
+        (&mut exposures, &mut findings),
+        ConcentrationDimension::Asset,
+        asset_groups,
+        &base_currency,
+        wealth_total,
+        thresholds.single_exposure_percent,
+        |label, percent| {
+            format!(
+                "{}% of recorded wealth is in {label}.",
+                display_decimal(percent)
+            )
+        },
+    );
+    add_currency_exposures(
+        &mut exposures,
+        &mut findings,
+        currency_groups,
+        asset_rows
+            .iter()
+            .map(|row| {
+                parse_decimal("valuation amount", &row.value_native).map(|value| value.abs())
+            })
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
+            .sum(),
+        thresholds.single_exposure_percent,
+        |label, percent| {
+            format!(
+                "{}% of recorded valuation exposure is in {label}.",
+                display_decimal(percent)
+            )
+        },
+    );
+    add_group_exposures(
+        (&mut exposures, &mut findings),
+        ConcentrationDimension::AssetClass,
+        class_groups,
+        &base_currency,
+        wealth_total,
+        thresholds.single_exposure_percent,
+        |label, percent| format!("{}% of wealth is in {label}.", display_decimal(percent)),
+    );
+
+    let account_total = account_rows
+        .iter()
+        .filter(|row| row.base_currency == base_currency)
+        .map(|row| parse_decimal("account valuation", &row.total_value).map(|value| value.abs()))
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .sum();
+    let mut account_groups = BTreeMap::<String, (Decimal, i64)>::new();
+    for row in &account_rows {
+        if row.base_currency == base_currency {
+            add_group(
+                &mut account_groups,
+                format!("{} ({})", row.account_name, row.account_id),
+                parse_decimal("account valuation", &row.total_value)?.abs(),
+            );
+        }
+    }
+    add_group_exposures(
+        (&mut exposures, &mut findings),
+        ConcentrationDimension::AccountCustodian,
+        account_groups,
+        &base_currency,
+        account_total,
+        thresholds.single_exposure_percent,
+        |label, percent| {
+            format!(
+                "{}% of account-level wealth is held at {label}.",
+                display_decimal(percent)
+            )
+        },
+    );
+
+    add_taxonomy_exposures(
+        &mut exposures,
+        &mut findings,
+        &asset_rows,
+        &taxonomy_rows,
+        &base_currency,
+        wealth_total,
+        thresholds.single_exposure_percent,
+    )?;
+    add_income_exposures(
+        &mut exposures,
+        &mut findings,
+        income_rows,
+        thresholds.combined_income_percent,
+    )?;
+    add_fragility_exposure(
+        (&mut exposures, &mut findings),
+        (
+            ConcentrationDimension::ManualStale,
+            "Manual valuations older than 90 days",
+        ),
+        stale_manual,
+        &base_currency,
+        wealth_total,
+        thresholds.fragility_percent,
+        |percent| {
+            format!(
+                "{}% of wealth is valued manually and older than 90 days.",
+                display_decimal(percent)
+            )
+        },
+    );
+    add_fragility_exposure(
+        (&mut exposures, &mut findings),
+        (
+            ConcentrationDimension::PrivateIlliquid,
+            "Private or illiquid assets",
+        ),
+        private_illiquid,
+        &base_currency,
+        wealth_total,
+        thresholds.fragility_percent,
+        |percent| {
+            format!(
+                "{}% of wealth is in private or illiquid assets.",
+                display_decimal(percent)
+            )
+        },
+    );
+    if islamic_enabled {
+        add_fragility_exposure(
+            (&mut exposures, &mut findings),
+            (
+                ConcentrationDimension::ShariahUnknown,
+                "Unknown Shariah screening",
+            ),
+            shariah_unknown,
+            &base_currency,
+            wealth_total,
+            Decimal::ZERO,
+            |percent| {
+                format!(
+                    "{}% of wealth has unknown Shariah screening status.",
+                    display_decimal(percent)
+                )
+            },
+        );
+    }
+    if has_any_citation {
+        add_fragility_exposure(
+            (&mut exposures, &mut findings),
+            (
+                ConcentrationDimension::DocumentUncited,
+                "Valuations without source citations",
+            ),
+            uncited,
+            &base_currency,
+            wealth_total,
+            thresholds.fragility_percent,
+            |percent| {
+                format!(
+                    "{}% of cited valuation coverage is missing source citations.",
+                    display_decimal(percent)
+                )
+            },
+        );
+    }
+
+    exposures.sort_by(|left, right| {
+        left.dimension
+            .title()
+            .cmp(right.dimension.title())
+            .then_with(|| right.amount.cmp(&left.amount))
+            .then_with(|| left.label.cmp(&right.label))
+    });
+    findings.sort_by(|left, right| {
+        right
+            .percent
+            .cmp(&left.percent)
+            .then_with(|| left.label.cmp(&right.label))
+    });
+
+    Ok(ConcentrationFragilitySummary {
+        as_of_date: as_of_date.to_string(),
+        base_currency,
+        total_wealth: wealth_total,
+        exposures,
+        findings,
+        empty_state: asset_rows.is_empty() && account_rows.is_empty(),
+        islamic_mode_enabled: islamic_enabled,
+        taxonomy_state,
+    })
+}
+
+fn concentration_asset_rows(conn: &mut SqliteConnection) -> Result<Vec<ConcentrationAssetRow>> {
+    sql_query(
+        "
+        WITH ranked AS (
+            SELECT
+                v.asset_id,
+                a.name AS asset_name,
+                a.display_code,
+                a.classification,
+                a.quote_mode,
+                v.valuation_date,
+                v.value_native,
+                v.currency,
+                v.source_type,
+                v.source_citation_id,
+                pid.asset_id AS private_asset_id,
+                ass.status AS shariah_status,
+                ROW_NUMBER() OVER (
+                    PARTITION BY v.asset_id
+                    ORDER BY v.valuation_date DESC, v.created_at DESC, v.id DESC
+                ) AS rn
+            FROM valuations v
+            JOIN assets a ON a.id = v.asset_id
+            LEFT JOIN asset_private_investment_details pid ON pid.asset_id = a.id
+            LEFT JOIN asset_shariah_screening ass ON ass.asset_id = a.id
+            WHERE a.is_active = 1
+        )
+        SELECT
+            asset_id,
+            asset_name,
+            display_code,
+            classification,
+            quote_mode,
+            valuation_date,
+            value_native,
+            currency,
+            source_type,
+            source_citation_id,
+            private_asset_id,
+            shariah_status
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY asset_id ASC
+        ",
+    )
+    .load(conn)
+    .map_err(StorageError::from)
+    .map_err(Error::from)
+}
+
+fn concentration_account_rows(conn: &mut SqliteConnection) -> Result<Vec<ConcentrationAccountRow>> {
+    sql_query(
+        "
+        WITH ranked AS (
+            SELECT
+                dav.account_id,
+                accounts.name AS account_name,
+                dav.total_value,
+                dav.base_currency,
+                ROW_NUMBER() OVER (
+                    PARTITION BY dav.account_id
+                    ORDER BY dav.valuation_date DESC, dav.calculated_at DESC, dav.id DESC
+                ) AS rn
+            FROM daily_account_valuation dav
+            JOIN accounts ON accounts.id = dav.account_id
+            WHERE accounts.is_active = 1 AND accounts.is_archived = 0
+        )
+        SELECT account_id, account_name, total_value, base_currency
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY account_name ASC
+        ",
+    )
+    .load(conn)
+    .map_err(StorageError::from)
+    .map_err(Error::from)
+}
+
+fn concentration_taxonomy_rows(
+    conn: &mut SqliteConnection,
+) -> Result<Vec<ConcentrationTaxonomyRow>> {
+    sql_query(
+        "
+        SELECT
+            ata.asset_id,
+            taxonomies.name AS taxonomy_name,
+            taxonomy_categories.name AS category_name,
+            ata.weight
+        FROM asset_taxonomy_assignments ata
+        JOIN taxonomies ON taxonomies.id = ata.taxonomy_id
+        JOIN taxonomy_categories
+            ON taxonomy_categories.id = ata.category_id
+           AND taxonomy_categories.taxonomy_id = ata.taxonomy_id
+        ORDER BY ata.asset_id ASC, taxonomies.name ASC, taxonomy_categories.name ASC
+        ",
+    )
+    .load(conn)
+    .map_err(StorageError::from)
+    .map_err(Error::from)
+}
+
+fn concentration_income_rows(conn: &mut SqliteConnection) -> Result<Vec<ConcentrationIncomeRow>> {
+    sql_query(
+        "
+        SELECT
+            COALESCE(assets.name, assets.display_code, activities.asset_id, activities.activity_type) AS source_label,
+            activities.amount,
+            activities.currency
+        FROM activities
+        LEFT JOIN assets ON assets.id = activities.asset_id
+        WHERE LOWER(activities.activity_type) IN ('dividend', 'interest', 'coupon', 'distribution')
+          AND activities.amount IS NOT NULL
+        ",
+    )
+    .load(conn)
+    .map_err(StorageError::from)
+    .map_err(Error::from)
+}
+
+fn concentration_thresholds(conn: &mut SqliteConnection) -> Result<ConcentrationThresholds> {
+    let rows = app_settings::table
+        .filter(app_settings::setting_key.like("concentration_%_threshold_percent"))
+        .select((app_settings::setting_key, app_settings::setting_value))
+        .load::<(String, String)>(conn)
+        .map_err(StorageError::from)?;
+    let mut thresholds = ConcentrationThresholds {
+        single_exposure_percent: Decimal::new(25, 0),
+        combined_income_percent: Decimal::new(40, 0),
+        fragility_percent: Decimal::new(20, 0),
+    };
+    for (key, value) in rows {
+        let parsed = parse_decimal("concentration threshold", &value)?;
+        match key.as_str() {
+            "concentration_single_exposure_threshold_percent" => {
+                thresholds.single_exposure_percent = parsed;
+            }
+            "concentration_combined_income_threshold_percent" => {
+                thresholds.combined_income_percent = parsed;
+            }
+            "concentration_fragility_threshold_percent" => {
+                thresholds.fragility_percent = parsed;
+            }
+            _ => {}
+        }
+    }
+    Ok(thresholds)
+}
+
+fn add_group(groups: &mut BTreeMap<String, (Decimal, i64)>, label: String, amount: Decimal) {
+    let entry = groups.entry(label).or_default();
+    entry.0 += amount;
+    entry.1 += 1;
+}
+
+fn add_group_exposures(
+    output: (
+        &mut Vec<ConcentrationExposure>,
+        &mut Vec<ConcentrationFinding>,
+    ),
+    dimension: ConcentrationDimension,
+    groups: BTreeMap<String, (Decimal, i64)>,
+    currency: &str,
+    total: Decimal,
+    threshold_percent: Decimal,
+    message: impl Fn(&str, Decimal) -> String,
+) {
+    let (exposures, findings) = output;
+    if total <= Decimal::ZERO {
+        return;
+    }
+    for (label, (amount, source_count)) in groups {
+        if amount <= Decimal::ZERO {
+            continue;
+        }
+        let percent = percent_of(amount, total);
+        exposures.push(ConcentrationExposure {
+            dimension,
+            label: label.clone(),
+            amount,
+            currency: currency.to_string(),
+            percent,
+            source_count,
+        });
+        if percent >= threshold_percent {
+            findings.push(ConcentrationFinding {
+                dimension,
+                label: dimension.title().to_string(),
+                message: message(&label, percent),
+                amount,
+                currency: currency.to_string(),
+                percent,
+                threshold_percent,
+            });
+        }
+    }
+}
+
+fn add_currency_exposures(
+    exposures: &mut Vec<ConcentrationExposure>,
+    findings: &mut Vec<ConcentrationFinding>,
+    groups: BTreeMap<String, (Decimal, i64)>,
+    total: Decimal,
+    threshold_percent: Decimal,
+    message: impl Fn(&str, Decimal) -> String,
+) {
+    if total <= Decimal::ZERO {
+        return;
+    }
+    for (currency, (amount, source_count)) in groups {
+        if amount <= Decimal::ZERO {
+            continue;
+        }
+        let percent = percent_of(amount, total);
+        exposures.push(ConcentrationExposure {
+            dimension: ConcentrationDimension::Currency,
+            label: currency.clone(),
+            amount,
+            currency: currency.clone(),
+            percent,
+            source_count,
+        });
+        if percent >= threshold_percent {
+            findings.push(ConcentrationFinding {
+                dimension: ConcentrationDimension::Currency,
+                label: ConcentrationDimension::Currency.title().to_string(),
+                message: message(&currency, percent),
+                amount,
+                currency,
+                percent,
+                threshold_percent,
+            });
+        }
+    }
+}
+
+fn add_taxonomy_exposures(
+    exposures: &mut Vec<ConcentrationExposure>,
+    findings: &mut Vec<ConcentrationFinding>,
+    asset_rows: &[ConcentrationAssetRow],
+    taxonomy_rows: &[ConcentrationTaxonomyRow],
+    base_currency: &str,
+    wealth_total: Decimal,
+    threshold_percent: Decimal,
+) -> Result<()> {
+    if wealth_total <= Decimal::ZERO || taxonomy_rows.is_empty() {
+        return Ok(());
+    }
+    let values_by_asset = asset_rows
+        .iter()
+        .filter(|row| row.currency == base_currency)
+        .map(|row| {
+            Ok((
+                row.asset_id.as_str(),
+                parse_decimal("valuation amount", &row.value_native)?.abs(),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>>>()?;
+    let mut sector_groups = BTreeMap::<String, (Decimal, i64)>::new();
+    let mut country_groups = BTreeMap::<String, (Decimal, i64)>::new();
+    for row in taxonomy_rows {
+        let Some(value) = values_by_asset.get(row.asset_id.as_str()) else {
+            continue;
+        };
+        let weighted = *value * Decimal::from(row.weight) / Decimal::new(10000, 0);
+        let taxonomy_name = row.taxonomy_name.to_ascii_lowercase();
+        if taxonomy_name.contains("sector") {
+            add_group(&mut sector_groups, row.category_name.clone(), weighted);
+        } else if taxonomy_name.contains("country") || taxonomy_name.contains("region") {
+            add_group(&mut country_groups, row.category_name.clone(), weighted);
+        }
+    }
+    add_group_exposures(
+        (exposures, findings),
+        ConcentrationDimension::SectorTaxonomy,
+        sector_groups,
+        base_currency,
+        wealth_total,
+        threshold_percent,
+        |label, percent| {
+            format!(
+                "{}% of wealth is mapped to sector {label}.",
+                display_decimal(percent)
+            )
+        },
+    );
+    add_group_exposures(
+        (exposures, findings),
+        ConcentrationDimension::CountryTaxonomy,
+        country_groups,
+        base_currency,
+        wealth_total,
+        threshold_percent,
+        |label, percent| {
+            format!(
+                "{}% of wealth is mapped to country/region {label}.",
+                display_decimal(percent)
+            )
+        },
+    );
+    Ok(())
+}
+
+fn add_income_exposures(
+    exposures: &mut Vec<ConcentrationExposure>,
+    findings: &mut Vec<ConcentrationFinding>,
+    income_rows: Vec<ConcentrationIncomeRow>,
+    threshold_percent: Decimal,
+) -> Result<()> {
+    let mut groups_by_currency = BTreeMap::<String, BTreeMap<String, (Decimal, i64)>>::new();
+    for row in income_rows {
+        let amount = parse_decimal("income amount", &row.amount)?.abs();
+        if amount == Decimal::ZERO {
+            continue;
+        }
+        add_group(
+            groups_by_currency.entry(row.currency).or_default(),
+            row.source_label,
+            amount,
+        );
+    }
+    for (currency, groups) in groups_by_currency {
+        let total = groups.values().map(|(amount, _)| *amount).sum();
+        if total <= Decimal::ZERO {
+            continue;
+        }
+        let mut ranked = groups.into_iter().collect::<Vec<_>>();
+        ranked.sort_by_key(|row| std::cmp::Reverse(row.1 .0));
+        for (label, (amount, source_count)) in &ranked {
+            let percent = percent_of(*amount, total);
+            exposures.push(ConcentrationExposure {
+                dimension: ConcentrationDimension::IncomeSource,
+                label: label.clone(),
+                amount: *amount,
+                currency: currency.clone(),
+                percent,
+                source_count: *source_count,
+            });
+        }
+        let top_count = ranked.len().min(2);
+        if top_count > 0 {
+            let combined = ranked
+                .iter()
+                .take(top_count)
+                .map(|(_, (amount, _))| *amount)
+                .sum();
+            let percent = percent_of(combined, total);
+            if percent >= threshold_percent {
+                findings.push(ConcentrationFinding {
+                    dimension: ConcentrationDimension::IncomeSource,
+                    label: if top_count == 1 {
+                        "Top income source".to_string()
+                    } else {
+                        "Top two income sources".to_string()
+                    },
+                    message: if top_count == 1 {
+                        format!(
+                            "{}% of income comes from one asset.",
+                            display_decimal(percent)
+                        )
+                    } else {
+                        format!(
+                            "{}% of income comes from two assets.",
+                            display_decimal(percent)
+                        )
+                    },
+                    amount: combined,
+                    currency: currency.clone(),
+                    percent,
+                    threshold_percent,
+                });
+            }
+        }
+    }
+    Ok(())
+}
+
+fn add_fragility_exposure(
+    output: (
+        &mut Vec<ConcentrationExposure>,
+        &mut Vec<ConcentrationFinding>,
+    ),
+    target: (ConcentrationDimension, &str),
+    exposure: (Decimal, i64),
+    currency: &str,
+    wealth_total: Decimal,
+    threshold_percent: Decimal,
+    message: impl Fn(Decimal) -> String,
+) {
+    let (exposures, findings) = output;
+    let (dimension, label) = target;
+    if wealth_total <= Decimal::ZERO || exposure.0 <= Decimal::ZERO {
+        return;
+    }
+    let percent = percent_of(exposure.0, wealth_total);
+    exposures.push(ConcentrationExposure {
+        dimension,
+        label: label.to_string(),
+        amount: exposure.0,
+        currency: currency.to_string(),
+        percent,
+        source_count: exposure.1,
+    });
+    if percent >= threshold_percent {
+        findings.push(ConcentrationFinding {
+            dimension,
+            label: label.to_string(),
+            message: message(percent),
+            amount: exposure.0,
+            currency: currency.to_string(),
+            percent,
+            threshold_percent,
+        });
+    }
+}
+
+fn percent_of(amount: Decimal, total: Decimal) -> Decimal {
+    if total <= Decimal::ZERO {
+        Decimal::ZERO
+    } else {
+        (amount / total * Decimal::new(100, 0)).round_dp(2)
+    }
+}
+
+fn display_decimal(value: Decimal) -> String {
+    value.normalize().to_string()
+}
+
+fn asset_label(row: &ConcentrationAssetRow) -> String {
+    row.asset_name
+        .clone()
+        .or_else(|| row.display_code.clone())
+        .unwrap_or_else(|| row.asset_id.clone())
+}
+
+fn asset_class_label(row: &ConcentrationAssetRow) -> String {
+    row.classification
+        .clone()
+        .unwrap_or_else(|| row.quote_mode.clone())
+        .replace('_', " ")
+}
+
+fn is_stale_manual(row: &ConcentrationAssetRow, as_of_date: NaiveDate) -> bool {
+    if !row.source_type.eq_ignore_ascii_case("manual")
+        && !row.quote_mode.eq_ignore_ascii_case("manual")
+    {
+        return false;
+    }
+    let Some(date_text) = row.valuation_date.get(0..10) else {
+        return false;
+    };
+    let Ok(date) = NaiveDate::parse_from_str(date_text, "%Y-%m-%d") else {
+        return false;
+    };
+    (as_of_date - date).num_days() > 90
+}
+
+fn is_private_or_illiquid(row: &ConcentrationAssetRow) -> bool {
+    row.private_asset_id.is_some()
+        || row
+            .classification
+            .as_deref()
+            .is_some_and(|classification| classification.contains("private"))
+}
+
+fn shariah_unknown_status(status: Option<&str>) -> bool {
+    matches!(status, None | Some("unknown") | Some("needs_review"))
+}
+
+fn validate_currency_code(currency: &str) -> Result<()> {
+    if currency.len() != 3 || !currency.chars().all(|ch| ch.is_ascii_uppercase()) {
+        return Err(Error::Validation(
+            mizan_core::errors::ValidationError::InvalidInput(format!(
+                "currency {currency:?} must be a 3-letter uppercase ISO code"
+            )),
+        ));
+    }
+    Ok(())
+}
+
 fn estate_account_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> {
     let rows = accounts::table
         .filter(accounts::is_archived.eq(false))
@@ -1837,7 +2734,9 @@ mod tests {
     use crate::db::write_actor::spawn_writer;
     use crate::db::{create_pool, init, run_migrations};
     use crate::schema::{
-        accounts, activities, assets, documents, source_citations, tax_pack_lines, tax_packs,
+        accounts, activities, app_settings, asset_private_investment_details,
+        asset_shariah_screening, assets, daily_account_valuation, documents, source_citations,
+        tax_pack_lines, tax_packs, valuations,
     };
     use tempfile::tempdir;
 
@@ -2213,6 +3112,233 @@ mod tests {
         assert!(summary.missing_fees_state);
     }
 
+    #[tokio::test]
+    async fn concentration_radar_flags_single_asset_and_report_section() {
+        let (pool, writer) = setup();
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "asset-large",
+                name: "ACME",
+                classification: "public_equity",
+                value: "700",
+                currency: "USD",
+                valuation_date: "2026-05-01",
+                source_type: "market",
+                quote_mode: "MARKET",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "asset-small",
+                name: "Cash fund",
+                classification: "cash",
+                value: "300",
+                currency: "USD",
+                valuation_date: "2026-05-01",
+                source_type: "market",
+                quote_mode: "MARKET",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        seed_daily_account_valuation(&pool, "acc-risk", "Main custodian", "1000", "USD");
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let summary = repo
+            .get_concentration_fragility_summary("USD".to_string())
+            .expect("summary");
+        let report = repo
+            .generate_report(request(ReportType::PortfolioSummary))
+            .await
+            .expect("portfolio summary");
+
+        assert!(summary
+            .findings
+            .iter()
+            .any(|finding| finding.message == "70% of recorded wealth is in ACME."));
+        assert!(report
+            .sections
+            .iter()
+            .any(|section| section.title == "Concentration and fragility"));
+        assert!(!summary
+            .findings
+            .iter()
+            .any(|finding| finding.message.to_ascii_lowercase().contains("buy")));
+    }
+
+    #[tokio::test]
+    async fn concentration_radar_flags_currency_concentration() {
+        let (pool, writer) = setup();
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "asset-usd",
+                name: "USD asset",
+                classification: "public_equity",
+                value: "800",
+                currency: "USD",
+                valuation_date: "2026-05-01",
+                source_type: "market",
+                quote_mode: "MARKET",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "asset-eur",
+                name: "EUR asset",
+                classification: "public_equity",
+                value: "200",
+                currency: "EUR",
+                valuation_date: "2026-05-01",
+                source_type: "market",
+                quote_mode: "MARKET",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let summary = repo
+            .get_concentration_fragility_summary("USD".to_string())
+            .expect("summary");
+
+        assert!(summary.findings.iter().any(|finding| {
+            finding.dimension == ConcentrationDimension::Currency
+                && finding.message == "80% of recorded valuation exposure is in USD."
+        }));
+    }
+
+    #[tokio::test]
+    async fn concentration_radar_flags_stale_manual_exposure() {
+        let (pool, writer) = setup();
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "manual-old",
+                name: "Apartment",
+                classification: "real_estate_residential",
+                value: "280",
+                currency: "USD",
+                valuation_date: "2026-01-01",
+                source_type: "manual",
+                quote_mode: "MANUAL",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "fresh",
+                name: "Fresh",
+                classification: "cash",
+                value: "720",
+                currency: "USD",
+                valuation_date: "2026-05-01",
+                source_type: "market",
+                quote_mode: "MARKET",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let summary = repo
+            .get_concentration_fragility_summary("USD".to_string())
+            .expect("summary");
+
+        assert!(summary.findings.iter().any(|finding| {
+            finding.dimension == ConcentrationDimension::ManualStale
+                && finding
+                    .message
+                    .contains("wealth is valued manually and older than 90 days")
+        }));
+    }
+
+    #[tokio::test]
+    async fn concentration_radar_handles_missing_taxonomy_without_fake_rows() {
+        let (pool, writer) = setup();
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "asset-no-taxonomy",
+                name: "No taxonomy",
+                classification: "public_equity",
+                value: "100",
+                currency: "USD",
+                valuation_date: "2026-05-01",
+                source_type: "market",
+                quote_mode: "MARKET",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let summary = repo
+            .get_concentration_fragility_summary("USD".to_string())
+            .expect("summary");
+
+        assert_eq!(summary.taxonomy_state, "missing");
+        assert!(!summary.exposures.iter().any(|exposure| matches!(
+            exposure.dimension,
+            ConcentrationDimension::SectorTaxonomy | ConcentrationDimension::CountryTaxonomy
+        )));
+    }
+
+    #[tokio::test]
+    async fn concentration_radar_respects_islamic_mode_off_and_on() {
+        let (pool, writer) = setup();
+        seed_concentration_asset(
+            &pool,
+            ConcentrationAssetSeed {
+                id: "unknown-shariah",
+                name: "Unknown Shariah asset",
+                classification: "public_equity",
+                value: "100",
+                currency: "USD",
+                valuation_date: "2026-05-01",
+                source_type: "market",
+                quote_mode: "MARKET",
+                private_detail: false,
+                citation: false,
+                shariah_status: None,
+            },
+        );
+        let repo = ReportBuilderRepository::new(pool.clone(), writer);
+
+        let disabled = repo
+            .get_concentration_fragility_summary("USD".to_string())
+            .expect("disabled summary");
+        set_shariah_mode(&pool, true);
+        let enabled = repo
+            .get_concentration_fragility_summary("USD".to_string())
+            .expect("enabled summary");
+
+        assert!(!disabled
+            .findings
+            .iter()
+            .any(|finding| finding.dimension == ConcentrationDimension::ShariahUnknown));
+        assert!(enabled
+            .findings
+            .iter()
+            .any(|finding| finding.dimension == ConcentrationDimension::ShariahUnknown));
+    }
+
     fn request(report_type: ReportType) -> GenerateReportRequest {
         GenerateReportRequest {
             report_type,
@@ -2247,6 +3373,153 @@ mod tests {
             period_month: Some(period_month.to_string()),
             included_sections: None,
         }
+    }
+
+    struct ConcentrationAssetSeed<'a> {
+        id: &'a str,
+        name: &'a str,
+        classification: &'a str,
+        value: &'a str,
+        currency: &'a str,
+        valuation_date: &'a str,
+        source_type: &'a str,
+        quote_mode: &'a str,
+        private_detail: bool,
+        citation: bool,
+        shariah_status: Option<&'a str>,
+    }
+
+    fn seed_concentration_asset(
+        pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
+        seed: ConcentrationAssetSeed<'_>,
+    ) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::insert_into(assets::table)
+            .values((
+                assets::id.eq(seed.id),
+                assets::kind.eq("INVESTMENT"),
+                assets::name.eq(Some(seed.name)),
+                assets::display_code.eq(Some(seed.id)),
+                assets::is_active.eq(1),
+                assets::quote_mode.eq(seed.quote_mode),
+                assets::quote_ccy.eq(seed.currency),
+                assets::classification.eq(Some(seed.classification)),
+                assets::created_at.eq("2026-05-01T00:00:00Z"),
+                assets::updated_at.eq("2026-05-01T00:00:00Z"),
+            ))
+            .execute(&mut conn)
+            .expect("seed concentration asset");
+        let citation_id = if seed.citation {
+            let citation_id = format!("citation-{}", seed.id);
+            diesel::insert_into(source_citations::table)
+                .values((
+                    source_citations::id.eq(&citation_id),
+                    source_citations::source_type.eq("manual"),
+                    source_citations::citation_label.eq(format!("Citation {}", seed.id)),
+                    source_citations::created_at.eq("2026-05-01T00:00:00Z"),
+                ))
+                .execute(&mut conn)
+                .expect("seed concentration citation");
+            Some(citation_id)
+        } else {
+            None
+        };
+        diesel::insert_into(valuations::table)
+            .values((
+                valuations::id.eq(format!("valuation-{}", seed.id)),
+                valuations::asset_id.eq(seed.id),
+                valuations::valuation_date.eq(seed.valuation_date),
+                valuations::value_native.eq(seed.value),
+                valuations::currency.eq(seed.currency),
+                valuations::source_type.eq(seed.source_type),
+                valuations::source_id.eq::<Option<String>>(None),
+                valuations::confidence.eq(Some("1")),
+                valuations::notes.eq::<Option<String>>(None),
+                valuations::created_at.eq("2026-05-01T00:00:00Z"),
+                valuations::updated_at.eq("2026-05-01T00:00:00Z"),
+                valuations::source_citation_id.eq(citation_id.as_deref()),
+            ))
+            .execute(&mut conn)
+            .expect("seed concentration valuation");
+        if seed.private_detail {
+            diesel::insert_into(asset_private_investment_details::table)
+                .values((
+                    asset_private_investment_details::asset_id.eq(seed.id),
+                    asset_private_investment_details::instrument_subtype.eq("private_equity"),
+                    asset_private_investment_details::created_at.eq("2026-05-01T00:00:00Z"),
+                    asset_private_investment_details::updated_at.eq("2026-05-01T00:00:00Z"),
+                ))
+                .execute(&mut conn)
+                .expect("seed private detail");
+        }
+        if let Some(status) = seed.shariah_status {
+            diesel::insert_into(asset_shariah_screening::table)
+                .values((
+                    asset_shariah_screening::id.eq(format!("screening-{}", seed.id)),
+                    asset_shariah_screening::asset_id.eq(seed.id),
+                    asset_shariah_screening::profile_id
+                        .eq(mizan_core::islamic_mode::DEFAULT_SHARIAH_PROFILE_ID),
+                    asset_shariah_screening::status.eq(status),
+                    asset_shariah_screening::created_at.eq("2026-05-01T00:00:00Z"),
+                    asset_shariah_screening::updated_at.eq("2026-05-01T00:00:00Z"),
+                ))
+                .execute(&mut conn)
+                .expect("seed shariah screening");
+        }
+    }
+
+    fn seed_daily_account_valuation(
+        pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
+        account_id: &str,
+        account_name: &str,
+        total_value: &str,
+        base_currency: &str,
+    ) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::insert_into(accounts::table)
+            .values((
+                accounts::id.eq(account_id),
+                accounts::name.eq(account_name),
+                accounts::account_type.eq("brokerage"),
+                accounts::currency.eq(base_currency),
+                accounts::is_default.eq(false),
+                accounts::is_active.eq(true),
+                accounts::created_at.eq("2026-05-01T00:00:00Z"),
+                accounts::updated_at.eq("2026-05-01T00:00:00Z"),
+                accounts::is_archived.eq(false),
+                accounts::tracking_mode.eq("portfolio"),
+            ))
+            .execute(&mut conn)
+            .expect("seed concentration account");
+        diesel::insert_into(daily_account_valuation::table)
+            .values((
+                daily_account_valuation::id.eq(format!("daily-{account_id}")),
+                daily_account_valuation::account_id.eq(account_id),
+                daily_account_valuation::valuation_date
+                    .eq(NaiveDate::from_ymd_opt(2026, 5, 1).expect("date")),
+                daily_account_valuation::account_currency.eq(base_currency),
+                daily_account_valuation::base_currency.eq(base_currency),
+                daily_account_valuation::fx_rate_to_base.eq("1"),
+                daily_account_valuation::cash_balance.eq("0"),
+                daily_account_valuation::investment_market_value.eq(total_value),
+                daily_account_valuation::total_value.eq(total_value),
+                daily_account_valuation::cost_basis.eq("0"),
+                daily_account_valuation::net_contribution.eq("0"),
+                daily_account_valuation::calculated_at.eq("2026-05-01T00:00:00Z"),
+            ))
+            .execute(&mut conn)
+            .expect("seed daily account valuation");
+    }
+
+    fn set_shariah_mode(
+        pool: &Arc<Pool<r2d2::ConnectionManager<SqliteConnection>>>,
+        enabled: bool,
+    ) {
+        let mut conn = get_connection(pool).expect("conn");
+        diesel::update(app_settings::table.find("shariah_mode_enabled"))
+            .set(app_settings::setting_value.eq(if enabled { "true" } else { "false" }))
+            .execute(&mut conn)
+            .expect("set shariah mode");
     }
 
     fn seed_tax_pack(

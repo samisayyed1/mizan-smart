@@ -6,8 +6,8 @@ use axum::{
     Json, Router,
 };
 use mizan_core::report_builder::{
-    FeeIntelligenceSummary, GenerateReportRequest, ManualFeeEntry, ManualFeeEntryInput,
-    ReportBuilderRepositoryTrait, ReportExportBundle, ReportRun,
+    ConcentrationFragilitySummary, FeeIntelligenceSummary, GenerateReportRequest, ManualFeeEntry,
+    ManualFeeEntryInput, ReportBuilderRepositoryTrait, ReportExportBundle, ReportRun,
 };
 use serde::Deserialize;
 
@@ -77,6 +77,23 @@ async fn get_fee_intelligence_summary(
         .map_err(ApiError::from)
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConcentrationSummaryQuery {
+    base_currency: Option<String>,
+}
+
+async fn get_concentration_fragility_summary(
+    State(state): State<Arc<AppState>>,
+    Query(query): Query<ConcentrationSummaryQuery>,
+) -> ApiResult<Json<ConcentrationFragilitySummary>> {
+    state
+        .report_builder_repository
+        .get_concentration_fragility_summary(query.base_currency.unwrap_or_else(|| "USD".into()))
+        .map(Json)
+        .map_err(ApiError::from)
+}
+
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
         .route("/report-runs", post(generate_report))
@@ -86,5 +103,9 @@ pub fn router() -> Router<Arc<AppState>> {
         .route(
             "/fee-intelligence/summary",
             get(get_fee_intelligence_summary),
+        )
+        .route(
+            "/concentration-fragility/summary",
+            get(get_concentration_fragility_summary),
         )
 }

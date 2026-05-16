@@ -31,7 +31,7 @@
 - [x] p31 phase-4/p31  Monthly Wealth Letter (deterministic) (f532964)
 - [x] p32 phase-4/p32  Estate / Legacy Binder (aee4daf)
 - [x] p33 phase-4/p33  Fee Intelligence (0999c5d)
-- [ ] p34 phase-4/p34  Concentration and fragility radar
+- [x] p34 phase-4/p34  Concentration and fragility radar (ae9f26f)
 - [ ] p35 phase-5/p35  Web Evidence foundation
 - [ ] p36 phase-5/p36  SearXNG search provider
 - [ ] p37 phase-5/p37  Safe web fetcher and snapshot store

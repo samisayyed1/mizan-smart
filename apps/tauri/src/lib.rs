@@ -441,6 +441,7 @@ pub fn run() {
             commands::report_builder::get_report_run,
             commands::report_builder::add_manual_fee_entry,
             commands::report_builder::get_fee_intelligence_summary,
+            commands::report_builder::get_concentration_fragility_summary,
             // Goal commands
             commands::goal::create_goal,
             commands::goal::update_goal,

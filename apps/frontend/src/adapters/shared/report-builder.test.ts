@@ -4,6 +4,7 @@ import {
   addManualFeeEntry,
   exportReport,
   generateReport,
+  getConcentrationFragilitySummary,
   getFeeIntelligenceSummary,
   getReportRun,
   type GenerateReportRequest,
@@ -89,6 +90,25 @@ describe("report builder adapter", () => {
     expect(invokeMock).toHaveBeenNthCalledWith(1, "add_manual_fee_entry", { input });
     expect(invokeMock).toHaveBeenNthCalledWith(2, "get_fee_intelligence_summary", {
       periodMonth: "2026-05",
+    });
+  });
+
+  it("loads concentration and fragility summaries", async () => {
+    invokeMock.mockResolvedValueOnce({
+      asOfDate: "2026-05-16",
+      baseCurrency: "USD",
+      totalWealth: "100",
+      exposures: [],
+      findings: [],
+      emptyState: false,
+      islamicModeEnabled: false,
+      taxonomyState: "missing",
+    });
+
+    await getConcentrationFragilitySummary("USD");
+
+    expect(invokeMock).toHaveBeenCalledWith("get_concentration_fragility_summary", {
+      baseCurrency: "USD",
     });
   });
 });

@@ -280,6 +280,76 @@ pub struct FeeIntelligenceSummary {
     pub missing_fees_state: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ConcentrationDimension {
+    Asset,
+    AccountCustodian,
+    Currency,
+    SectorTaxonomy,
+    CountryTaxonomy,
+    AssetClass,
+    IncomeSource,
+    ManualStale,
+    PrivateIlliquid,
+    ShariahUnknown,
+    DocumentUncited,
+}
+
+impl ConcentrationDimension {
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::Asset => "Asset",
+            Self::AccountCustodian => "Account / custodian",
+            Self::Currency => "Currency",
+            Self::SectorTaxonomy => "Sector taxonomy",
+            Self::CountryTaxonomy => "Country taxonomy",
+            Self::AssetClass => "Asset class",
+            Self::IncomeSource => "Income source",
+            Self::ManualStale => "Manual / stale valuation",
+            Self::PrivateIlliquid => "Private / illiquid",
+            Self::ShariahUnknown => "Shariah unknown",
+            Self::DocumentUncited => "Document citation",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConcentrationExposure {
+    pub dimension: ConcentrationDimension,
+    pub label: String,
+    pub amount: Decimal,
+    pub currency: String,
+    pub percent: Decimal,
+    pub source_count: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConcentrationFinding {
+    pub dimension: ConcentrationDimension,
+    pub label: String,
+    pub message: String,
+    pub amount: Decimal,
+    pub currency: String,
+    pub percent: Decimal,
+    pub threshold_percent: Decimal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConcentrationFragilitySummary {
+    pub as_of_date: String,
+    pub base_currency: String,
+    pub total_wealth: Decimal,
+    pub exposures: Vec<ConcentrationExposure>,
+    pub findings: Vec<ConcentrationFinding>,
+    pub empty_state: bool,
+    pub islamic_mode_enabled: bool,
+    pub taxonomy_state: String,
+}
+
 impl GenerateReportRequest {
     pub fn validate(&self) -> Result<()> {
         validate_currency(&self.base_currency)?;
@@ -345,6 +415,10 @@ pub trait ReportBuilderRepositoryTrait: Send + Sync {
         &self,
         period_month: Option<String>,
     ) -> Result<FeeIntelligenceSummary>;
+    fn get_concentration_fragility_summary(
+        &self,
+        base_currency: String,
+    ) -> Result<ConcentrationFragilitySummary>;
 }
 
 pub fn build_empty_report(

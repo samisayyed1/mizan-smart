@@ -10,7 +10,7 @@ import {
   type ReconciliationItem,
   type ReconciliationRunDetail,
 } from "@/adapters";
-import { Button, Input } from "@mizan/ui";
+import { Button, Input, Page, PageContent, PageHeader } from "@mizan/ui";
 
 const EMPTY_ITEMS = "[]";
 
@@ -98,14 +98,12 @@ export default function ReconciliationCenterPage() {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Reconciliation Center</h1>
-        <p className="text-muted-foreground text-sm">
-          Prove Mizan rows against statement, document, or import evidence before writing anything.
-        </p>
-      </div>
-
+    <Page>
+      <PageHeader
+        heading="Reconciliation Center"
+        text="Prove Mizan rows against statement, document, or import evidence before writing anything."
+      />
+      <PageContent className="space-y-6">
       <section className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
         <label className="grid gap-1 text-sm">
           Scope ID
@@ -216,7 +214,8 @@ export default function ReconciliationCenterPage() {
           </Button>
         </section>
       ) : null}
-    </div>
+      </PageContent>
+    </Page>
   );
 }
 

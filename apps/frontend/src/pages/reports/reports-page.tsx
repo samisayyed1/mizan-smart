@@ -1,5 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 
 import {
   addManualFeeEntry,
@@ -165,6 +166,18 @@ export default function ReportsPage() {
         text="Build deterministic report previews from local source data."
       />
       <PageContent>
+        {/* Tax Pack has its own dedicated builder for jurisdiction-specific
+            exports and the full CPA bundle (Phase 4 P28/P29). Surface the
+            link here so the standalone /reports/tax-pack page isn't orphaned. */}
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3 text-sm">
+          <Icons.ShieldCheck className="text-muted-foreground size-4" aria-hidden="true" />
+          <span className="text-muted-foreground flex-1">
+            Need year + jurisdiction + CPA export bundle?
+          </span>
+          <Button asChild variant="secondary" size="sm">
+            <Link to="/reports/tax-pack">Open Tax Pack builder</Link>
+          </Button>
+        </div>
         <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <Card>
             <CardHeader>

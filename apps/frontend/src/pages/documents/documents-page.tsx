@@ -184,9 +184,14 @@ export default function DocumentsPage() {
               ? "1 extracted fact awaiting review"
               : `${pendingFacts.length} extracted facts awaiting review`}
           </p>
-          <Button asChild type="button" variant="secondary">
-            <Link to="/documents/review-queue">Review queue</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild type="button" variant="secondary">
+              <Link to="/documents/review-queue">Review queue</Link>
+            </Button>
+            <Button asChild type="button" variant="secondary">
+              <Link to="/reconciliation">Reconciliation Center</Link>
+            </Button>
+          </div>
 
           {error ? (
             <div

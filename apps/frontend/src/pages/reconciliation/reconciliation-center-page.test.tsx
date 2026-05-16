@@ -33,6 +33,17 @@ vi.mock("@mizan/ui", () => ({
     </button>
   ),
   Input: (props: InputHTMLAttributes<HTMLInputElement>) => <input {...props} />,
+  // Polish pass: ReconciliationCenterPage now uses the shared Page
+  // shell to match the Mizan 3.4.1 page conventions. Mock matches the
+  // shape used by other test files in the suite.
+  Page: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PageContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  PageHeader: ({ heading, text }: { heading?: string; text?: string }) => (
+    <header>
+      <h1>{heading}</h1>
+      {text ? <p>{text}</p> : null}
+    </header>
+  ),
 }));
 
 describe("ReconciliationCenterPage", () => {

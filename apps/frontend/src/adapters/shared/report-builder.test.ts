@@ -1,8 +1,10 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
+  addManualFeeEntry,
   exportReport,
   generateReport,
+  getFeeIntelligenceSummary,
   getReportRun,
   type GenerateReportRequest,
 } from "./report-builder";
@@ -15,6 +17,10 @@ vi.mock("./platform", () => ({
 const invokeMock = vi.mocked(invoke);
 
 describe("report builder adapter", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("generates deterministic report runs through the shared invoke channel", async () => {
     const request = { reportType: "tax_pack" as const, baseCurrency: "USD" };
     invokeMock.mockResolvedValueOnce({ id: "run-1", sections: [] });
@@ -64,5 +70,25 @@ describe("report builder adapter", () => {
     await exportReport("run-1");
 
     expect(invokeMock).toHaveBeenCalledWith("export_report", { reportRunId: "run-1" });
+  });
+
+  it("saves manual fee entries and loads fee intelligence summaries", async () => {
+    const input = {
+      feeDate: "2026-05-10",
+      category: "transaction_fees" as const,
+      amount: "12.34",
+      currency: "USD",
+      notes: "Broker statement",
+    };
+    invokeMock.mockResolvedValueOnce({ id: "fee-1", ...input });
+    invokeMock.mockResolvedValueOnce({ periodMonth: "2026-05", totals: [] });
+
+    await addManualFeeEntry(input);
+    await getFeeIntelligenceSummary("2026-05");
+
+    expect(invokeMock).toHaveBeenNthCalledWith(1, "add_manual_fee_entry", { input });
+    expect(invokeMock).toHaveBeenNthCalledWith(2, "get_fee_intelligence_summary", {
+      periodMonth: "2026-05",
+    });
   });
 });

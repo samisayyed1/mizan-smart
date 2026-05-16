@@ -21,6 +21,7 @@ pub enum ReportType {
     TaxPack,
     MonthlyWealthLetter,
     EstateBinder,
+    FeeReport,
 }
 
 impl ReportType {
@@ -33,6 +34,7 @@ impl ReportType {
             Self::TaxPack => "tax_pack",
             Self::MonthlyWealthLetter => "monthly_wealth_letter",
             Self::EstateBinder => "estate_binder",
+            Self::FeeReport => "fee_report",
         }
     }
 
@@ -45,6 +47,7 @@ impl ReportType {
             Self::TaxPack => "Tax Pack Report",
             Self::MonthlyWealthLetter => "Monthly Wealth Letter",
             Self::EstateBinder => "Estate Binder",
+            Self::FeeReport => "Fee Report",
         }
     }
 }
@@ -61,7 +64,75 @@ impl FromStr for ReportType {
             "tax_pack" => Ok(Self::TaxPack),
             "monthly_wealth_letter" => Ok(Self::MonthlyWealthLetter),
             "estate_binder" => Ok(Self::EstateBinder),
+            "fee_report" => Ok(Self::FeeReport),
             _ => Err(invalid(format!("Unsupported report type: {value}"))),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeeCategory {
+    BrokerFees,
+    TransactionFees,
+    PlatformFees,
+    AdvisoryFees,
+    FundExpenseRatioManual,
+    InsuranceUlipCharges,
+    FxFees,
+    PrivateFundFees,
+    CustodyAdminFees,
+    Other,
+}
+
+impl FeeCategory {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::BrokerFees => "broker_fees",
+            Self::TransactionFees => "transaction_fees",
+            Self::PlatformFees => "platform_fees",
+            Self::AdvisoryFees => "advisory_fees",
+            Self::FundExpenseRatioManual => "fund_expense_ratio_manual",
+            Self::InsuranceUlipCharges => "insurance_ulip_charges",
+            Self::FxFees => "fx_fees",
+            Self::PrivateFundFees => "private_fund_fees",
+            Self::CustodyAdminFees => "custody_admin_fees",
+            Self::Other => "other",
+        }
+    }
+
+    pub const fn title(self) -> &'static str {
+        match self {
+            Self::BrokerFees => "Broker fees",
+            Self::TransactionFees => "Transaction fees",
+            Self::PlatformFees => "Platform fees",
+            Self::AdvisoryFees => "Advisory fees",
+            Self::FundExpenseRatioManual => "Fund expense ratio manual",
+            Self::InsuranceUlipCharges => "Insurance / ULIP charges",
+            Self::FxFees => "FX fees",
+            Self::PrivateFundFees => "Private fund fees",
+            Self::CustodyAdminFees => "Custody / admin fees",
+            Self::Other => "Other fees",
+        }
+    }
+}
+
+impl FromStr for FeeCategory {
+    type Err = Error;
+
+    fn from_str(value: &str) -> Result<Self> {
+        match value {
+            "broker_fees" => Ok(Self::BrokerFees),
+            "transaction_fees" => Ok(Self::TransactionFees),
+            "platform_fees" => Ok(Self::PlatformFees),
+            "advisory_fees" => Ok(Self::AdvisoryFees),
+            "fund_expense_ratio_manual" => Ok(Self::FundExpenseRatioManual),
+            "insurance_ulip_charges" => Ok(Self::InsuranceUlipCharges),
+            "fx_fees" => Ok(Self::FxFees),
+            "private_fund_fees" => Ok(Self::PrivateFundFees),
+            "custody_admin_fees" => Ok(Self::CustodyAdminFees),
+            "other" => Ok(Self::Other),
+            _ => Err(invalid(format!("Unsupported fee category: {value}"))),
         }
     }
 }
@@ -135,6 +206,80 @@ pub struct GenerateReportRequest {
     pub included_sections: Option<Vec<EstateBinderSection>>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualFeeEntryInput {
+    pub fee_date: String,
+    pub category: FeeCategory,
+    pub amount: Decimal,
+    pub currency: String,
+    pub account_id: Option<String>,
+    pub asset_id: Option<String>,
+    pub source_citation_id: Option<String>,
+    pub notes: Option<String>,
+}
+
+impl ManualFeeEntryInput {
+    pub fn validate(&self) -> Result<()> {
+        validate_date(&self.fee_date)?;
+        validate_currency(&self.currency)?;
+        if self.amount <= Decimal::ZERO {
+            return Err(invalid("manual fee amount must be positive"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ManualFeeEntry {
+    pub id: String,
+    pub fee_date: String,
+    pub category: FeeCategory,
+    pub amount: Decimal,
+    pub currency: String,
+    pub account_id: Option<String>,
+    pub asset_id: Option<String>,
+    pub source_citation_id: Option<String>,
+    pub notes: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeCategoryTotal {
+    pub category: FeeCategory,
+    pub amount: Decimal,
+    pub currency: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeCurrencyTotal {
+    pub amount: Decimal,
+    pub currency: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeSpikeAlert {
+    pub currency: String,
+    pub current_period_total: Decimal,
+    pub prior_average: Decimal,
+    pub multiple: Decimal,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FeeIntelligenceSummary {
+    pub period_month: String,
+    pub totals: Vec<FeeCurrencyTotal>,
+    pub category_totals: Vec<FeeCategoryTotal>,
+    pub spike: Option<FeeSpikeAlert>,
+    pub missing_fees_state: bool,
+}
+
 impl GenerateReportRequest {
     pub fn validate(&self) -> Result<()> {
         validate_currency(&self.base_currency)?;
@@ -195,6 +340,11 @@ pub trait ReportBuilderRepositoryTrait: Send + Sync {
     async fn generate_report(&self, request: GenerateReportRequest) -> Result<ReportRun>;
     fn get_report_run(&self, report_run_id: &str) -> Result<Option<ReportRun>>;
     fn export_report(&self, report_run_id: &str) -> Result<ReportExportBundle>;
+    async fn add_manual_fee_entry(&self, input: ManualFeeEntryInput) -> Result<ManualFeeEntry>;
+    fn get_fee_intelligence_summary(
+        &self,
+        period_month: Option<String>,
+    ) -> Result<FeeIntelligenceSummary>;
 }
 
 pub fn build_empty_report(
@@ -339,6 +489,20 @@ fn validate_period_month(value: &str) -> Result<()> {
         return Err(invalid("period_month month must be 01 through 12"));
     }
     Ok(())
+}
+
+fn validate_date(value: &str) -> Result<()> {
+    if value.len() == 10
+        && value.as_bytes().get(4) == Some(&b'-')
+        && value.as_bytes().get(7) == Some(&b'-')
+        && value
+            .chars()
+            .enumerate()
+            .all(|(idx, ch)| matches!(idx, 4 | 7) || ch.is_ascii_digit())
+    {
+        return Ok(());
+    }
+    Err(invalid(format!("Invalid date: {value}")))
 }
 
 fn escape_html(value: &str) -> String {

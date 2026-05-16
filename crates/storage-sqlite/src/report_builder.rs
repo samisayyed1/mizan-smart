@@ -11,9 +11,11 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use mizan_core::report_builder::{
-    build_empty_report, build_report_export, EstateBinderSection, GenerateReportRequest,
-    ReportBuilderRepositoryTrait, ReportExportBundle, ReportLine, ReportRun, ReportRunStatus,
-    ReportSection, ReportType, ESTATE_BINDER_DISCLAIMER, REPORT_BUILDER_DISCLAIMER,
+    build_empty_report, build_report_export, EstateBinderSection, FeeCategory, FeeCategoryTotal,
+    FeeCurrencyTotal, FeeIntelligenceSummary, FeeSpikeAlert, GenerateReportRequest, ManualFeeEntry,
+    ManualFeeEntryInput, ReportBuilderRepositoryTrait, ReportExportBundle, ReportLine, ReportRun,
+    ReportRunStatus, ReportSection, ReportType, ESTATE_BINDER_DISCLAIMER,
+    REPORT_BUILDER_DISCLAIMER,
 };
 use mizan_core::{Error, Result};
 
@@ -22,8 +24,8 @@ use crate::errors::StorageError;
 use crate::schema::{
     accounts, activities, app_settings, asset_insurance_details, asset_liability_details,
     asset_private_investment_details, asset_real_estate_details, assets, capital_calls, documents,
-    extracted_facts, fixed_income_cashflows, report_lines, report_runs, report_sections,
-    tax_pack_lines, tax_pack_missing_items, tax_packs, zakat_snapshots,
+    extracted_facts, fixed_income_cashflows, manual_fee_entries, report_lines, report_runs,
+    report_sections, tax_pack_lines, tax_pack_missing_items, tax_packs, zakat_snapshots,
 };
 
 pub struct ReportBuilderRepository {
@@ -191,6 +193,48 @@ struct EstateDocumentRow {
     status: String,
 }
 
+#[derive(Debug, Clone, Queryable, Insertable, Selectable)]
+#[diesel(table_name = manual_fee_entries)]
+struct ManualFeeEntryRow {
+    id: String,
+    fee_date: String,
+    category: String,
+    amount: String,
+    currency: String,
+    account_id: Option<String>,
+    asset_id: Option<String>,
+    source_citation_id: Option<String>,
+    notes: Option<String>,
+    created_at: String,
+    updated_at: String,
+}
+
+#[derive(Debug, Clone)]
+struct FeeSourceRow {
+    id: String,
+    fee_date: String,
+    category: FeeCategory,
+    amount: Decimal,
+    currency: String,
+    account_id: Option<String>,
+    asset_id: Option<String>,
+    source_citation_id: Option<String>,
+    source_table: &'static str,
+}
+
+#[derive(Debug, Clone, Queryable)]
+struct ActivityFeeRow {
+    id: String,
+    account_id: String,
+    asset_id: Option<String>,
+    activity_type: String,
+    subtype: Option<String>,
+    activity_date: String,
+    amount: Option<String>,
+    fee: Option<String>,
+    currency: String,
+}
+
 #[async_trait]
 impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
     async fn generate_report(&self, request: GenerateReportRequest) -> Result<ReportRun> {
@@ -202,6 +246,7 @@ impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
                 self.build_monthly_wealth_letter(request, created_at)?
             }
             ReportType::EstateBinder => self.build_estate_binder(request, created_at)?,
+            ReportType::FeeReport => self.build_fee_report(request, created_at)?,
             _ => build_empty_report(
                 Uuid::new_v4().to_string(),
                 Uuid::new_v4().to_string(),
@@ -257,6 +302,44 @@ impl ReportBuilderRepositoryTrait for ReportBuilderRepository {
             )))
         })?;
         Ok(build_report_export(&report))
+    }
+
+    async fn add_manual_fee_entry(&self, input: ManualFeeEntryInput) -> Result<ManualFeeEntry> {
+        input.validate()?;
+        let now = Utc::now().to_rfc3339();
+        let row = ManualFeeEntryRow {
+            id: Uuid::new_v4().to_string(),
+            fee_date: input.fee_date,
+            category: input.category.as_str().to_string(),
+            amount: input.amount.normalize().to_string(),
+            currency: input.currency.to_ascii_uppercase(),
+            account_id: input.account_id,
+            asset_id: input.asset_id,
+            source_citation_id: input.source_citation_id,
+            notes: input.notes,
+            created_at: now.clone(),
+            updated_at: now,
+        };
+        self.writer
+            .exec_tx(move |tx| {
+                let conn = tx.conn();
+                diesel::insert_into(manual_fee_entries::table)
+                    .values(&row)
+                    .execute(conn)
+                    .map_err(StorageError::from)?;
+                manual_fee_entry_row_to_domain(row)
+            })
+            .await
+    }
+
+    fn get_fee_intelligence_summary(
+        &self,
+        period_month: Option<String>,
+    ) -> Result<FeeIntelligenceSummary> {
+        let created_at = Utc::now().to_rfc3339();
+        let period_month = period_month.unwrap_or_else(|| created_at.chars().take(7).collect());
+        let mut conn = get_connection(&self.pool)?;
+        build_fee_summary(&mut conn, &period_month)
     }
 }
 
@@ -845,6 +928,180 @@ impl ReportBuilderRepository {
         })
     }
 
+    fn build_fee_report(
+        &self,
+        request: GenerateReportRequest,
+        created_at: String,
+    ) -> Result<ReportRun> {
+        let period_month = request
+            .period_month
+            .clone()
+            .unwrap_or_else(|| created_at.chars().take(7).collect::<String>());
+        let mut conn = get_connection(&self.pool)?;
+        let summary = build_fee_summary(&mut conn, &period_month)?;
+        let source_rows = fee_source_rows(&mut conn)?
+            .into_iter()
+            .filter(|row| row.fee_date.starts_with(&period_month))
+            .collect::<Vec<_>>();
+        let run_id = Uuid::new_v4().to_string();
+
+        if source_rows.is_empty() {
+            return build_empty_report(
+                run_id,
+                Uuid::new_v4().to_string(),
+                Uuid::new_v4().to_string(),
+                request,
+                created_at,
+            );
+        }
+
+        let totals_section_id = Uuid::new_v4().to_string();
+        let totals_lines = summary
+            .totals
+            .iter()
+            .map(|total| {
+                amount_line(
+                    &totals_section_id,
+                    format!("Total fees for {}", summary.period_month),
+                    total.amount,
+                    total.currency.clone(),
+                    None,
+                    json!({"periodMonth":summary.period_month,"sourceTables":["activities","manual_fee_entries"],"citationStatus":"mixed"}),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let category_section_id = Uuid::new_v4().to_string();
+        let category_lines = summary
+            .category_totals
+            .iter()
+            .map(|total| {
+                amount_line(
+                    &category_section_id,
+                    total.category.title().to_string(),
+                    total.amount,
+                    total.currency.clone(),
+                    None,
+                    json!({"periodMonth":summary.period_month,"feeCategory":total.category.as_str(),"citationStatus":"mixed"}),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let account_section_id = Uuid::new_v4().to_string();
+        let account_lines = aggregate_fee_lines(
+            &account_section_id,
+            source_rows.iter().filter_map(|row| {
+                row.account_id
+                    .as_ref()
+                    .map(|account_id| (account_id.as_str(), row.currency.as_str(), row.amount))
+            }),
+            "Account",
+        );
+
+        let asset_section_id = Uuid::new_v4().to_string();
+        let asset_lines = aggregate_fee_lines(
+            &asset_section_id,
+            source_rows.iter().filter_map(|row| {
+                row.asset_id
+                    .as_ref()
+                    .map(|asset_id| (asset_id.as_str(), row.currency.as_str(), row.amount))
+            }),
+            "Asset",
+        );
+
+        let source_section_id = Uuid::new_v4().to_string();
+        let source_lines = source_rows
+            .into_iter()
+            .map(|row| {
+                amount_line(
+                    &source_section_id,
+                    format!("{} on {}", row.category.title(), row.fee_date),
+                    row.amount,
+                    row.currency,
+                    row.source_citation_id,
+                    json!({"sourceTable":row.source_table,"sourceId":row.id,"feeCategory":row.category.as_str()}),
+                )
+            })
+            .collect::<Vec<_>>();
+
+        let mut sections = vec![
+            section(
+                &run_id,
+                totals_section_id,
+                "Period totals",
+                0,
+                json!({"periodMonth":summary.period_month}),
+                totals_lines,
+            ),
+            section(
+                &run_id,
+                category_section_id,
+                "Fee categories",
+                1,
+                json!({"periodMonth":summary.period_month}),
+                category_lines,
+            ),
+        ];
+        if !account_lines.is_empty() {
+            sections.push(section(
+                &run_id,
+                account_section_id,
+                "Account totals",
+                sections.len() as i32,
+                json!({"periodMonth":summary.period_month}),
+                account_lines,
+            ));
+        }
+        if !asset_lines.is_empty() {
+            sections.push(section(
+                &run_id,
+                asset_section_id,
+                "Asset totals",
+                sections.len() as i32,
+                json!({"periodMonth":summary.period_month}),
+                asset_lines,
+            ));
+        }
+        if let Some(spike) = summary.spike {
+            let spike_section_id = Uuid::new_v4().to_string();
+            sections.push(section(
+                &run_id,
+                spike_section_id.clone(),
+                "Fee spike warning",
+                sections.len() as i32,
+                json!({"periodMonth":summary.period_month,"rule":"current_period_gt_2x_prior_3_month_average"}),
+                vec![text_line(
+                    &spike_section_id,
+                    format!("{} fee spike", spike.currency),
+                    format!(
+                        "{} versus prior average {} ({}x)",
+                        spike.current_period_total, spike.prior_average, spike.multiple
+                    ),
+                    json!({"currency":spike.currency,"citationStatus":"missing"}),
+                )],
+            ));
+        }
+        sections.push(section(
+            &run_id,
+            source_section_id,
+            "Source rows",
+            sections.len() as i32,
+            json!({"periodMonth":summary.period_month}),
+            source_lines,
+        ));
+
+        Ok(ReportRun {
+            id: run_id,
+            report_type: request.report_type,
+            base_currency: request.base_currency,
+            status: ReportRunStatus::Generated,
+            created_at: created_at.clone(),
+            completed_at: Some(created_at),
+            disclaimer: REPORT_BUILDER_DISCLAIMER.to_string(),
+            sections,
+        })
+    }
+
     async fn persist_report(&self, report: ReportRun) -> Result<()> {
         let run_row = ReportRunRow::from(&report);
         let section_rows = report
@@ -1239,6 +1496,228 @@ fn estate_islamic_lines(conn: &mut SqliteConnection) -> Result<Vec<ReportLine>> 
     )])
 }
 
+fn build_fee_summary(
+    conn: &mut SqliteConnection,
+    period_month: &str,
+) -> Result<FeeIntelligenceSummary> {
+    let current_rows = fee_source_rows(conn)?
+        .into_iter()
+        .filter(|row| row.fee_date.starts_with(period_month))
+        .collect::<Vec<_>>();
+    let mut totals_by_currency = BTreeMap::<String, Decimal>::new();
+    let mut totals_by_category = BTreeMap::<(String, String), Decimal>::new();
+    for row in &current_rows {
+        *totals_by_currency.entry(row.currency.clone()).or_default() += row.amount;
+        *totals_by_category
+            .entry((row.category.as_str().to_string(), row.currency.clone()))
+            .or_default() += row.amount;
+    }
+
+    let totals = totals_by_currency
+        .iter()
+        .map(|(currency, amount)| FeeCurrencyTotal {
+            amount: *amount,
+            currency: currency.clone(),
+        })
+        .collect::<Vec<_>>();
+    let category_totals = totals_by_category
+        .into_iter()
+        .map(|((category, currency), amount)| {
+            Ok(FeeCategoryTotal {
+                category: FeeCategory::from_str(&category)?,
+                amount,
+                currency,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let spike = detect_fee_spike(conn, period_month, &totals)?;
+
+    Ok(FeeIntelligenceSummary {
+        period_month: period_month.to_string(),
+        totals,
+        category_totals,
+        spike,
+        missing_fees_state: current_rows.is_empty(),
+    })
+}
+
+fn fee_source_rows(conn: &mut SqliteConnection) -> Result<Vec<FeeSourceRow>> {
+    let manual_rows = manual_fee_entries::table
+        .select(ManualFeeEntryRow::as_select())
+        .load::<ManualFeeEntryRow>(conn)
+        .map_err(StorageError::from)?;
+    let mut rows = manual_rows
+        .into_iter()
+        .map(|row| {
+            Ok(FeeSourceRow {
+                id: row.id,
+                fee_date: row.fee_date,
+                category: FeeCategory::from_str(&row.category)?,
+                amount: parse_decimal("manual fee amount", &row.amount)?,
+                currency: row.currency,
+                account_id: row.account_id,
+                asset_id: row.asset_id,
+                source_citation_id: row.source_citation_id,
+                source_table: "manual_fee_entries",
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+
+    let activity_rows = activities::table
+        .select((
+            activities::id,
+            activities::account_id,
+            activities::asset_id,
+            activities::activity_type,
+            activities::subtype,
+            activities::activity_date,
+            activities::amount,
+            activities::fee,
+            activities::currency,
+        ))
+        .load::<ActivityFeeRow>(conn)
+        .map_err(StorageError::from)?;
+    for row in activity_rows {
+        if let Some(fee_text) = row.fee.as_deref() {
+            let fee = parse_decimal("activity fee", fee_text)?;
+            if fee != Decimal::ZERO {
+                rows.push(FeeSourceRow {
+                    id: row.id.clone(),
+                    fee_date: row.activity_date.chars().take(10).collect(),
+                    category: classify_activity_fee(&row, false),
+                    amount: fee.abs(),
+                    currency: row.currency.clone(),
+                    account_id: Some(row.account_id.clone()),
+                    asset_id: row.asset_id.clone(),
+                    source_citation_id: None,
+                    source_table: "activities",
+                });
+            }
+        }
+        if row.activity_type.eq_ignore_ascii_case("FEE") {
+            if let Some(amount_text) = row.amount.as_deref() {
+                let amount = parse_decimal("fee activity amount", amount_text)?;
+                if amount != Decimal::ZERO {
+                    let category = classify_activity_fee(&row, true);
+                    rows.push(FeeSourceRow {
+                        id: row.id,
+                        fee_date: row.activity_date.chars().take(10).collect(),
+                        category,
+                        amount: amount.abs(),
+                        currency: row.currency,
+                        account_id: Some(row.account_id),
+                        asset_id: row.asset_id,
+                        source_citation_id: None,
+                        source_table: "activities",
+                    });
+                }
+            }
+        }
+    }
+    Ok(rows)
+}
+
+fn classify_activity_fee(row: &ActivityFeeRow, fee_activity_amount: bool) -> FeeCategory {
+    let subtype = row.subtype.as_deref().unwrap_or("").to_ascii_lowercase();
+    if subtype.contains("fx") || subtype.contains("foreign") || subtype.contains("currency") {
+        FeeCategory::FxFees
+    } else if subtype.contains("platform") {
+        FeeCategory::PlatformFees
+    } else if subtype.contains("advis") {
+        FeeCategory::AdvisoryFees
+    } else if subtype.contains("custody") || subtype.contains("admin") {
+        FeeCategory::CustodyAdminFees
+    } else if fee_activity_amount {
+        FeeCategory::BrokerFees
+    } else {
+        FeeCategory::TransactionFees
+    }
+}
+
+fn detect_fee_spike(
+    conn: &mut SqliteConnection,
+    period_month: &str,
+    current_totals: &[FeeCurrencyTotal],
+) -> Result<Option<FeeSpikeAlert>> {
+    let previous_months = previous_three_months(period_month)?;
+    if previous_months.is_empty() {
+        return Ok(None);
+    }
+    let all_rows = fee_source_rows(conn)?;
+    let mut prior_totals = BTreeMap::<String, Decimal>::new();
+    for row in all_rows {
+        if previous_months
+            .iter()
+            .any(|month| row.fee_date.starts_with(month))
+        {
+            *prior_totals.entry(row.currency).or_default() += row.amount;
+        }
+    }
+    for total in current_totals {
+        let prior_average = prior_totals
+            .get(&total.currency)
+            .copied()
+            .unwrap_or_default()
+            / Decimal::from(3);
+        if prior_average > Decimal::ZERO && total.amount > prior_average * Decimal::from(2) {
+            return Ok(Some(FeeSpikeAlert {
+                currency: total.currency.clone(),
+                current_period_total: total.amount,
+                prior_average,
+                multiple: total.amount / prior_average,
+            }));
+        }
+    }
+    Ok(None)
+}
+
+fn previous_three_months(period_month: &str) -> Result<Vec<String>> {
+    let start =
+        NaiveDate::parse_from_str(&format!("{period_month}-01"), "%Y-%m-%d").map_err(|err| {
+            Error::Validation(mizan_core::errors::ValidationError::InvalidInput(format!(
+                "period_month is invalid: {err}"
+            )))
+        })?;
+    let mut months = Vec::new();
+    let mut year = start.year();
+    let mut month = start.month() as i32;
+    for _ in 0..3 {
+        month -= 1;
+        if month == 0 {
+            month = 12;
+            year -= 1;
+        }
+        months.push(format!("{year:04}-{month:02}"));
+    }
+    Ok(months)
+}
+
+fn aggregate_fee_lines<'a>(
+    section_id: &str,
+    rows: impl Iterator<Item = (&'a str, &'a str, Decimal)>,
+    prefix: &str,
+) -> Vec<ReportLine> {
+    let mut totals = BTreeMap::<(String, String), Decimal>::new();
+    for (entity_id, currency, amount) in rows {
+        *totals
+            .entry((entity_id.to_string(), currency.to_string()))
+            .or_default() += amount;
+    }
+    totals
+        .into_iter()
+        .map(|((entity_id, currency), amount)| {
+            amount_line(
+                section_id,
+                format!("{prefix} {entity_id}"),
+                amount,
+                currency,
+                None,
+                json!({"entityId":entity_id,"citationStatus":"mixed"}),
+            )
+        })
+        .collect()
+}
+
 impl From<&ReportRun> for ReportRunRow {
     fn from(report: &ReportRun) -> Self {
         Self {
@@ -1277,6 +1756,22 @@ impl From<&ReportLine> for ReportLineRow {
             metadata_json: line.metadata_json.clone(),
         }
     }
+}
+
+fn manual_fee_entry_row_to_domain(row: ManualFeeEntryRow) -> Result<ManualFeeEntry> {
+    Ok(ManualFeeEntry {
+        id: row.id,
+        fee_date: row.fee_date,
+        category: FeeCategory::from_str(&row.category)?,
+        amount: parse_decimal("manual fee amount", &row.amount)?,
+        currency: row.currency,
+        account_id: row.account_id,
+        asset_id: row.asset_id,
+        source_citation_id: row.source_citation_id,
+        notes: row.notes,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+    })
 }
 
 fn run_row_to_domain(row: ReportRunRow, sections: Vec<ReportSection>) -> Result<ReportRun> {
@@ -1590,6 +2085,134 @@ mod tests {
         assert!(!html.contains("Assets"));
     }
 
+    #[tokio::test]
+    async fn fee_report_aggregates_manual_and_activity_fees_by_period() {
+        let (pool, writer) = setup();
+        seed_account(&pool);
+        seed_activity(
+            &pool,
+            "fee-may-1",
+            "BUY",
+            "2026-05-10",
+            Some("100"),
+            Some("2"),
+        );
+        seed_activity(
+            &pool,
+            "fee-old",
+            "BUY",
+            "2026-04-10",
+            Some("100"),
+            Some("99"),
+        );
+        let repo = ReportBuilderRepository::new(pool, writer);
+        repo.add_manual_fee_entry(ManualFeeEntryInput {
+            fee_date: "2026-05-11".to_string(),
+            category: FeeCategory::AdvisoryFees,
+            amount: Decimal::from_str("7").expect("decimal"),
+            currency: "USD".to_string(),
+            account_id: Some("acc-1".to_string()),
+            asset_id: None,
+            source_citation_id: None,
+            notes: Some("Advisory invoice".to_string()),
+        })
+        .await
+        .expect("manual fee");
+
+        let report = repo
+            .generate_report(fee_request("2026-05"))
+            .await
+            .expect("fee report");
+        let summary = repo
+            .get_fee_intelligence_summary(Some("2026-05".to_string()))
+            .expect("summary");
+
+        assert_eq!(report.report_type, ReportType::FeeReport);
+        assert!(report
+            .sections
+            .iter()
+            .any(|section| section.title == "Fee categories"));
+        assert_eq!(
+            summary.totals[0].amount,
+            Decimal::from_str("9").expect("decimal")
+        );
+        assert!(summary
+            .category_totals
+            .iter()
+            .any(|total| total.category == FeeCategory::AdvisoryFees));
+        assert!(!summary
+            .category_totals
+            .iter()
+            .any(|total| total.amount == Decimal::from_str("99").expect("decimal")));
+    }
+
+    #[tokio::test]
+    async fn fee_intelligence_detects_spike_deterministically() {
+        let (pool, writer) = setup();
+        seed_account(&pool);
+        seed_activity(
+            &pool,
+            "fee-feb",
+            "BUY",
+            "2026-02-10",
+            Some("100"),
+            Some("10"),
+        );
+        seed_activity(
+            &pool,
+            "fee-mar",
+            "BUY",
+            "2026-03-10",
+            Some("100"),
+            Some("10"),
+        );
+        seed_activity(
+            &pool,
+            "fee-apr",
+            "BUY",
+            "2026-04-10",
+            Some("100"),
+            Some("10"),
+        );
+        seed_activity(
+            &pool,
+            "fee-may",
+            "BUY",
+            "2026-05-10",
+            Some("100"),
+            Some("50"),
+        );
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let summary = repo
+            .get_fee_intelligence_summary(Some("2026-05".to_string()))
+            .expect("summary");
+
+        let spike = summary.spike.expect("spike");
+        assert_eq!(spike.currency, "USD");
+        assert_eq!(
+            spike.current_period_total,
+            Decimal::from_str("50").expect("decimal")
+        );
+    }
+
+    #[tokio::test]
+    async fn fee_report_empty_state_is_honest_when_no_fees_exist() {
+        let (pool, writer) = setup();
+        let repo = ReportBuilderRepository::new(pool, writer);
+
+        let report = repo
+            .generate_report(fee_request("2026-05"))
+            .await
+            .expect("fee report");
+        let summary = repo
+            .get_fee_intelligence_summary(Some("2026-05".to_string()))
+            .expect("summary");
+
+        assert_eq!(report.sections[0].lines[0].label, "No report data");
+        assert!(summary.missing_fees_state);
+    }
+
     fn request(report_type: ReportType) -> GenerateReportRequest {
         GenerateReportRequest {
             report_type,
@@ -1614,6 +2237,15 @@ mod tests {
             base_currency: "USD".to_string(),
             period_month: None,
             included_sections: Some(included_sections),
+        }
+    }
+
+    fn fee_request(period_month: &str) -> GenerateReportRequest {
+        GenerateReportRequest {
+            report_type: ReportType::FeeReport,
+            base_currency: "USD".to_string(),
+            period_month: Some(period_month.to_string()),
+            included_sections: None,
         }
     }
 

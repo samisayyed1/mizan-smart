@@ -360,7 +360,13 @@ export {
 export { getLiquidityLadder } from "../shared/liquidity-ladder";
 export { applyCorporateAction, listCorporateActions, previewCorporateAction } from "../shared/corporate-actions";
 export { generateTaxPack, generateTaxPackExport, getTaxPack } from "../shared/tax-packs";
-export { exportReport, generateReport, getReportRun } from "../shared/report-builder";
+export {
+  addManualFeeEntry,
+  exportReport,
+  generateReport,
+  getFeeIntelligenceSummary,
+  getReportRun,
+} from "../shared/report-builder";
 export type {
   DataLineageEntityType,
   DataLineageFxRate,
@@ -467,7 +473,14 @@ export type {
 } from "../shared/tax-packs";
 export type {
   EstateBinderSection,
+  FeeCategory,
+  FeeCategoryTotal,
+  FeeCurrencyTotal,
+  FeeIntelligenceSummary,
+  FeeSpikeAlert,
   GenerateReportRequest,
+  ManualFeeEntry,
+  ManualFeeEntryInput,
   ReportExportBundle,
   ReportLine,
   ReportRun,

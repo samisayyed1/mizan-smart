@@ -3,9 +3,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { exportReport, generateReport } from "@/adapters";
+import { addManualFeeEntry, exportReport, generateReport } from "@/adapters";
 
 vi.mock("@/adapters", () => ({
+  addManualFeeEntry: vi.fn(),
   exportReport: vi.fn(),
   generateReport: vi.fn(),
 }));
@@ -55,6 +56,7 @@ import ReportsPage from "./reports-page";
 
 const generateReportMock = vi.mocked(generateReport);
 const exportReportMock = vi.mocked(exportReport);
+const addManualFeeEntryMock = vi.mocked(addManualFeeEntry);
 
 describe("ReportsPage", () => {
   beforeEach(() => {
@@ -199,6 +201,76 @@ describe("ReportsPage", () => {
     });
     expect(await screen.findByText("Taxable")).toBeInTheDocument();
     expect(screen.getByText(/organizational checklist/i)).toBeInTheDocument();
+  });
+
+  it("saves a manual fee and generates a fee report for the selected month", async () => {
+    addManualFeeEntryMock.mockResolvedValueOnce({
+      id: "fee-1",
+      feeDate: "2026-05-10",
+      category: "transaction_fees",
+      amount: "12.34",
+      currency: "USD",
+      notes: "Broker statement",
+      createdAt: "2026-05-10T00:00:00Z",
+      updatedAt: "2026-05-10T00:00:00Z",
+    });
+    generateReportMock.mockResolvedValueOnce({
+      ...reportRun(),
+      reportType: "fee_report",
+      sections: [
+        {
+          id: "section-fees",
+          reportRunId: "run-1",
+          title: "Fee categories",
+          sectionOrder: 0,
+          metadataJson: null,
+          lines: [
+            {
+              id: "line-fee",
+              sectionId: "section-fees",
+              label: "Transaction fees",
+              amount: "12.34",
+              currency: "USD",
+              valueText: null,
+              sourceCitationId: null,
+              metadataJson: null,
+            },
+          ],
+        },
+      ],
+    });
+    renderPage();
+
+    fireEvent.change(screen.getByLabelText("Report type"), {
+      target: { value: "fee_report" },
+    });
+    fireEvent.change(screen.getByLabelText("Month"), { target: { value: "2026-05" } });
+    fireEvent.change(screen.getByLabelText("Date"), { target: { value: "2026-05-10" } });
+    fireEvent.change(screen.getByLabelText("Amount"), { target: { value: "12.34" } });
+    fireEvent.change(screen.getByLabelText("Notes"), { target: { value: "Broker statement" } });
+    fireEvent.click(screen.getByRole("button", { name: /Save Fee/i }));
+
+    await waitFor(() => {
+      expect(addManualFeeEntryMock).toHaveBeenCalledWith({
+        feeDate: "2026-05-10",
+        category: "transaction_fees",
+        amount: "12.34",
+        currency: "USD",
+        notes: "Broker statement",
+      });
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Generate Preview/i }));
+
+    await waitFor(() => {
+      expect(generateReportMock).toHaveBeenCalledWith({
+        reportType: "fee_report",
+        baseCurrency: "USD",
+        periodMonth: "2026-05",
+      });
+    });
+    await screen.findByText("Fee categories");
+    expect(screen.getAllByText("Transaction fees").length).toBeGreaterThan(1);
   });
 });
 

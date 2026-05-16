@@ -2,9 +2,11 @@ import { useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 
 import {
+  addManualFeeEntry,
   exportReport,
   generateReport,
   type EstateBinderSection,
+  type FeeCategory,
   type ReportRun,
   type ReportType,
 } from "@/adapters";
@@ -21,6 +23,12 @@ interface ReportOption {
 }
 
 const REPORT_OPTIONS: ReportOption[] = [
+  {
+    type: "fee_report",
+    title: "Fee Report",
+    description: "Fee totals, source rows, and deterministic spike warnings.",
+    icon: "HandCoins",
+  },
   {
     type: "estate_binder",
     title: "Estate Binder",
@@ -78,10 +86,27 @@ const ESTATE_BINDER_OPTIONS: { section: EstateBinderSection; label: string }[] =
   { section: "islamic_notes", label: "Zakat / waqf / charity notes" },
 ];
 
+const FEE_CATEGORY_OPTIONS: { category: FeeCategory; label: string }[] = [
+  { category: "broker_fees", label: "Broker fees" },
+  { category: "transaction_fees", label: "Transaction fees" },
+  { category: "platform_fees", label: "Platform fees" },
+  { category: "advisory_fees", label: "Advisory fees" },
+  { category: "fund_expense_ratio_manual", label: "Fund expense ratio manual" },
+  { category: "insurance_ulip_charges", label: "Insurance / ULIP charges" },
+  { category: "fx_fees", label: "FX fees" },
+  { category: "private_fund_fees", label: "Private fund fees" },
+  { category: "custody_admin_fees", label: "Custody / admin fees" },
+  { category: "other", label: "Other" },
+];
+
 export default function ReportsPage() {
   const [reportType, setReportType] = useState<ReportType>("tax_pack");
   const [baseCurrency, setBaseCurrency] = useState("USD");
   const [periodMonth, setPeriodMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  const [manualFeeDate, setManualFeeDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [manualFeeCategory, setManualFeeCategory] = useState<FeeCategory>("transaction_fees");
+  const [manualFeeAmount, setManualFeeAmount] = useState("");
+  const [manualFeeNotes, setManualFeeNotes] = useState("");
   const [estateSections, setEstateSections] = useState<EstateBinderSection[]>([
     "accounts",
     "assets",
@@ -99,7 +124,7 @@ export default function ReportsPage() {
         reportType,
         baseCurrency: baseCurrency.toUpperCase(),
       };
-      if (reportType === "monthly_wealth_letter") {
+      if (reportType === "monthly_wealth_letter" || reportType === "fee_report") {
         return generateReport({ ...request, periodMonth });
       }
       if (reportType === "estate_binder") {
@@ -113,6 +138,21 @@ export default function ReportsPage() {
     mutationFn: (reportRunId: string) => exportReport(reportRunId),
     onSuccess: (bundle) => {
       downloadBundle(bundle.fileName, bundle.mimeType, bundle.bytes);
+    },
+  });
+
+  const manualFeeMutation = useMutation({
+    mutationFn: () =>
+      addManualFeeEntry({
+        feeDate: manualFeeDate,
+        category: manualFeeCategory,
+        amount: manualFeeAmount,
+        currency: baseCurrency.toUpperCase(),
+        notes: manualFeeNotes.trim() || null,
+      }),
+    onSuccess: () => {
+      setManualFeeAmount("");
+      setManualFeeNotes("");
     },
   });
 
@@ -155,7 +195,7 @@ export default function ReportsPage() {
                   onChange={(event) => setBaseCurrency(event.target.value.toUpperCase())}
                 />
               </div>
-              {reportType === "monthly_wealth_letter" ? (
+              {reportType === "monthly_wealth_letter" || reportType === "fee_report" ? (
                 <div className="space-y-2">
                   <Label htmlFor="period-month">Month</Label>
                   <Input
@@ -164,6 +204,69 @@ export default function ReportsPage() {
                     value={periodMonth}
                     onChange={(event) => setPeriodMonth(event.target.value)}
                   />
+                </div>
+              ) : null}
+              {reportType === "fee_report" ? (
+                <div className="space-y-3 rounded-md border p-3">
+                  <p className="text-sm font-medium">Manual fee entry</p>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-fee-date">Date</Label>
+                    <Input
+                      id="manual-fee-date"
+                      type="date"
+                      value={manualFeeDate}
+                      onChange={(event) => setManualFeeDate(event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-fee-category">Category</Label>
+                    <select
+                      id="manual-fee-category"
+                      className="border-input bg-background h-10 w-full rounded-md border px-3 text-sm"
+                      value={manualFeeCategory}
+                      onChange={(event) => setManualFeeCategory(event.target.value as FeeCategory)}
+                    >
+                      {FEE_CATEGORY_OPTIONS.map((option) => (
+                        <option key={option.category} value={option.category}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-fee-amount">Amount</Label>
+                    <Input
+                      id="manual-fee-amount"
+                      inputMode="decimal"
+                      value={manualFeeAmount}
+                      onChange={(event) => setManualFeeAmount(event.target.value)}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="manual-fee-notes">Notes</Label>
+                    <Input
+                      id="manual-fee-notes"
+                      value={manualFeeNotes}
+                      onChange={(event) => setManualFeeNotes(event.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => manualFeeMutation.mutate()}
+                    disabled={
+                      manualFeeMutation.isPending ||
+                      manualFeeDate.length !== 10 ||
+                      manualFeeAmount.trim().length === 0 ||
+                      baseCurrency.length !== 3
+                    }
+                  >
+                    Save Fee
+                  </Button>
+                  {manualFeeMutation.error ? (
+                    <p className="text-destructive text-sm">{manualFeeMutation.error.message}</p>
+                  ) : null}
                 </div>
               ) : null}
               {reportType === "estate_binder" ? (
@@ -196,7 +299,8 @@ export default function ReportsPage() {
                 disabled={
                   generateMutation.isPending ||
                   baseCurrency.length !== 3 ||
-                  (reportType === "monthly_wealth_letter" && periodMonth.length !== 7) ||
+                  ((reportType === "monthly_wealth_letter" || reportType === "fee_report") &&
+                    periodMonth.length !== 7) ||
                   (reportType === "estate_binder" && estateSections.length === 0)
                 }
               >

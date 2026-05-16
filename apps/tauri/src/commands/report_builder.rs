@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use log::error;
 use mizan_core::report_builder::{
-    GenerateReportRequest, ReportBuilderRepositoryTrait, ReportExportBundle, ReportRun,
+    FeeIntelligenceSummary, GenerateReportRequest, ManualFeeEntry, ManualFeeEntryInput,
+    ReportBuilderRepositoryTrait, ReportExportBundle, ReportRun,
 };
 use tauri::State;
 
@@ -40,6 +41,29 @@ pub async fn export_report(
         .report_builder_repository()
         .export_report(&report_run_id)
         .map_err(command_error("export_report"))
+}
+
+#[tauri::command]
+pub async fn add_manual_fee_entry(
+    input: ManualFeeEntryInput,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<ManualFeeEntry, String> {
+    state
+        .report_builder_repository()
+        .add_manual_fee_entry(input)
+        .await
+        .map_err(command_error("add_manual_fee_entry"))
+}
+
+#[tauri::command]
+pub async fn get_fee_intelligence_summary(
+    period_month: Option<String>,
+    state: State<'_, Arc<ServiceContext>>,
+) -> Result<FeeIntelligenceSummary, String> {
+    state
+        .report_builder_repository()
+        .get_fee_intelligence_summary(period_month)
+        .map_err(command_error("get_fee_intelligence_summary"))
 }
 
 fn command_error(command: &'static str) -> impl FnOnce(mizan_core::Error) -> String {

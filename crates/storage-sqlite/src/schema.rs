@@ -269,6 +269,22 @@ diesel::table! {
 }
 
 diesel::table! {
+    manual_fee_entries (id) {
+        id -> Text,
+        fee_date -> Text,
+        category -> Text,
+        amount -> Text,
+        currency -> Text,
+        account_id -> Nullable<Text>,
+        asset_id -> Nullable<Text>,
+        source_citation_id -> Nullable<Text>,
+        notes -> Nullable<Text>,
+        created_at -> Text,
+        updated_at -> Text,
+    }
+}
+
+diesel::table! {
     asset_taxonomy_assignments (id) {
         id -> Text,
         asset_id -> Text,
@@ -1151,6 +1167,9 @@ diesel::joinable!(tax_pack_missing_items -> assets (related_asset_id));
 diesel::joinable!(report_sections -> report_runs (report_run_id));
 diesel::joinable!(report_lines -> report_sections (section_id));
 diesel::joinable!(report_lines -> source_citations (source_citation_id));
+diesel::joinable!(manual_fee_entries -> accounts (account_id));
+diesel::joinable!(manual_fee_entries -> assets (asset_id));
+diesel::joinable!(manual_fee_entries -> source_citations (source_citation_id));
 diesel::joinable!(asset_public_market_details -> assets (asset_id));
 diesel::joinable!(asset_fixed_income_details -> assets (asset_id));
 diesel::joinable!(asset_real_estate_details -> assets (asset_id));
@@ -1273,6 +1292,7 @@ diesel::allow_tables_to_appear_in_same_query!(
     report_runs,
     report_sections,
     report_lines,
+    manual_fee_entries,
     valuations,
     asset_public_market_details,
     asset_fixed_income_details,

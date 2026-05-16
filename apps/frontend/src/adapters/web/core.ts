@@ -245,6 +245,8 @@ export const COMMANDS: CommandMap = {
   generate_report: { method: "POST", path: "/report-runs" },
   get_report_run: { method: "GET", path: "/report-runs" },
   export_report: { method: "POST", path: "/report-runs" },
+  add_manual_fee_entry: { method: "POST", path: "/fee-entries" },
+  get_fee_intelligence_summary: { method: "GET", path: "/fee-intelligence/summary" },
   preview_corporate_action: { method: "POST", path: "/corporate-actions/preview" },
   apply_corporate_action: { method: "POST", path: "/corporate-actions/apply" },
   list_corporate_actions: { method: "GET", path: "/corporate-actions" },
@@ -1092,6 +1094,20 @@ export const invoke = async <T>(command: string, payload?: Record<string, unknow
     case "export_report": {
       const { reportRunId } = payload as { reportRunId: string };
       url += `/${encodeURIComponent(reportRunId)}/export`;
+      break;
+    }
+    case "add_manual_fee_entry": {
+      const { input } = payload as { input: Record<string, unknown> };
+      body = JSON.stringify(input);
+      break;
+    }
+    case "get_fee_intelligence_summary": {
+      const { periodMonth } = payload as { periodMonth?: string | null };
+      if (periodMonth) {
+        const params = new URLSearchParams();
+        params.set("periodMonth", periodMonth);
+        url += `?${params.toString()}`;
+      }
       break;
     }
     case "create_asset": {

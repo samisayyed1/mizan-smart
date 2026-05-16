@@ -30,7 +30,7 @@
 - [x] p30 phase-4/p30  Report Builder foundation (ddd144a)
 - [x] p31 phase-4/p31  Monthly Wealth Letter (deterministic) (f532964)
 - [x] p32 phase-4/p32  Estate / Legacy Binder (aee4daf)
-- [ ] p33 phase-4/p33  Fee Intelligence
+- [x] p33 phase-4/p33  Fee Intelligence (0999c5d)
 - [ ] p34 phase-4/p34  Concentration and fragility radar
 - [ ] p35 phase-5/p35  Web Evidence foundation
 - [ ] p36 phase-5/p36  SearXNG search provider

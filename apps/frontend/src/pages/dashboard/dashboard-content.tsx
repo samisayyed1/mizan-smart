@@ -1,4 +1,4 @@
-import { getEstimatedHistoricalValuation } from "@/adapters";
+import { getEstimatedHistoricalValuation, getFeeIntelligenceSummary } from "@/adapters";
 import { HistoryChart } from "@/components/history-chart";
 import { ExplainableNumber } from "@/components/explainable-number";
 import { useHapticFeedback } from "@/hooks";
@@ -23,6 +23,7 @@ import {
   IntervalSelector,
   usePersistentState,
 } from "@mizan/ui";
+import { Card, CardContent } from "@mizan/ui/components/ui/card";
 import { Skeleton } from "@mizan/ui/components/ui/skeleton";
 import { differenceInDays, format, parseISO } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -98,6 +99,12 @@ export function DashboardContent() {
 
   const { settings } = useSettingsContext();
   const baseCurrency = settings?.baseCurrency ?? "USD";
+  const feePeriodMonth = useMemo(() => new Date().toISOString().slice(0, 7), []);
+  const feeSummary = useQuery({
+    queryKey: ["fee-intelligence-summary", feePeriodMonth],
+    queryFn: () => getFeeIntelligenceSummary(feePeriodMonth),
+    staleTime: 5 * 60 * 1000,
+  });
 
   // Calculate gainLossAmount and simpleReturn from valuationHistory
   const { gainLossAmount, simpleReturn } = useMemo(() => {
@@ -278,6 +285,7 @@ export function DashboardContent() {
               <AccountsSummary dateRange={dateRange} isAllTime={isAllTime} />
             </div>
             <div className="space-y-6 lg:col-span-1">
+              {feeSummary.data?.spike ? <FeeSpikeWarning spike={feeSummary.data.spike} /> : null}
               <InboxPreview />
               <LiquidityLadderCard />
               <QuickActions />
@@ -292,6 +300,29 @@ export function DashboardContent() {
         </div>
       </div>
     </div>
+  );
+}
+
+function FeeSpikeWarning({
+  spike,
+}: {
+  spike: {
+    currency: string;
+    currentPeriodTotal: string;
+    priorAverage: string;
+    multiple: string;
+  };
+}) {
+  return (
+    <Card data-testid="fee-spike-warning" className="border-warning/50">
+      <CardContent className="space-y-1 p-4">
+        <p className="text-sm font-medium">Fee spike detected</p>
+        <p className="text-muted-foreground text-sm">
+          Recorded fees are {spike.currentPeriodTotal} {spike.currency}; prior average{" "}
+          {spike.priorAverage} {spike.currency}.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 

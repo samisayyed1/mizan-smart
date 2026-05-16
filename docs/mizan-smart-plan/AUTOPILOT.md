@@ -15,7 +15,7 @@ Progress: docs/mizan-smart-plan/PROGRESS.md (source of truth for
 State: docs/mizan-smart-plan/.autopilot-state.json
 Rollback anchors (DO NOT TOUCH): tags `v3.4.1` and `pre-mizan-smart`
 
-## Stop conditions (ONLY these two stop the loop)
+## Stop conditions (ONLY these three stop the loop)
 
 STOP-DONE:
   grep -c '^- \[ \]' docs/mizan-smart-plan/PROGRESS.md = 0
@@ -26,6 +26,13 @@ STOP-BLOCKED:
   state.json shows `attempts_on_current` >= 10
   AND the last 3 attempts failed the same validation command with the
   same error hash. Write docs/mizan-smart-plan/BLOCKER.md, push, stop.
+
+STOP-PAUSE:
+  File docs/mizan-smart-plan/PAUSE.md exists. This is a human-driven
+  pause for audit / polish. Do NOT start a new iteration. Do NOT
+  attempt to remove the file. Simply exit. The human will remove
+  the file when work should resume. Until then, every iteration is
+  a no-op.
 
 Nothing else stops the loop. Not "the task feels done". Not "the
 context is getting big". Not "a single test failed". Not "the network
@@ -39,6 +46,9 @@ safe.
 
 ### STEP 0 — Re-read durable state
   - `cd /Users/samisayyed/Documents/mizan-smart`
+  - **PAUSE GATE:** If `docs/mizan-smart-plan/PAUSE.md` exists, exit
+    immediately. Print one line: `AUTOPILOT-PAUSED`. Do nothing else.
+    The human controls resumption by deleting that file.
   - `git rev-parse --abbrev-ref HEAD` must equal `main`. If not,
     `git checkout main`.
   - `git rev-parse --verify v3.4.1^{commit}` must succeed.

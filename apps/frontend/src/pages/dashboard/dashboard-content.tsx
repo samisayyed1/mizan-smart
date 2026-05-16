@@ -189,60 +189,66 @@ export function DashboardContent() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      <div className="px-4 pb-1 pt-2 md:px-6 md:pb-2 lg:px-8">
+      {/* HEADLINE — balance, change, time range. Sits above the chart
+          with quiet breathing room. The gradient backdrop is bounded
+          to the chart area below, not washed across the whole page. */}
+      <div className="px-4 pb-3 pt-4 md:px-6 md:pb-4 md:pt-6 lg:px-8">
         <PortfolioUpdateTrigger lastCalculatedAt={currentValuation?.calculatedAt}>
-          <div className="flex items-start gap-2">
-            <div>
-              <Balance
-                isLoading={isHoldingsLoading}
-                targetValue={totalValue}
-                currency={baseCurrency}
-                displayCurrency={true}
-              />
+          <div className="flex flex-col gap-1">
+            <Balance
+              isLoading={isHoldingsLoading}
+              targetValue={totalValue}
+              currency={baseCurrency}
+              displayCurrency={true}
+            />
+            {/* Gain block + Explain-This-Number icon button on one row.
+                The icon button is sized as a small ghost so it reads as a
+                caption affordance, not a competing CTA. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm lg:text-base">
+              {isValuationHistoryLoading && !valuationHistory ? (
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-4 w-24" />
+                  <div className="border-secondary h-4 border-r" />
+                  <Skeleton className="h-4 w-16" />
+                </div>
+              ) : (
+                <>
+                  <GainAmount
+                    className="text-sm font-light lg:text-base"
+                    value={gainLossAmount}
+                    currency={baseCurrency}
+                    displayCurrency={false}
+                  />
+                  <div className="border-secondary h-4 border-r" />
+                  <GainPercent
+                    className="text-sm font-light lg:text-base"
+                    value={simpleReturn}
+                    animated={true}
+                  />
+                </>
+              )}
+              {displayedIntervalDescription && (
+                <span className="text-muted-foreground text-sm font-light lg:text-base">
+                  {displayedIntervalDescription}
+                </span>
+              )}
               <ExplainableNumber
                 entityType="portfolio"
                 entityId="total"
                 metricType="net_worth"
               />
-              <div className="text-md flex space-x-3">
-                {isValuationHistoryLoading && !valuationHistory ? (
-                  <div className="flex items-center gap-3 pt-1">
-                    <Skeleton className="h-4 w-24" />
-                    <div className="border-secondary my-1 border-r pr-2" />
-                    <Skeleton className="h-4 w-16" />
-                  </div>
-                ) : (
-                  <>
-                    <GainAmount
-                      className="lg:text-md text-sm font-light"
-                      value={gainLossAmount}
-                      currency={baseCurrency}
-                      displayCurrency={false}
-                    ></GainAmount>
-                    <div className="border-secondary my-1 border-r pr-2" />
-                    <GainPercent
-                      className="lg:text-md text-sm font-light"
-                      value={simpleReturn}
-                      animated={true}
-                    ></GainPercent>
-                  </>
-                )}
-                {displayedIntervalDescription && (
-                  <span className="lg:text-md text-muted-foreground ml-1 text-sm font-light">
-                    {displayedIntervalDescription}
-                  </span>
-                )}
-              </div>
             </div>
           </div>
         </PortfolioUpdateTrigger>
       </div>
 
+      {/* CHART REGION — the gradient is bounded HERE only, so it frames
+          the chart without bleeding into the cards below. */}
       <div
-        className={`bg-linear-to-t flex grow flex-col ${
+        className={`bg-linear-to-t flex flex-col ${
           isNegative
-            ? "from-destructive/30 via-destructive/15 to-transparent"
-            : "from-success/30 via-success/15 to-transparent"
+            ? "from-destructive/20 via-destructive/10 to-transparent"
+            : "from-success/20 via-success/10 to-transparent"
         }`}
       >
         <div className="h-[280px]">
@@ -288,27 +294,41 @@ export function DashboardContent() {
             </div>
           )}
         </div>
+      </div>
 
-        <div className="grow px-4 pb-[calc(var(--mobile-nav-ui-height)+max(var(--mobile-nav-gap),env(safe-area-inset-bottom)))] pt-12 md:px-6 md:pb-6 md:pt-6 lg:px-10 lg:pb-8 lg:pt-8">
-          <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:gap-20">
-            <div className="lg:col-span-2">
-              <AccountsSummary dateRange={dateRange} isAllTime={isAllTime} />
-            </div>
-            <div className="space-y-6 lg:col-span-1">
-              {feeSummary.data?.spike ? <FeeSpikeWarning spike={feeSummary.data.spike} /> : null}
-              {concentrationSummary.data ? (
-                <ConcentrationRadarCard summary={concentrationSummary.data} />
-              ) : null}
-              <InboxPreview />
-              <LiquidityLadderCard />
-              <QuickActions />
-              <TopHoldings
-                holdings={holdings}
-                isLoading={isHoldingsLoading}
-                baseCurrency={baseCurrency}
-              />
-              <SavingGoals />
-            </div>
+      {/* CARD GRID — left column = Accounts summary (the long one),
+          right rail = action-first stack. Column gap is the standard
+          24px dashboard rhythm; right rail uses uniform 24px between
+          cards so the surfaces line up cleanly. */}
+      <div className="grow px-4 pb-[calc(var(--mobile-nav-ui-height)+max(var(--mobile-nav-gap),env(safe-area-inset-bottom)))] pt-8 md:px-6 md:pb-6 md:pt-10 lg:px-8 lg:pb-8">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2">
+            <AccountsSummary dateRange={dateRange} isAllTime={isAllTime} />
+          </div>
+          {/* Right rail hierarchy:
+                1. Fee spike alert (only when triggered)
+                2. Inbox preview — "what needs attention right now"
+                3. Quick actions — entry points
+                4. Liquidity ladder — forward cashflow
+                5. Top holdings — biggest positions
+                6. Concentration radar — risk lens
+                7. Goals — long horizon
+              Lower-frequency surfaces sit further down so the eye
+              hits action-oriented content first. */}
+          <div className="space-y-6 lg:col-span-1">
+            {feeSummary.data?.spike ? <FeeSpikeWarning spike={feeSummary.data.spike} /> : null}
+            <InboxPreview />
+            <QuickActions />
+            <LiquidityLadderCard />
+            <TopHoldings
+              holdings={holdings}
+              isLoading={isHoldingsLoading}
+              baseCurrency={baseCurrency}
+            />
+            {concentrationSummary.data ? (
+              <ConcentrationRadarCard summary={concentrationSummary.data} />
+            ) : null}
+            <SavingGoals />
           </div>
         </div>
       </div>
